@@ -6,13 +6,14 @@
 mswm - Model Setup Workflow Manager
 
 ## Description
-A program to designed to serve as the Model Setup Workflow Manager, managing realization and configuration file generation for running ngen in calibration, validation, and forecast modes. mswm can either be run from the command line or called directly by ngen model runs.
+The Model Setup Workflow Manager generates realization and configuration filesfor running ngen in calibration, validation, and forecast modes. mswm can either be run from the command line or called directly by ngen model runs.
 
 ## Installation
 
 ### Clone mswm
 
-
+cd [NGEN_REG_ROOT]
+git clone -b development --recurse-submodules https://gitlab.sh.nextgenwaterprediction.com/NGWPC/nwm-ngen/mswm.git
 
 ### Build the environment
 
