@@ -2,78 +2,71 @@
 
 
 
-## Getting started
-
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
-
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
-
-## Add your files
-
-- [ ] [Create](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#create-a-file) or [upload](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#upload-a-file) files
-- [ ] [Add files using the command line](https://docs.gitlab.com/ee/gitlab-basics/add-file.html#add-a-file-using-the-command-line) or push an existing Git repository with the following command:
-
-```
-cd existing_repo
-git remote add origin https://gitlab.sh.nextgenwaterprediction.com/NGWPC/nwm-ngen/mswm.git
-git branch -M main
-git push -uf origin main
-```
-
-## Integrate with your tools
-
-- [ ] [Set up project integrations](https://gitlab.sh.nextgenwaterprediction.com/NGWPC/nwm-ngen/mswm/-/settings/integrations)
-
-## Collaborate with your team
-
-- [ ] [Invite team members and collaborators](https://docs.gitlab.com/ee/user/project/members/)
-- [ ] [Create a new merge request](https://docs.gitlab.com/ee/user/project/merge_requests/creating_merge_requests.html)
-- [ ] [Automatically close issues from merge requests](https://docs.gitlab.com/ee/user/project/issues/managing_issues.html#closing-issues-automatically)
-- [ ] [Enable merge request approvals](https://docs.gitlab.com/ee/user/project/merge_requests/approvals/)
-- [ ] [Set auto-merge](https://docs.gitlab.com/ee/user/project/merge_requests/merge_when_pipeline_succeeds.html)
-
-## Test and Deploy
-
-Use the built-in continuous integration in GitLab.
-
-- [ ] [Get started with GitLab CI/CD](https://docs.gitlab.com/ee/ci/quick_start/index.html)
-- [ ] [Analyze your code for known vulnerabilities with Static Application Security Testing(SAST)](https://docs.gitlab.com/ee/user/application_security/sast/)
-- [ ] [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/ee/topics/autodevops/requirements.html)
-- [ ] [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/ee/user/clusters/agent/)
-- [ ] [Set up protected environments](https://docs.gitlab.com/ee/ci/environments/protected_environments.html)
-
-***
-
-# Editing this README
-
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thank you to [makeareadme.com](https://www.makeareadme.com/) for this template.
-
-## Suggestions for a good README
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
-
 ## Name
-Choose a self-explaining name for your project.
+mswm - Model Setup Workflow Manager
 
 ## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
-
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
-
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
+A program to designed to serve as the Model Setup Workflow Manager, managing realization and configuration file generation for running ngen in calibration, validation, and forecast modes. mswm can either be run from the command line or called directly by ngen model runs.
 
 ## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
+
+### Clone mswm
+
+
+
+### Build the environment
+
+To run the program, one would need an environment for successfully running ngen.
+
+If you already have an environment for running ngen, you can use the same venv.
+
+Once the venv is activated, run:
+
+1) cd mswm
+2) pip install .
 
 ## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
 
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
+The two primary functionalities of mswm, generating realization files to run ngen (`build\_inputs.py`) and editing validation realization files during ngen-cal iterations (`edit\_configs.py`), are orchestrated by `manager.py`. Users will most directly use mswm from the command line to create realization files for calibration and forecasting.
 
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
+To generate the model realization file and config_calib yaml file for a calibration run of ngen:
+
+1. source [VENV_ROOT]/env.ngen/bin/activate
+2. python -m mswm.manager build_calib ~/ngwpc/run_ngen/input.config
+3. python calibration.py ~/ngwpc/run_ngen/kge_DDS/noah_cfes/01123000/Input/01123000_config_calib.yaml
+
+The mswm.manager script in calibration mode takes two command line arguments:
+1) Command for calibration mode (build_calib)
+2) Path to the user generated input.config file
+
+To generate the model realization file for a forecast run on ngen:
+
+1. source [VENV_ROOT]/env.ngen/bin/activate
+2. python -m mswm.manager build_fcst ~/ngwpc/run_ngen/kge_DDS/noah_cfes/01123000/Output/Validation_Run/01123000_config_valid_best.yaml ~/ngwpc/ngen-fcst/test_data/forcing.nc fcst_run1
+3. python ~/ngwpc/ngen-fcst/python/run_ngen_fcst.py ~/ngwpc/ngen-fcst/test_data/forcing.nc ~/ngwpc/run_ngen/kge_DDS/noah_cfes/01123000/Output/Validation_Run/01123000_config_valid_best.yaml fcst_run1
+
+The mswm.manager script in calibration mode takes two command line arguments:
+1) Command for forecast mode (build_fcst)
+2) Path to the config validation yaml file from a prior run of ngen-cal
+3) Path to the NetCDF forcing file or folder containing csv forcing files for all catchments in the basin
+4) Relative path to the folder to be created for storing inputs/outputs from running ngen, relative to the Output directory of the calibration run as indicated in the config yaml file. For example, if "fcst_run1" is the 4th argument, and "yaml_file" in the "general" section of the config file is '~/ngwpc/run_ngen/kge_DDS/noah_cfes/01123000/Output/Validation_Run/01123000_config_valid_best.yaml', then the new output directory to be created for the ngen-fcst run would be '~/ngwpc/run_ngen/kge_DDS/noah_cfes/01123000/Output/Forecast_Run/fcst_run1'
+
+The forecast realization file can also be used to run ngen directly from the command line:
+
+1. ~/ngwpc/ngen/cmake_build/ngen ~/s3/ngwpc-hydrofabric/2.2/CONUS/01123000/GEOPACKAGE/USGS/2025_Mar_14_21_14_37/gauge_01123000.gpkg 'all' ~/s3/ngwpc-hydrofabric/2.2/CONUS/01123000/GEOPACKAGE/USGS/2025_Mar_14_21_14_37/gauge_01123000.gpkg 'all' ~/ngwpc/run_ngen/kge_DDS/noah_cfes/01123000/Output/Forecast_Run/fcst_run1/01123000_realization_config_bmi_valid_best.json
+
+
+## Docker container
+
+### Requirements
+
+
+### Build
+
+
+### Running
+
+
 
 ## Contributing
 State if you are open to contributions and what your requirements are for accepting them.
