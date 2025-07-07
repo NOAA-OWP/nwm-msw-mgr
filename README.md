@@ -13,6 +13,7 @@ The Model Setup Workflow Manager generates realization and configuration filesfo
 ### Clone mswm
 
 cd [NGEN_REG_ROOT]
+
 git clone -b development --recurse-submodules https://gitlab.sh.nextgenwaterprediction.com/NGWPC/nwm-ngen/mswm.git
 
 ### Build the environment
