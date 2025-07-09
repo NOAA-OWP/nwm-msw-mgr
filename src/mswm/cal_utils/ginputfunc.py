@@ -161,9 +161,10 @@ def create_walk_file(
 
 def create_cfe_input(
         catids: List[str],
-        modules: List[str],
+        modules: Union[List[str], List[List[str]]],
         attr_file: Union[str, Path],
         cfe_input_dir: Union[str, Path],
+        run_type: str
 ) -> None:
     """ Create BMI initial configuration file for CFE with Schaake or Xianjiang infiltration and runoff scheme
 
@@ -194,11 +195,22 @@ def create_cfe_input(
 
     # surface partitioning scheme
     scheme = 'Schaake'
-    if ('cfex' in modules):
-        scheme = 'Xinanjiang'
+    if run_type == 'calib':
+        mods = modules
+        if ('cfex' in mods):
+            scheme = 'Xinanjiang'
 
     # Create bmi config files
-    for catID in catids:
+    for i in range(len(catids)):
+
+        catID = catids[i]
+
+        # Set module list for each catchment during regionalization
+        if run_type == 'regionalization':
+            mods = modules[i]
+            if ('cfex' in mods):
+                scheme = 'Xinanjiang'
+
         cfe_bmi_file = os.path.join(cfe_input_dir, catID + "_bmi_config_cfe.txt")
         f = open(cfe_bmi_file, "w")
         f.write("%s" % ("forcing_file=BMI\n"))
@@ -228,7 +240,7 @@ def create_cfe_input(
         f.write("%s" % ("giuh_ordinates=0.55,0.25,0.2\n"))
         f.write("%s" % ("surface_runoff_scheme=GIUH\n"))
 
-        if 'sft' in modules:
+        if 'sft' in mods:
             f.write("%s" % ("sft_coupled=true\n"))
             f.write("%s" % ("ice_content_threshold=0.3\n"))
 
@@ -249,6 +261,7 @@ def create_noah_input(
         attr_file: Union[str, Path],
         param_dir_source: Union[str, Path],
         noah_input_dir: Union[str, Path],
+        run_type: str
 ) -> None:
     """ Create BMI configuration file for Noah-OWP-Modular
 
@@ -278,8 +291,13 @@ def create_noah_input(
     dfa = pd.read_parquet(attr_file)
     dfa.set_index("divide_id", inplace=True)
 
-    # Files for the calibration and validation run
-    for run_name in ['calib', 'valid']:
+    # Files for either the calibration and validation run or the regionalization run
+    if run_type == 'calib':
+        run_list = ['calib', 'valid']
+    elif run_type == 'regionalization':
+        run_list = ['region']
+
+    for run_name in run_list:
         if time_period['run_time_period'][run_name][0] and time_period['run_time_period'][run_name][1]:
             # Date
             startdate = time_period['run_time_period'][run_name][0]
@@ -376,6 +394,7 @@ def create_noah_input_template(
         param_dir_source: Union[str, Path],
         input_dir: Union[str, Path],
         template_bmi_dir: Union[str, Path],
+        run_type: str
 ) -> None:
     """ Create BMI configuration files for Noah-OWP-Modular based on template BMI files provided by the user (or NEDS)
 
@@ -408,8 +427,13 @@ def create_noah_input_template(
                 os.symlink(src, dst)
                 logger.info(f'Creating symlink from {src} to {dst}')
 
-    # Files for the calibration and validation run
-    for run_name in ['calib', 'valid']:
+    # Files for either the calibration and validation run or the regionalization run
+    if run_type == 'calib':
+        run_list = ['calib', 'valid']
+    elif run_type == 'regionalization':
+        run_list = ['region']
+
+    for run_name in run_list:
         if time_period['run_time_period'][run_name][0] and time_period['run_time_period'][run_name][1]:
 
             startdate = time_period['run_time_period'][run_name][0]
@@ -439,17 +463,18 @@ def create_noah_input_template(
                 with open(namelst, 'w') as outfile:
                     outfile.writelines(lines)
 
-            logger.info(f'noah-owp-modular BMI config files for {run_name} created at {input_dir}/*_{run_name}.input')
+        logger.info(f'noah-owp-modular BMI config files for regionalization created at {input_dir}/*{run_name}_.input')
 
 
 def create_sft_smp_input(
         catids: List[str],
-        modules: List[str],
+        modules: Union[List[str], List[List[str]]],
         attr_file: Union[str, Path],
         cfe_dir: Union[str, Path],
         forcing_dir: Union[str, Path],
         sft_dir: Union[str, Path],
         smp_dir: Union[str, Path],
+        run_type: str,
 ) -> None:
     """ Create BMI configuration file for soil freeze and thaw module, and soil moisture profiles
 
@@ -472,17 +497,27 @@ def create_sft_smp_input(
     os.makedirs(sft_dir, exist_ok=True)
     os.makedirs(smp_dir, exist_ok=True)
 
-    # Read attribute file to obtain quartz
+    # Read attribute file
     dfa = pd.read_parquet(attr_file)
     dfa.set_index('divide_id', inplace=True)
 
     # Ice fraction scheme
     icefscheme = 'Schaake'
-    if ('cfex' in modules):
-        icefscheme = 'Xinanjiang'
+    if run_type == 'calib':
+        mods = modules
+        if ('cfex' in mods):
+            icefscheme = 'Xinanjiang'
 
     # Create bmi config files
-    for catID in catids:
+    for i in range(len(catids)):
+
+        catID = catids[i]
+
+        # Set module list for each catchment during regionalization
+        if run_type == 'regionalization':
+            mods = modules[i]
+            if ('cfex' in mods):
+                icefscheme = 'Xinanjiang'
 
         # Read cfe BMI files
         cfe_bmi_file = os.path.join(cfe_dir, fnmatch.filter(os.listdir(cfe_dir), '*' + catID + '*.txt')[0])
@@ -512,9 +547,9 @@ def create_sft_smp_input(
                    'soil_params.b=' + df.loc['soil_params.b'].iloc[0],
                    'soil_params.satpsi=' + df.loc['soil_params.satpsi'].iloc[0],
                    'soil_z=0.1,0.3,1.0,2.0[m]']
-        if 'cfes' in modules or 'cfex' in modules:
+        if 'cfes' in mods or 'cfex' in mods:
             smp_lst += ['soil_storage_model=conceptual', 'soil_storage_depth=2.0']
-        elif 'lasam' in modules:
+        elif 'lasam' in mods:
             smp_lst += ['soil_storage_model=layered', 'soil_moisture_profile_option=constant', 'soil_depth_layers=2.0', 'water_table_depth=10[m]']
         smp_bmi_file = os.path.join(smp_dir, catID + '_bmi_config_smp.txt')
         with open(smp_bmi_file, "w") as f:
@@ -661,7 +696,8 @@ def create_ueb_input(
         param_dir_source: Union[str, Path],
         ueb_input_dir: str,
         # sitevar_file_exists: bool,
-        bmi_dir: Union[str, Path]
+        bmi_dir: Union[str, Path],
+        run_type: str
 ) -> None:
     """ Create BMI configuration file for ueb
 
@@ -737,8 +773,13 @@ def create_ueb_input(
             with open(site_file, 'w') as outfile:
                 outfile.writelines(lines)
 
-    # ueb-init files need to be created for both calibration and validation runs
-    for run_name in ['calib', 'valid']:
+    # ueb-init files need to be created for both calibration and validation runs or regionalization runs
+    if run_type == 'calib':
+        run_list = ['calib', 'valid']
+    elif run_type == 'regionalization':
+        run_list = ['region']
+
+    for run_name in run_list:
         if time_period['run_time_period'][run_name][0] and time_period['run_time_period'][run_name][1]:
             # Date
             startdate = time_period['run_time_period'][run_name][0]
@@ -1009,9 +1050,10 @@ def create_pet_input(
 
 def create_lasam_input(
         catids: List[str],
-        modules: List[str],
+        modules: Union[List[str], List[List[str]]],
         input_dir: Union[str, Path],
         param_dir: Union[str, Path],
+        run_type: str
 ) -> None:
     """ Create BMI configuration file for Lumped Arid and Semi-arid Model
 
@@ -1068,11 +1110,20 @@ def create_lasam_input(
     df_soil.set_index("id", inplace=True)
 
     # Create bmi config file
-    for catID in catids:
+    for i in range(len(catids)):
+        catID = catids[i]
+        mods = modules[i]
+
         # cfe_file_catID = glob.glob(os.path.join(cfe_bmi_dir, catID + '*.txt'))[0]
         # df = pd.read_table(cfe_file_catID,  delimiter='=', names=["Params","Values"], index_col=0)
         lasam_lst_catID = lasam_lst.copy()
         lasam_lst_catID[9] = lasam_lst_catID[9] + str(df_soil.loc[catID]['category'])
+
+        if run_type == 'regionalization':
+            # Check if sft is in use
+            sft_coupled_str = 'true' if 'sft' in mods else 'false'
+            lasam_lst_catID[13] = 'sft_coupled=' + sft_coupled_str
+
         # lasam_lst_catID[12] = lasam_lst_catID[12] + df.loc['giuh_ordinates'][0]
         lasam_bmi_file = os.path.join(input_dir, catID + '_bmi_config_lasam.txt')
 
@@ -1272,6 +1323,9 @@ def change_topmodel_input(
 
     """
 
+    if not os.path.exists(inputDir):
+        os.makedirs(inputDir, exist_ok=True)
+
     # Copy
     new_runfile = os.path.join(inputDir, '{}'.format(catID) + '_topmodel.run')
     shutil.copy(runfile, new_runfile)
@@ -1305,6 +1359,8 @@ def create_topmodel_input(
         gpkg_file: Union[str, Path],
         inputDir: Union[str, Path],
 ) -> None:
+
+    os.makedirs(inputDir, exist_ok=True)
 
     # Read hydrofabric attribute file
     dfa = pd.read_parquet(attr_file)
@@ -1624,7 +1680,7 @@ def get_model_type_name(
     return settings.modules_all.loc[settings.modules_all['module'] == module, 'name_config'].iloc[0]
 
 
-def create_realization_file(
+def create_realization_reg_file(
         workdir: Union[str, Path],
         lib_file: dict,
         bmi_dir: dict,
@@ -1635,7 +1691,7 @@ def create_realization_file(
         rt_dict: dict,
         output_dict: dict,
 ) -> None:
-    """ Create realization file for the specified model and module
+    """ Create realization file for regionalization for the specified modules by catchment
 
     Parameters
     ----------
@@ -1652,7 +1708,37 @@ def create_realization_file(
     Returns
     ----------
     None
+    """
 
+def create_realization_file(
+        workdir: Union[str, Path],
+        lib_file: dict,
+        bmi_dir: dict,
+        forcing_dir: Union[str, Path],
+        realization_file: Union[str, Path],
+        modules: List[str],
+        time_period: dict,
+        rt_dict: dict,
+        output_dict: dict,
+) -> None:
+    """
+    Create realization file for the specified model and module
+
+    Parameters
+    ----------
+    workdir : basin directory for storing all the files
+    lib_file : library files for different modules
+    bmi_dir : directory for different model or module to store BMI files
+    forcing_dir : directory to store foricng files
+    realization_file : model realization configuration file
+    model: model and module combination
+    time_period : simulation and evaluation time period
+    rt_dict : routing model source file directory and configuration file
+    output_dict: whether to output certain variables (currently SWE and soil moisture)
+
+    Returns
+    ----------
+    None
     """
 
     # Create symlinks for libraries
