@@ -72,6 +72,33 @@ class RealizationBuilder:
             # Store group id and associated catchments
             self.reg_cat_dict[grp] = cat_df.divide_id.tolist()
 
+    def _parse_reg_params(self):
+        # Extract regionalization parameters for each group and module
+        # Set modules and associated calibratable parameters
+        params_dict = {
+            'cfes': ['b', 'satdk', 'satpsi', 'slope',
+                     'maxsmc', 'wltsmc', 'max_gw_storage', 'Cgw', 'expon',
+                     'refkdt', 'Kn', 'Klf'],
+            'cfex': ['b', 'satdk', 'satpsi', 'slope',
+                     'maxsmc', 'wltsmc', 'max_gw_storage', 'Cgw', 'expon',
+                     'refkdt', 'Kn', 'Klf', 'a_Xinanjiang_inflection_point_parameter',
+                     'b_Xinanjiang_shape_parameter', 'x_Xinanjiang_shape_parameter'],
+            'lasam': ['ponded_depth_max', 'field_capacity', 'smcmin', 'smcmax', 'van_genuchten_alpha', 'van_genuchten_n', 'hydraulic_conductivity'],
+            'noah': ['RSURF_EXP', 'CWP', 'VCMX25', 'MP', 'MFSNO', 'RSURF_SNOW', 'SCAMAX'],
+            'sac': ['uztwm', 'uzfwm', 'lztwm', 'lzfsm', 'lzfpm', 'adimp', 'uzk', 'lzpk', 'lzsk', 'zperc',
+                    'rexp', 'pctim', 'pfree', 'riva', 'side', 'rserv'],
+            'snow17': ['scf', 'mfmax', 'mfmin', 'uadj', 'si', 'pxtemp', 'nmf', 'tipm', 'plwhc', 'daygm'],
+            'topmodel': ['szm', 't0', 'td', 'chv', 'rv', 'srmax', 'sr0', 'xk0'],
+            'ueb': ['ems', 'cg', 'zo', 'rho', 'rhog', 'ks', 'de', 'avo', 'df', 'apr', 'cc', 'hcan', 'lai', 'subalb']
+        }
+
+        # For each module, retrieve group and corresponding parameter values
+        self.grp_params = {}
+        for mod, params in params_dict.items():
+            self.grp_params[mod] = {
+                row['group']: {param: row[param] for param in params} for _, row in self.reg_df.iterrows()
+            }
+
     def _parse_yaml(self):
         # read realization file path
         self.real_input_file = Path(self.conf['model']['realization'])
@@ -197,13 +224,22 @@ class RealizationBuilder:
 
         # rearrange modules in order of hydrologic processes
         self.modules = [m1 for m1 in settings.modules_all['module'] if m1 in self.modules]
+
+        # Reorder "sft" and "smp"
+        if "sft" in self.modules and "smp" in self.modules:
+            smp_index = self.modules.index("smp")
+            sft_index = self.modules.index("sft")
+            if smp_index > sft_index:
+                self.modules.remove("smp")
+                self.modules.insert(sft_index, "smp")
+
         logger.info(f"Final list of modules in formulation: {self.modules}\n")
 
     def _parse_reg_modules(self):
         # Retrieve modules from regionalization formulation assignment file
         # This could potentially be combined with _parse_modules to not repeat code
         logger.info(f"Available module names: {settings.modules_all['name_ui'].tolist()}")
-        self.reg_modules = {}
+        self.grp_to_form = {}
 
         for idx, row in self.reg_df.iterrows():
             modules0 = [x.replace(" ", "") for x in re.split('-', row['formulation'])]
@@ -267,8 +303,16 @@ class RealizationBuilder:
             else:
                 modules1 = modules.copy()
 
+            # Reorder "sft" and "smp"
+            if "sft" in modules1 and "smp" in modules1:
+                smp_index = modules1.index("smp")
+                sft_index = modules1.index("sft")
+                if smp_index > sft_index:
+                    modules1.remove("smp")
+                    modules1.insert(sft_index, "smp")
+
             # Store with regionalization group id
-            self.reg_modules[row['group']] = modules1
+            self.grp_to_form[row['group']] = modules1
 
     def _validate_processes(self):
         # check modules selected for each process
@@ -294,7 +338,7 @@ class RealizationBuilder:
             procs = list(set(procs + p1))
 
         # Loop through formulation group dictionary
-        for grp, form in self.reg_modules.items():
+        for grp, form in self.grp_to_form.items():
             for p1 in procs:
                 mods = [m1 for m1 in form if p1 in settings.modules_all.loc[settings.modules_all['module'] == m1, 'process'].values[0]]
 
@@ -306,14 +350,18 @@ class RealizationBuilder:
                 if (p1 in ['Evapotranspiration', 'Rainfall_runoff']) and (len(mods) == 0):
                     raise Exception(f'At least one module must be selected for {p1} process: {grp}')
 
+    def _map_cat_to_grp(self):
+        # Relate catchments and their groups
+        self.cat_to_grp = {}
+        for grp, cats in self.reg_cat_dict.items():
+            for cat in cats:
+                self.cat_to_grp[cat] = grp
+
     def _map_cat_to_form(self):
         # Relate catchments and their formulations
         self.cat_to_form = {}
-        for grp, cats in self.reg_cat_dict.items():
-            modules = self.reg_modules[grp]
-
-            for cat in cats:
-                self.cat_to_form[cat] = modules
+        for cat, grp in self.cat_to_grp.items():
+            self.cat_to_form[cat] = self.grp_to_form[grp]
 
     def _map_mod_to_cat(self):
         # Find the catchments that use each module
@@ -325,25 +373,16 @@ class RealizationBuilder:
     def _set_lib_paths(self):
         # library files for all modules included in the formulation
         self.lib_file = {}
-        modules1 = [m1 for m1 in self.modules if m1 != 'troute']
+        if self.run_type == 'calib':
+            modules1 = [m1 for m1 in self.modules if m1 != 'troute']
+        elif self.run_type == 'regionalization':
+            modules1 = list(set(m1 for form in self.grp_to_form.values() for m1 in form if m1 != 'troute'))
+            self.all_mod = modules1.copy()
+
         for m1 in modules1:
             m2 = settings.modules_all.loc[settings.modules_all['module'] == m1, 'name_ui'].iloc[0]
             m2 = m2 if m2 not in ['cfe-s', 'cfe-x'] else 'cfe'
             self.lib_file[m1] = self.conf3[m2 + '_lib']
-
-    def _set_reg_lib_paths(self):
-        # Set library files for all modules for each regionalization group
-        self.reg_lib_file = {}
-
-        # Loop through formulation group dictionary, storing lib files for each group
-        for grp, form in self.reg_modules.items():
-            modules1 = [m1 for m1 in form if m1 != 'troute']
-            lib_file = {}
-            for m1 in modules1:
-                m2 = settings.modules_all.loc[settings.modules_all['module'] == m1, 'name_ui'].iloc[0]
-                m2 = m2 if m2 not in ['cfe-s', 'cfe-x'] else 'cfe'
-                lib_file[m1] = self.conf3[m2 + '_lib']
-                self.reg_lib_file[grp] = lib_file
 
     def _create_calib_input_dir(self):
         # Create Input directory
@@ -688,7 +727,7 @@ class RealizationBuilder:
         self.run_configs = ['_troute_config_region.yaml']
 
         # Retrieve unique modules in all formulations
-        mod_all = [item for lst in self.reg_modules.values() for item in lst]
+        mod_all = [item for lst in self.grp_to_form.values() for item in lst]
 
         # Ensure cfes and cfex are first in mod_all
         if 'cfes' in mod_all:
@@ -715,7 +754,7 @@ class RealizationBuilder:
             cat_mod = self.mod_to_cat[m1]
 
             # If module requires full formulation, retrieve formulation for each catchment
-            if m1 in ['cfes', 'cfex', 'sft', ' lasam']:
+            if m1 in ['cfes', 'cfex', 'sft', 'lasam']:
                 cat_form = [self.cat_to_form[cat] for cat in cat_mod]
 
             # Modify existing BMI config files if filepaths provided (ignoring troute for now)
@@ -811,6 +850,7 @@ class RealizationBuilder:
                         else:
                             # If bmi_dir provided by input file, use that path
                             cfex_dir = self.conf3['cfe-x_bmi_dir']
+
                     # If CFE BMI config files not provided and cfe not in modules, create cfe input files required for sft
                     if 'cfes' not in mod_all and 'cfex' not in mod_all:
                         cfes_dir = os.path.join(self.input_dir, 'cfe-s' + '_input')
@@ -824,26 +864,27 @@ class RealizationBuilder:
                         # Create sft input for catchments using cfex
                         gfun.create_sft_smp_input(cfex_cat, cfex_form, self.attr_file, cfex_dir, self.conf3['forcing_dir'], sft_dir, smp_dir, self.run_type)
 
+                # Skip smp, inputs created in tandem with sft
                 elif m1 == 'smp':
                     continue
                 elif m1 == 'lasam':
                     gfun.create_lasam_input(cat_mod, cat_form, mod_input_dir, self.conf3['lasam_parameter_dir'], self.run_type)
 
-            #     elif m1 == 'troute':
-            #         for file_name, run_name in zip(self.run_configs, ['calib', 'valid', 'valid']):
-            #             routing_config_file = os.path.join(self.work_dir + '/Input', '{}'.format(self.basin) + file_name)
-            #             run_name1 = file_name.replace('_troute_config_', '').replace('.yaml', '')
-            #             if len(self.time_period['run_time_period'][run_name][0]) != 0 & len(self.time_period['run_time_period'][run_name][0]):
-            #                 run_range = pd.to_datetime(self.time_period['run_time_period'][run_name])
-            #                 nts = len(pd.date_range(start=run_range[0], end=run_range[1], freq='5min')) - 1
-            #                 gfun.create_troute_config(self.gpkg_file, routing_config_file, self.time_period['run_time_period'][run_name][0], nts)
-            #                 logger.info(f'troute config file for {run_name1} is created at: {routing_config_file}')
+                elif m1 == 'troute':
+                    for file_name, run_name in zip(self.run_configs, ['region']):
+                        routing_config_file = os.path.join(self.work_dir + '/Input', '{}'.format(self.basin) + file_name)
+                        run_name1 = file_name.replace('_troute_config_', '').replace('.yaml', '')
+                        if len(self.time_period['run_time_period'][run_name][0]) != 0 & len(self.time_period['run_time_period'][run_name][0]):
+                            run_range = pd.to_datetime(self.time_period['run_time_period'][run_name])
+                            nts = len(pd.date_range(start=run_range[0], end=run_range[1], freq='5min')) - 1
+                            gfun.create_troute_config(self.gpkg_file, routing_config_file, self.time_period['run_time_period'][run_name][0], nts)
+                            logger.info(f'troute config file for {run_name1} is created at: {routing_config_file}')
 
-            #     if m1 != 'troute':
-            #         logger.info(f'{m1}: input config files created at: {mod_input_dir}')
+                if m1 != 'troute':
+                    logger.info(f'{m1}: input config files created at: {mod_input_dir}')
 
     def _write_calib_realization(self):
-        # Create model realization file
+        # Create model realization file for calibration
         self.realization_file = self.work_dir + '/{}'.format(self.basin) + '_realization_config_bmi_calib.json'
         routing_config_file = os.path.join(self.work_dir + '/Input', '{}'.format(self.basin) + self.run_configs[0])
         bmi_dir = {}
@@ -853,22 +894,34 @@ class RealizationBuilder:
             bmi_dir[m1] = os.path.join(self.input_dir, m2 + '_input')
         rt_dict = {"routing": {"t_route_config_file_with_path": routing_config_file}}
 
-        # "smp" must be before "sft" in the realization file
-        if "sft" in self.modules and "smp" in self.modules:
-            smp_index = self.modules.index("smp")
-            sft_index = self.modules.index("sft")
-            if smp_index > sft_index:
-                self.modules.remove("smp")
-                self.modules.insert(sft_index, "smp")
-
         gfun.create_realization_file(self.work_dir, self.lib_file, bmi_dir, self.forcing_path, self.realization_file,
                                      self.modules, self.time_period, rt_dict, self.output_dict)
 
-    def _write_fcst_realization(self):
-        # save the new realization file
-        self.realization_file = Path(self.out_dir, os.path.basename(self.real_input_file))
-        with open(self.realization_file, 'w') as outfile:
-            json.dump(self.real_config, outfile, indent=4, separators=(", ", ": "), sort_keys=False)
+    def _write_region_realization(self):
+        # Create model realization file for regionalization
+        self.realization_file = self.work_dir + '/{}'.format(self.basin) + '_realization_config_bmi_region.json'
+        routing_config_file = os.path.join(self.work_dir + '/Input', '{}'.format(self.basin) + self.run_configs[0])
+
+        # Set BMI config directories
+        bmi_dir = {}
+        # modules1 = [m1 for m1 in self.modules if m1 not in ['sloth','troute']]
+        for m1 in self.all_mod:
+            m2 = settings.modules_all.loc[settings.modules_all['module'] == m1, 'name_ui'].iloc[0]
+            bmi_dir[m1] = os.path.join(self.input_dir, m2 + '_input')
+        rt_dict = {"routing": {"t_route_config_file_with_path": routing_config_file}}
+
+        gfun.create_reg_realization_file(self.work_dir, self.lib_file, bmi_dir, self.forcing_path, self.realization_file,
+                                         self.time_period, rt_dict, self.output_dict, self.cat_to_grp, self.grp_to_form, self.grp_params)
+
+        # routing_config_file = os.path.join(self.work_dir + '/Input', '{}'.format(self.basin) + self.run_configs[0])
+        # bmi_dir = {}
+
+        # # Skip modules that aren't calibrated
+        # if m1 not in ['pet', 'troute', 'smp', 'sft', 'sloth']:
+        #     # Retrieve group of each catchment
+        #     cat_grp = [self.cat_to_grp[cat] for cat in cat_mod]
+        #     # Retrieve parameter dictionary for module
+        #     mod_params = self.grp_params[m1]
 
     def _write_partition(self):
         self.part_file = gfun.create_partition_file(self.parallelSec['partition_generator_exe'],
@@ -972,17 +1025,20 @@ class RealizationBuilder:
         self._load_reg_catchments()
         self._parse_config()
         self._parse_time()
+        self._parse_reg_params()
         self._parse_reg_modules()
         self._validate_reg_processes()
+        self._map_cat_to_grp()
         self._map_cat_to_form()
         self._map_mod_to_cat()
-        self._set_reg_lib_paths()
+        self._set_lib_paths()
         self._create_reg_input_dir()
         self._extract_hydrofabric()
         self._extract_forcing()
         # Eliminated streamflow_obs file, not sure if needed for regionalization
         self._set_output_vars()
         self._create_reg_bmi_configs()
+        self._write_region_realization()
 
     def build_fcst_realization(self):
         """
