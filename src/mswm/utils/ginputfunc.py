@@ -22,7 +22,7 @@ import pandas as pd
 import yaml
 
 from tempfile import mkstemp
-from mswm.cal_utils import settings
+from mswm.utils import settings
 
 logger = logging.getLogger('createInput')
 

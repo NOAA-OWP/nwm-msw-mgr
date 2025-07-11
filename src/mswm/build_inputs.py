@@ -13,11 +13,11 @@ import pandas as pd
 import json
 from collections import defaultdict
 
-from mswm.cal_utils import ginputfunc as gfun
-from mswm.cal_utils import settings
-from mswm.fcst_utils.log_level import log_level_set
-from mswm.fcst_utils.process_forcing import update_forcing_in_realization
-from mswm.fcst_utils.update_bmi_config import update_noah_ueb, update_troute
+from mswm.utils import ginputfunc as gfun
+from mswm.utils import settings
+from mswm.utils.log_level import log_level_set
+from mswm.utils.process_forcing import update_forcing_in_realization
+from mswm.utils.update_bmi_config import update_noah_ueb, update_troute
 
 logger = logging.getLogger(__name__)
 
@@ -64,13 +64,13 @@ class RealizationBuilder:
 
     def _load_reg_catchments(self):
         # Load grouped catchment files produced by regionalization and store grouped catchment ids
-        self.reg_cat_dict = {}
+        self.grp_to_cat = {}
         for grp in self.reg_df['group']:
             cat_path = os.path.join(self.assign_path.parent, grp + "_catchments.csv")
             cat_df = pd.read_csv(cat_path)
 
             # Store group id and associated catchments
-            self.reg_cat_dict[grp] = cat_df.divide_id.tolist()
+            self.grp_to_cat[grp] = cat_df.divide_id.tolist()
 
     def _parse_reg_params(self):
         # Extract regionalization parameters for each group and module
@@ -295,7 +295,7 @@ class RealizationBuilder:
             modules = [m1 for m1 in settings.modules_all['module'] if m1 in modules]
             logger.info(f"Final list of modules in formulation for {row['group']}: {modules}\n")
 
-            # always create CFE inputs first since sft/smp need data from CFE inputs if they are selected
+            # CFE must be ordered before sft/smp
             if 'cfes' in modules:
                 modules1 = ['cfes'] + [m1 for m1 in modules if m1 != 'cfes']
             elif 'cfex' in modules:
@@ -353,7 +353,7 @@ class RealizationBuilder:
     def _map_cat_to_grp(self):
         # Relate catchments and their groups
         self.cat_to_grp = {}
-        for grp, cats in self.reg_cat_dict.items():
+        for grp, cats in self.grp_to_cat.items():
             for cat in cats:
                 self.cat_to_grp[cat] = grp
 
@@ -726,8 +726,8 @@ class RealizationBuilder:
 
         self.run_configs = ['_troute_config_region.yaml']
 
-        # Retrieve unique modules in all formulations
-        mod_all = [item for lst in self.grp_to_form.values() for item in lst]
+        # Retrieve unique modules in all formulations, maintaining formulation order
+        mod_all = list(dict.fromkeys(item for lst in self.grp_to_form.values() for item in lst))
 
         # Ensure cfes and cfex are first in mod_all
         if 'cfes' in mod_all:
@@ -755,7 +755,7 @@ class RealizationBuilder:
 
             # If module requires full formulation, retrieve formulation for each catchment
             if m1 in ['cfes', 'cfex', 'sft', 'lasam']:
-                cat_form = [self.cat_to_form[cat] for cat in cat_mod]
+                form_cat = [self.cat_to_form[cat] for cat in cat_mod]
 
             # Modify existing BMI config files if filepaths provided (ignoring troute for now)
             # Skip config generation for sloth
@@ -809,7 +809,7 @@ class RealizationBuilder:
 
             else:
                 if m1 in ['cfes', 'cfex']:
-                    gfun.create_cfe_input(cat_mod, cat_form, self.attr_file, mod_input_dir, self.run_type)
+                    gfun.create_cfe_input(cat_mod, form_cat, self.attr_file, mod_input_dir, self.run_type)
                 elif m1 == 'ueb':
                     gfun.create_ueb_input(cat_mod, self.time_period, self.attr_file, self.conf3[m1 + '_parameter_dir'], mod_input_dir, '', self.run_type)
                 elif m1 == 'snow17':
@@ -824,51 +824,43 @@ class RealizationBuilder:
                     sft_dir = os.path.join(self.input_dir, 'sft_input')
                     smp_dir = os.path.join(self.input_dir, 'smp_input')
 
-                    # Update CFE bmi dir with correct scheme (Schaake/Xinanjiang)
-                    if ('cfes' in mod_all):
-                        # Retrieve catchments and related formulations that also use cfes
-                        cfes_ind = [i for i, form in enumerate(cat_form) if 'cfes' in form]
-                        cfes_cat = [cat_mod[i] for i in cfes_ind]
-                        cfes_form = [cat_form[i] for i in cfes_ind]
+                    # Loop through schemes that could be paired with SFT (CFES/CFEX/LASAM)
+                    # SFT could be paired with CFES/CFEX/LASAM simulatenously in different formulations, so configs must be generated separately
+                    for scheme in ['cfes', 'cfex', 'lasam']:
+                        # Retrieve formulation groups where CFES/CFEX/LASAM co-occur with SFT
+                        scheme_sft_grps = [grp for grp, mods in self.grp_to_form.items() if scheme in mods and 'sft' in mods]
+                        if scheme_sft_grps:
+                            # Update CFE bmi dir with correct scheme for formulation (Schaake/Xinanjiang)
+                            if scheme == 'cfes' or scheme == 'lasam':
+                                scheme_bmi_var = 'cfe-s'
+                            elif scheme == 'cfex':
+                                scheme_bmi_var = 'cfe-x'
+                            else:
+                                raise Exception('SMP/SFT only implemented when CFE-S, CFE-X, or LASAM are selected')
 
-                        # If bmi_dir not provided by input file, create from input dir
-                        if self.conf3['cfe-s_bmi_dir'] == '':
-                            cfes_dir = os.path.join(self.input_dir, 'cfe-s_input')
-                        else:
-                            # If bmi_dir provided by input file, use that path
-                            cfes_dir = self.conf3['cfe-s_bmi_dir']
-                    if ('cfex' in mod_all):
-                        # Retrieve catchments and related formulations that also use cfes
-                        cfex_ind = [i for i, form in enumerate(cat_form) if 'cfex' in form]
-                        cfex_cat = [cat_mod[i] for i in cfex_ind]
-                        cfex_form = [cat_form[i] for i in cfex_ind]
+                            # Retrieve catchments and formulations corresponding to scheme
+                            scheme_cat = [cat for grp in scheme_sft_grps for cat in self.grp_to_cat[grp]]
+                            scheme_form = [self.cat_to_form[cat] for cat in scheme_cat]
 
-                        # If bmi_dir not provided by input file, create from input dir
-                        if self.conf3['cfe-x_bmi_dir'] == '':
-                            cfex_dir = os.path.join(self.input_dir, 'cfe-x_input')
+                            # If bmi_dir not provided by input file, create from input dir
+                            if self.conf3[scheme_bmi_var + '_bmi_dir'] == '':
+                                scheme_dir = os.path.join(self.input_dir, scheme_bmi_var + '_input')
+                            else:
+                                scheme_dir = self.conf3[scheme_bmi_var + '_bmi_var']
 
-                        else:
-                            # If bmi_dir provided by input file, use that path
-                            cfex_dir = self.conf3['cfe-x_bmi_dir']
+                            # If LASAM is selected, create cfe input files required for sft (assume ice_fraction_scheme is cfes)
+                            if scheme not in ('cfes', 'cfex'):
+                                scheme_form_cfes = [form + ['cfes'] for form in scheme_form]
+                                gfun.create_cfe_input(scheme_cat, scheme_form_cfes, self.attr_file, scheme_dir, self.run_type)
 
-                    # If CFE BMI config files not provided and cfe not in modules, create cfe input files required for sft
-                    if 'cfes' not in mod_all and 'cfex' not in mod_all:
-                        cfes_dir = os.path.join(self.input_dir, 'cfe-s' + '_input')
-                        cat_form_cfes = [form + ['cfes'] for form in cat_form]
-                        gfun.create_cfe_input(cat_mod, cat_form_cfes, self.attr_file, cfes_dir, self.run_type)
-
-                    if ('cfes' in mod_all):
-                        # Create sft input for catchments using cfes
-                        gfun.create_sft_smp_input(cfes_cat, cfes_form, self.attr_file, cfes_dir, self.conf3['forcing_dir'], sft_dir, smp_dir, self.run_type)
-                    if ('cfex' in mod_all):
-                        # Create sft input for catchments using cfex
-                        gfun.create_sft_smp_input(cfex_cat, cfex_form, self.attr_file, cfex_dir, self.conf3['forcing_dir'], sft_dir, smp_dir, self.run_type)
+                            # Create SFT/SMP inputs
+                            gfun.create_sft_smp_input(scheme_cat, scheme_form, self.attr_file, scheme_dir, self.conf3['forcing_dir'], sft_dir, smp_dir, self.run_type)
 
                 # Skip smp, inputs created in tandem with sft
                 elif m1 == 'smp':
                     continue
                 elif m1 == 'lasam':
-                    gfun.create_lasam_input(cat_mod, cat_form, mod_input_dir, self.conf3['lasam_parameter_dir'], self.run_type)
+                    gfun.create_lasam_input(cat_mod, form_cat, mod_input_dir, self.conf3['lasam_parameter_dir'], self.run_type)
 
                 elif m1 == 'troute':
                     for file_name, run_name in zip(self.run_configs, ['region']):
