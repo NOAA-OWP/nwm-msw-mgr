@@ -174,6 +174,7 @@ def create_cfe_input(
     modules: list of modules in the formulation
     attr_file : file containing model parameter attributes
     cfe_input_dir: directory to save configuration files
+    run_type: type of run (calib or regionalization)
 
     Returns
     ----------
@@ -269,8 +270,10 @@ def create_noah_input(
     ----------
     catids : catchment IDs in the basin
     time_period : simulation and evaluation time period
+    attr_file: file containing model parameter attributes
     param_dir_source : source directory containing Noah-OWP-Modular parameter files
     noah_input_dir: directory to save configuration files
+    run_type: type of run (calib or regionalization)
 
     Returns
     ----------
@@ -405,6 +408,7 @@ def create_noah_input_template(
     param_dir_source : source directory containing Noah-OWP-Modular parameter files
     input_dir: directory to save configuration files
     template_bmi_dir: directory to template BMI files
+    run_type: type of run (calib or regionalization)
 
     Returns
     ----------
@@ -487,6 +491,7 @@ def create_sft_smp_input(
     forcing_dir : directory containing forcing files
     sft_dir : directory for writing sft bmi configuration files
     smp_dir : directory for writing smp bmi configuration files
+    run_type: type of run (calib or regionalization)
 
     Returns
     ----------
@@ -568,9 +573,10 @@ def create_snow17_input(
     Parameters
     ----------
     catids : catchment IDs in the basin
-    cfe_bmi_dir : directory for the cfe bmi configuration file
-    snow17_param_file : soil hydraulic parameter file
-    snow17_bmi_dir : directory for the lasam bmi configuration file
+    attr_file: file containing model parameter attributes
+    gpkg_file: GeoPackage hydrofabric file
+    param_dir_source : directory containing snow17 parameter files
+    snow17_input_dir : directory for the snow17 bmi configuration files
 
     Returns
     ----------
@@ -593,34 +599,6 @@ def create_snow17_input(
     params_df.set_index('divide_id', inplace=True)
 
     for catID in catids:
-
-        # Set catchment-specific snow17 config parameters from defaults
-        # param_list = ['hru_id ' + catID,
-        #               'hru_area ' + str(df_divide.loc[catID]['areasqkm']),
-        #               'latitude ' + str(dfa.loc[catID]['Y']),
-        #               'elev ' + str(dfa.loc[catID]['elevation_mean']),
-        #               'scf 1.100',
-        #               'mfmax 1.00',
-        #               'mfmin 0.20',
-        #               'uadj 0.05',
-        #               'si 500.00',
-        #               'pxtemp 1.000',
-        #               'nmf 0.150',
-        #               'tipm 0.100',
-        #               'mbase 0.000',
-        #               'plwhc 0.030',
-        #               'daygm 0.000',
-        #               'adc1 0.050',
-        #               'adc2 0.100',
-        #               'adc3 0.200',
-        #               'adc4 0.300',
-        #               'adc5 0.400',
-        #               'adc6 0.500',
-        #               'adc7 0.600',
-        #               'adc8 0.700',
-        #               'adc9 0.800',
-        #               'adc10 0.900',
-        #               'adc11 1.000']
 
         # Set catchment-specific snow17 config parameters
         param_list = ['hru_id ' + catID,
@@ -695,7 +673,6 @@ def create_ueb_input(
         attr_file: Union[str, Path],
         param_dir_source: Union[str, Path],
         ueb_input_dir: str,
-        # sitevar_file_exists: bool,
         bmi_dir: Union[str, Path],
         run_type: str
 ) -> None:
@@ -705,10 +682,11 @@ def create_ueb_input(
     ----------
     catids : catchment IDs in the basin
     time_period: simulation time period
-    attr_file : attributes file containing info on lat/lon/slope/aspect etc
+    attr_file: file containing model parameter attributes
     param_dir_source : directory containing UEB parameter files
     ueb_input_dir : directory for the UEB bmi configuration file
     bmi_dir: directory path containing existing sitevar files (e.g., from EDS)
+    run_type: type of run (calib or regionalization)
 
     Returns
     ----------
@@ -822,8 +800,10 @@ def create_sac_input(
     Parameters
     ----------
     catids : catchment IDs in the basin
-    sac_param_file : sac parameter file
-    sac_bmi_dir : directory for the sac bmi configuration file
+    attr_file: file containing model parameter attributes
+    gpkg_file: GeoPackage hydrofabric file
+    param_dir_source : directory for sac parameter file
+    sac_input_dir : directory for the sac bmi configuration file
 
     Returns
     ----------
@@ -917,8 +897,8 @@ def change_sac_snow17_input(
     ----------
     module: "sac" or "snow17"
     catids : catchment IDs
-    bmi_dir: directory for existing config files
     input_dir : directory for storing new config files
+    bmi_dir: directory for existing config files
 
     Returns
     ----------
@@ -983,6 +963,7 @@ def create_pet_input(
     Parameters
     ----------
     catids : catchment IDs in the basin
+    attr_file: file containing model parameter attributes
     pet_input_dir : directory for the pet input files
 
     Returns
@@ -1040,8 +1021,10 @@ def create_lasam_input(
     Parameters
     ----------
     catids : catchment IDs in the basin
+    modules: list of modules or a list of formulations for each catchment
     input_dir : directory for the lasam input configuration file
     param_dir: directory for static lasam parameter files
+    run_type: type of run (calib or regionalization)
 
     Returns
     ----------
@@ -1122,8 +1105,8 @@ def change_lasam_input(
     Parameters
     ----------
     catids : catchment IDs
-    bmi_dir: directory for existing config files
     input_dir : directory for storing new config files
+    bmi_dir: directory for existing config files
     param_dir: path to lasam parameter files
 
     Returns
@@ -1182,8 +1165,8 @@ def change_smp_input(
     Parameters
     ----------
     catids : catchment IDs
-    bmi_dir: directory for existing config files
     input_dir : directory for storing new config files
+    bmi_dir: directory for existing config files
     sm_frac_depth: depth (m) at which to output soil moisture fraction
     sm_profile_depth: depth (m) at which to output soil moisture (from the first soil layer)
 
@@ -1405,7 +1388,20 @@ def create_topmodel_input(
         gpkg_file: Union[str, Path],
         inputDir: Union[str, Path],
 ) -> None:
+    """ Create BMI configuration file for Topmodel
 
+    Parameters
+    ----------
+    catids : catchment IDs in the basin
+    attr_file: file containing model parameter attributes
+    gpkg_file: GeoPackage hydrofabric file
+    inputDir: directory for writing topmodel bmi configuration files
+
+    Returns
+    ----------
+    None
+
+    """
     os.makedirs(inputDir, exist_ok=True)
 
     # Read hydrofabric attribute file
@@ -1783,24 +1779,6 @@ def create_reg_realization_file(
 
         # noah
         if 'noah' in cat_mod:
-            # model_configs['noah'] = {"name": "bmi_fortran",
-            #                          "params": {"name": "bmi_fortran",
-            #                                     "model_type_name": get_model_type_name('noah'),
-            #                                     "main_output_variable": "QINSUR",
-            #                                     "library_file": lib_mod['noah'],
-            #                                     "init_config": os.path.join(bmi_dir['noah'], catID + '_region.input'),
-            #                                     "allow_exceed_end_time": True, "fixed_time_step": False, "uses_forcing_file": False,
-            #                                     "variables_names_map": {
-            #                                         "PRCPNONC": "atmosphere_water__liquid_equivalent_precipitation_rate",
-            #                                         "Q2": "atmosphere_air_water~vapor__relative_saturation",
-            #                                         "SFCTMP": "land_surface_air__temperature",
-            #                                         "UU": "land_surface_wind__x_component_of_velocity",
-            #                                         "VV": "land_surface_wind__y_component_of_velocity",
-            #                                         "LWDN": "land_surface_radiation~incoming~longwave__energy_flux",
-            #                                         "SOLDN": "land_surface_radiation~incoming~shortwave__energy_flux",
-            #                                         "SFCPRS": "land_surface_air__pressure"},
-            #                                     "model_params": grp_params['noah'][cat_to_grp[catID]]}}
-
             model_configs['noah'] = {"name": "bmi_fortran",
                                      "params": {"name": "bmi_fortran",
                                                 "model_type_name": get_model_type_name('noah'),
@@ -1817,22 +1795,11 @@ def create_reg_realization_file(
                                                     "LWDN": "land_surface_radiation~incoming~longwave__energy_flux",
                                                     "SOLDN": "land_surface_radiation~incoming~shortwave__energy_flux",
                                                     "SFCPRS": "land_surface_air__pressure"},
-                                                }}
-
+                                                "model_params": grp_params['noah'][cat_to_grp[catID]]}}
 
         # cfe or cfex
         if 'cfes' in cat_mod or 'cfex' in cat_mod:
             m1 = 'cfes' if 'cfes' in cat_mod else 'cfex'
-            # model_configs[m1] = {"name": "bmi_c",
-            #                      "params": {"name": "bmi_c",
-            #                                 "model_type_name": get_model_type_name(m1),
-            #                                 "main_output_variable": "Q_OUT",
-            #                                 "library_file": lib_mod[m1],
-            #                                 "init_config": os.path.join(bmi_dir[m1], catID + '_bmi_config_cfe.txt'),
-            #                                 "allow_exceed_end_time": True, "fixed_time_step": False, "uses_forcing_file": False,
-            #                                 "registration_function": "register_bmi_cfe",
-            #                                 "model_params": grp_params[m1][cat_to_grp[catID]]}}
-            
             model_configs[m1] = {"name": "bmi_c",
                                  "params": {"name": "bmi_c",
                                             "model_type_name": get_model_type_name(m1),
@@ -1840,7 +1807,8 @@ def create_reg_realization_file(
                                             "library_file": lib_mod[m1],
                                             "init_config": os.path.join(bmi_dir[m1], catID + '_bmi_config_cfe.txt'),
                                             "allow_exceed_end_time": True, "fixed_time_step": False, "uses_forcing_file": False,
-                                            "registration_function": "register_bmi_cfe"}}
+                                            "registration_function": "register_bmi_cfe",
+                                            "model_params": grp_params[m1][cat_to_grp[catID]]}}
 
             # variable name mapping section
             pet_in = "water_potential_evaporation_flux"
@@ -2108,7 +2076,7 @@ def create_reg_realization_file(
     # g = {"global": {"formulations": [gbmain],
     #                 "forcing": {"file_pattern": ".*{{id}}.*.csv", "path": forcing_dir, "provider": "CsvPerFeature"}}}
     # g = {"global": {"forcing": {"file_pattern": ".*{{id}}.*.csv", "path": forcing_dir, "provider": "CsvPerFeature"}}}
-    
+
     # Initialize global dictionary
     g = {}
 
@@ -2533,17 +2501,32 @@ def create_calib_config_file(
 
 def create_partition_file(
         partition_generator: str,
-        hydrofab_file: str,
+        gpkg_file: str,
         nprocs: int,
         work_dir: str,
         basin: str) -> Union[str, Path]:
+    """ Create partition file
+
+    Parameters
+    ----------
+    partition_generator: partition config generator json file
+    gpkg_file: GeoPackage hydrofabric file
+    nprocs: number of processors
+    work_dir : path to working directory
+    basin : name of basin
+
+    Returns
+    ----------
+    None
+
+    """
 
     partition_file = os.path.join(work_dir, 'Input', f"{basin}_partition_config.json")
-    cmd = f"{partition_generator} {hydrofab_file} {hydrofab_file} {partition_file} {nprocs} '' ''"
+    cmd = f"{partition_generator} {gpkg_file} {gpkg_file} {partition_file} {nprocs} '' ''"
 
     logger.info("Creating partition file for basin %s", basin)
     logger.info(" - Partition generator: %s", partition_generator)
-    logger.info(" - Hydrofabric file: %s", hydrofab_file)
+    logger.info(" - Hydrofabric file: %s", gpkg_file)
     logger.info(" - Partition file: %s", partition_file)
     logger.info(" - Number of processors: %s", nprocs)
     logger.info(" - Command: %s", cmd)
