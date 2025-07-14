@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 
 class RealizationBuilder:
-    def __init__(self, input_path: str, assign_path: str, forcing_path: str = None, output_folder: str = None):
+    def __init__(self, input_path: str, assign_path: str | None = None, forcing_path: str | None = None, output_folder: str | None = None):
         self.input_path = Path(input_path)
         self.assign_path = Path(assign_path) if assign_path else None
         self.forcing_path = Path(forcing_path) if forcing_path else None
@@ -654,10 +654,13 @@ class RealizationBuilder:
                         gfun.change_sac_snow17_input(m1, self.catids, mod_input_dir, self.conf3[m2 + "_bmi_dir"])
                     elif m1 == 'lasam':
                         gfun.change_lasam_input(self.catids, mod_input_dir, self.conf3[m2 + "_bmi_dir"], self.conf3['lasam_parameter_dir'])
-                    elif m1 == "smp" and self.output_dict['output_sm']:
+                    elif m1 == 'smp' and self.output_dict['output_sm']:
                         # For SMP, the depth to output soil moisture may need to be adjusted
                         self.output_dict['sm_profile_depth'] = gfun.change_smp_input(self.catids, mod_input_dir, self.conf3[m2 + "_bmi_dir"],
                                                                                      self.output_dict['sm_frac_depth'], self.output_dict['sm_profile_depth'])
+                    elif m1 == 'sft':
+                        # Modify SFT inputs to ensure ice_fraction_scheme matches rainfall_runoff model
+                        gfun.change_sft_input(self.catids, modules1, mod_input_dir, bmi_dir, self.run_type)
                     else:
                         # Create symbolic link
                         logger.info(f'{m2}: create symlink from {bmi_dir} to {mod_input_dir}')
@@ -675,7 +678,7 @@ class RealizationBuilder:
                 elif m1 == "sac":
                     gfun.create_sac_input(self.catids, self.attr_file, self.gpkg_file, self.conf3[m1 + '_parameter_dir'], mod_input_dir)
                 elif m1 == 'noah':
-                    gfun.create_noah_input(self.catids, self.time_period, self.attr_file, self.conf3[m1 + '_parameter_dir'], mod_input_dir)
+                    gfun.create_noah_input(self.catids, self.time_period, self.attr_file, self.conf3[m1 + '_parameter_dir'], mod_input_dir, self.run_type)
                 elif m1 == 'sft':
                     sft_dir = os.path.join(self.input_dir, 'sft_input')
                     smp_dir = os.path.join(self.input_dir, 'smp_input')
@@ -793,6 +796,37 @@ class RealizationBuilder:
                         # For SMP, the depth to output soil moisture may need to be adjusted
                         self.output_dict['sm_profile_depth'] = gfun.change_smp_input(cat_mod, mod_input_dir, self.conf3[m2 + "_bmi_dir"],
                                                                                      self.output_dict['sm_frac_depth'], self.output_dict['sm_profile_depth'])
+                    # Modify existing SFT inputs to match rainfall runoff model
+                    elif m1 == "sft":
+                        # Loop through schemes that could be paired with SFT (CFES/CFEX/LASAM)
+                        # SFT could be paired with CFES/CFEX/LASAM simulatenously in different formulations, so configs must be generated separately
+                        for scheme in ['cfes', 'cfex', 'lasam']:
+                            # Retrieve formulation groups where CFES/CFEX/LASAM co-occur with SFT
+                            scheme_sft_grps = [grp for grp, mods in self.grp_to_form.items() if scheme in mods and 'sft' in mods]
+                            if scheme_sft_grps:
+                                # Update CFE bmi dir with correct scheme for formulation (Schaake/Xinanjiang)
+                                if scheme == 'cfes' or scheme == 'lasam':
+                                    scheme_bmi_var = 'cfe-s'
+                                elif scheme == 'cfex':
+                                    scheme_bmi_var = 'cfe-x'
+                                else:
+                                    raise Exception('SMP/SFT only implemented when CFE-S, CFE-X, or LASAM are selected')
+
+                                # Retrieve catchments and formulations corresponding to scheme
+                                scheme_cat = [cat for grp in scheme_sft_grps for cat in self.grp_to_cat[grp]]
+                                scheme_form = [self.cat_to_form[cat] for cat in scheme_cat]
+
+                                # Form CFE input dir
+                                cfe_dir = os.path.join(self.input_dir, scheme_bmi_var + '_input')
+
+                                # If LASAM is selected, create cfe input files required for sft (assume ice_fraction_scheme is cfes)
+                                if scheme not in ('cfes', 'cfex'):
+                                    scheme_form_cfes = [form + ['cfes'] for form in scheme_form]
+                                    gfun.create_cfe_input(scheme_cat, scheme_form_cfes, self.attr_file, cfe_dir, self.run_type)
+
+                                # Create SFT inputs
+                                gfun.change_sft_input(scheme_cat, scheme_form, mod_input_dir, bmi_dir, self.run_type)
+
                     else:
                         # Create symbolic link to catchments with formulation
                         os.makedirs(mod_input_dir, exist_ok=True)
@@ -842,19 +876,16 @@ class RealizationBuilder:
                             scheme_cat = [cat for grp in scheme_sft_grps for cat in self.grp_to_cat[grp]]
                             scheme_form = [self.cat_to_form[cat] for cat in scheme_cat]
 
-                            # If bmi_dir not provided by input file, create from input dir
-                            if self.conf3[scheme_bmi_var + '_bmi_dir'] == '':
-                                scheme_dir = os.path.join(self.input_dir, scheme_bmi_var + '_input')
-                            else:
-                                scheme_dir = self.conf3[scheme_bmi_var + '_bmi_var']
+                            # Form CFE input dir
+                            cfe_dir = os.path.join(self.input_dir, scheme_bmi_var + '_input')
 
                             # If LASAM is selected, create cfe input files required for sft (assume ice_fraction_scheme is cfes)
                             if scheme not in ('cfes', 'cfex'):
                                 scheme_form_cfes = [form + ['cfes'] for form in scheme_form]
-                                gfun.create_cfe_input(scheme_cat, scheme_form_cfes, self.attr_file, scheme_dir, self.run_type)
+                                gfun.create_cfe_input(scheme_cat, scheme_form_cfes, self.attr_file, cfe_dir, self.run_type)
 
                             # Create SFT/SMP inputs
-                            gfun.create_sft_smp_input(scheme_cat, scheme_form, self.attr_file, scheme_dir, self.conf3['forcing_dir'], sft_dir, smp_dir, self.run_type)
+                            gfun.create_sft_smp_input(scheme_cat, scheme_form, self.attr_file, cfe_dir, self.conf3['forcing_dir'], sft_dir, smp_dir, self.run_type)
 
                 # Skip smp, inputs created in tandem with sft
                 elif m1 == 'smp':

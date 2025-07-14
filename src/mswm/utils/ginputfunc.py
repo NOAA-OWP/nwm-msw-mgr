@@ -1280,6 +1280,72 @@ def change_smp_input(
     return depths[0]
 
 
+def change_sft_input(
+        catids: List[str],
+        modules: Union[List[str], List[List[str]]],
+        input_dir: Union[str, Path],
+        bmi_dir: Union[str, Path],
+        run_type: str,
+) -> None:
+    """ Create BMI configuration file for soil freeze and thaw module, and soil moisture profiles
+
+    Parameters
+    ----------
+    catids : catchment IDs in the basin
+    modules: list of modules in the formulation
+    input_dir: directory for writing sft bmi configuration files
+    bmi_dir : directory containing bmi configuration files
+    run_type: type of run (calib or regionalization)
+
+    Returns
+    ----------
+    None
+
+    """
+
+    # create input directory for storing new config files
+    os.makedirs(input_dir, exist_ok=True)
+
+    # Ice fraction scheme
+    icefscheme = 'Schaake'
+    if run_type == 'calib':
+        mods = modules
+        if ('cfex' in mods):
+            icefscheme = 'Xinanjiang'
+
+    # Create bmi config files
+    for i in range(len(catids)):
+
+        catID = catids[i]
+
+        # Set module list for each catchment during regionalization
+        if run_type == 'regionalization':
+            mods = modules[i]
+            if ('cfex' in mods):
+                icefscheme = 'Xinanjiang'
+
+        # existing config files
+        param_file0 = os.path.join(bmi_dir, catID + '_bmi_config_sft.txt')
+
+        # new config files to be created
+        param_file = os.path.join(input_dir, catID + '_bmi_config_sft.txt')
+
+        # correct the ice_fraction_scheme depending on the catchments formulation
+        if not os.path.exists(param_file0):
+            raise Exception(f'Param file does not exist: {param_file0}')
+        with open(param_file0) as f:
+            lines0 = f.readlines()
+        lines1 = copy.deepcopy(lines0)
+
+        # Find index of ice_fraction_scheme line
+        idx = [i for i, s in enumerate(lines0) if s.startswith('ice')]
+        lines1[idx[0]] = f'ice_fraction_scheme={icefscheme}\n'
+
+        # Save to new parameter file
+        with open(param_file, 'w') as outfile:
+            outfile.writelines(lines1)
+
+
 def change_topmodel_input(
         catID: str,
         runfile: Union[str, Path],
@@ -1717,6 +1783,24 @@ def create_reg_realization_file(
 
         # noah
         if 'noah' in cat_mod:
+            # model_configs['noah'] = {"name": "bmi_fortran",
+            #                          "params": {"name": "bmi_fortran",
+            #                                     "model_type_name": get_model_type_name('noah'),
+            #                                     "main_output_variable": "QINSUR",
+            #                                     "library_file": lib_mod['noah'],
+            #                                     "init_config": os.path.join(bmi_dir['noah'], catID + '_region.input'),
+            #                                     "allow_exceed_end_time": True, "fixed_time_step": False, "uses_forcing_file": False,
+            #                                     "variables_names_map": {
+            #                                         "PRCPNONC": "atmosphere_water__liquid_equivalent_precipitation_rate",
+            #                                         "Q2": "atmosphere_air_water~vapor__relative_saturation",
+            #                                         "SFCTMP": "land_surface_air__temperature",
+            #                                         "UU": "land_surface_wind__x_component_of_velocity",
+            #                                         "VV": "land_surface_wind__y_component_of_velocity",
+            #                                         "LWDN": "land_surface_radiation~incoming~longwave__energy_flux",
+            #                                         "SOLDN": "land_surface_radiation~incoming~shortwave__energy_flux",
+            #                                         "SFCPRS": "land_surface_air__pressure"},
+            #                                     "model_params": grp_params['noah'][cat_to_grp[catID]]}}
+
             model_configs['noah'] = {"name": "bmi_fortran",
                                      "params": {"name": "bmi_fortran",
                                                 "model_type_name": get_model_type_name('noah'),
@@ -1733,11 +1817,22 @@ def create_reg_realization_file(
                                                     "LWDN": "land_surface_radiation~incoming~longwave__energy_flux",
                                                     "SOLDN": "land_surface_radiation~incoming~shortwave__energy_flux",
                                                     "SFCPRS": "land_surface_air__pressure"},
-                                                "model_params": grp_params['noah'][cat_to_grp[catID]]}}
+                                                }}
+
 
         # cfe or cfex
         if 'cfes' in cat_mod or 'cfex' in cat_mod:
             m1 = 'cfes' if 'cfes' in cat_mod else 'cfex'
+            # model_configs[m1] = {"name": "bmi_c",
+            #                      "params": {"name": "bmi_c",
+            #                                 "model_type_name": get_model_type_name(m1),
+            #                                 "main_output_variable": "Q_OUT",
+            #                                 "library_file": lib_mod[m1],
+            #                                 "init_config": os.path.join(bmi_dir[m1], catID + '_bmi_config_cfe.txt'),
+            #                                 "allow_exceed_end_time": True, "fixed_time_step": False, "uses_forcing_file": False,
+            #                                 "registration_function": "register_bmi_cfe",
+            #                                 "model_params": grp_params[m1][cat_to_grp[catID]]}}
+            
             model_configs[m1] = {"name": "bmi_c",
                                  "params": {"name": "bmi_c",
                                             "model_type_name": get_model_type_name(m1),
@@ -1745,8 +1840,7 @@ def create_reg_realization_file(
                                             "library_file": lib_mod[m1],
                                             "init_config": os.path.join(bmi_dir[m1], catID + '_bmi_config_cfe.txt'),
                                             "allow_exceed_end_time": True, "fixed_time_step": False, "uses_forcing_file": False,
-                                            "registration_function": "register_bmi_cfe",
-                                            "model_params": grp_params[m1][cat_to_grp[catID]]}}
+                                            "registration_function": "register_bmi_cfe"}}
 
             # variable name mapping section
             pet_in = "water_potential_evaporation_flux"
@@ -1973,14 +2067,14 @@ def create_reg_realization_file(
         model_configs[rr_mod1]["params"]["variables_names_map"] = var_maps['input']
 
         # Update catmain with new catchment config
-        cat_configs["params"]["modules"] = list(model_configs.values())
+        cat_configs["params"]["modules"] = [model_configs[m1] for m1 in cat_mod if m1 != 'troute']
         catmain[catID] = {}
         catmain[catID]["formulations"] = [cat_configs]
 
         # Update forcing file path for catchment
         catmain[catID]["forcing"] = {"path": forcing_dir + "/" + catID + ".csv"}
 
-    # It seems that we do not need a formulation section in global to run the realization.
+    # We do not need a formulation section in global to run the regionalization realization.
     # If we want a global formulation, add this code back in
 
     # # Combine configurations globally
@@ -2014,6 +2108,8 @@ def create_reg_realization_file(
     # g = {"global": {"formulations": [gbmain],
     #                 "forcing": {"file_pattern": ".*{{id}}.*.csv", "path": forcing_dir, "provider": "CsvPerFeature"}}}
     # g = {"global": {"forcing": {"file_pattern": ".*{{id}}.*.csv", "path": forcing_dir, "provider": "CsvPerFeature"}}}
+    
+    # Initialize global dictionary
     g = {}
 
     # time object
