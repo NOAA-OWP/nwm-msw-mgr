@@ -295,24 +295,16 @@ class RealizationBuilder:
             modules = [m1 for m1 in settings.modules_all['module'] if m1 in modules]
             logger.info(f"Final list of modules in formulation for {row['group']}: {modules}\n")
 
-            # CFE must be ordered before sft/smp
-            if 'cfes' in modules:
-                modules1 = ['cfes'] + [m1 for m1 in modules if m1 != 'cfes']
-            elif 'cfex' in modules:
-                modules1 = ['cfex'] + [m1 for m1 in modules if m1 != 'cfex']
-            else:
-                modules1 = modules.copy()
-
             # Reorder "sft" and "smp"
-            if "sft" in modules1 and "smp" in modules1:
-                smp_index = modules1.index("smp")
-                sft_index = modules1.index("sft")
+            if "sft" in modules and "smp" in modules:
+                smp_index = modules.index("smp")
+                sft_index = modules.index("sft")
                 if smp_index > sft_index:
-                    modules1.remove("smp")
-                    modules1.insert(sft_index, "smp")
+                    modules.remove("smp")
+                    modules.insert(sft_index, "smp")
 
             # Store with regionalization group id
-            self.grp_to_form[row['group']] = modules1
+            self.grp_to_form[row['group']] = modules
 
     def _validate_processes(self):
         # check modules selected for each process
@@ -911,7 +903,6 @@ class RealizationBuilder:
         self.realization_file = self.work_dir + '/{}'.format(self.basin) + '_realization_config_bmi_calib.json'
         routing_config_file = os.path.join(self.work_dir + '/Input', '{}'.format(self.basin) + self.run_configs[0])
         bmi_dir = {}
-        # modules1 = [m1 for m1 in self.modules if m1 not in ['sloth','troute']]
         for m1 in self.modules:
             m2 = settings.modules_all.loc[settings.modules_all['module'] == m1, 'name_ui'].iloc[0]
             bmi_dir[m1] = os.path.join(self.input_dir, m2 + '_input')
@@ -927,7 +918,6 @@ class RealizationBuilder:
 
         # Set BMI config directories
         bmi_dir = {}
-        # modules1 = [m1 for m1 in self.modules if m1 not in ['sloth','troute']]
         for m1 in self.all_mod:
             m2 = settings.modules_all.loc[settings.modules_all['module'] == m1, 'name_ui'].iloc[0]
             bmi_dir[m1] = os.path.join(self.input_dir, m2 + '_input')
