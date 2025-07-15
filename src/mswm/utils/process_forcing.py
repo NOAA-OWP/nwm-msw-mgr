@@ -4,7 +4,7 @@ import netCDF4
 import pandas as pd
 import geopandas as gpd
 
-from mswm.fcst_utils.log_level import log_level_set
+from mswm.utils.log_level import log_level_set
 
 # setup the logger
 log_level_set()

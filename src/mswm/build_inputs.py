@@ -11,19 +11,20 @@ import re
 import geopandas as gpd
 import pandas as pd
 import json
+from collections import defaultdict
 
-from mswm.cal_utils import ginputfunc as gfun
-from mswm.cal_utils import settings
-from mswm.fcst_utils.log_level import log_level_set
-from mswm.fcst_utils.process_forcing import update_forcing_in_realization
-from mswm.fcst_utils.update_bmi_config import update_noah_ueb, update_troute
+from mswm.utils import ginputfunc as gfun
+from mswm.utils import settings
+from mswm.utils.process_forcing import update_forcing_in_realization
+from mswm.utils.update_bmi_config import update_noah_ueb, update_troute
 
 logger = logging.getLogger(__name__)
 
 
 class RealizationBuilder:
-    def __init__(self, input_path: str, forcing_path: str = None, output_folder: str = None):
+    def __init__(self, input_path: str, assign_path: str | None = None, forcing_path: str | None = None, output_folder: str | None = None):
         self.input_path = Path(input_path)
+        self.assign_path = Path(assign_path) if assign_path else None
         self.forcing_path = Path(forcing_path) if forcing_path else None
         self.output_folder = output_folder if output_folder else None
         logger.info(f"Initialized RealizationBuilder with {input_path}")
@@ -49,6 +50,54 @@ class RealizationBuilder:
         with open(self.config_yaml) as file:
             self.conf = yaml.safe_load(file)
 
+    def _load_realization(self):
+        # Read realization file
+        self.real_input_file.resolve(strict=True)
+        with open(self.real_input_file) as fp:
+            self.real_config = json.load(fp)
+
+    def _load_reg_formulation(self):
+        # Read regionalization formulation assignment file
+        self.assign_path.resolve(strict=True)
+        self.reg_df = pd.read_csv(self.assign_path)
+
+    def _load_reg_catchments(self):
+        # Load grouped catchment files produced by regionalization and store grouped catchment ids
+        self.grp_to_cat = {}
+        for grp in self.reg_df['group']:
+            cat_path = os.path.join(self.assign_path.parent, grp + "_catchments.csv")
+            cat_df = pd.read_csv(cat_path)
+
+            # Store group id and associated catchments
+            self.grp_to_cat[grp] = cat_df.divide_id.tolist()
+
+    def _parse_reg_params(self):
+        # Extract regionalization parameters for each group and module
+        # Set modules and associated calibratable parameters
+        params_dict = {
+            'cfes': ['b', 'satdk', 'satpsi', 'slope',
+                     'maxsmc', 'wltsmc', 'max_gw_storage', 'Cgw', 'expon',
+                     'refkdt', 'Kn', 'Klf'],
+            'cfex': ['b', 'satdk', 'satpsi', 'slope',
+                     'maxsmc', 'wltsmc', 'max_gw_storage', 'Cgw', 'expon',
+                     'refkdt', 'Kn', 'Klf', 'a_Xinanjiang_inflection_point_parameter',
+                     'b_Xinanjiang_shape_parameter', 'x_Xinanjiang_shape_parameter'],
+            'lasam': ['ponded_depth_max', 'field_capacity', 'smcmin', 'smcmax', 'van_genuchten_alpha', 'van_genuchten_n', 'hydraulic_conductivity'],
+            'noah': ['RSURF_EXP', 'CWP', 'VCMX25', 'MP', 'MFSNO', 'RSURF_SNOW', 'SCAMAX'],
+            'sac': ['uztwm', 'uzfwm', 'lztwm', 'lzfsm', 'lzfpm', 'adimp', 'uzk', 'lzpk', 'lzsk', 'zperc',
+                    'rexp', 'pctim', 'pfree', 'riva', 'side', 'rserv'],
+            'snow17': ['scf', 'mfmax', 'mfmin', 'uadj', 'si', 'pxtemp', 'nmf', 'tipm', 'plwhc', 'daygm'],
+            'topmodel': ['szm', 't0', 'td', 'chv', 'rv', 'srmax', 'sr0', 'xk0'],
+            'ueb': ['ems', 'cg', 'zo', 'rho', 'rhog', 'ks', 'de', 'avo', 'df', 'apr', 'cc', 'hcan', 'lai', 'subalb']
+        }
+
+        # For each module, retrieve group and corresponding parameter values
+        self.grp_params = {}
+        for mod, params in params_dict.items():
+            self.grp_params[mod] = {
+                row['group']: {param: row[param] for param in params} for _, row in self.reg_df.iterrows()
+            }
+
     def _parse_yaml(self):
         # read realization file path
         self.real_input_file = Path(self.conf['model']['realization'])
@@ -59,12 +108,6 @@ class RealizationBuilder:
 
         # get ngen executable
         self.ngen_exe = self.conf['model']['binary']
-
-    def _load_realization(self):
-        # Read realization file
-        self.real_input_file.resolve(strict=True)
-        with open(self.real_input_file) as fp:
-            self.real_config = json.load(fp)
 
     def _create_fcst_output_dir(self):
         # create output directory
@@ -81,7 +124,11 @@ class RealizationBuilder:
 
         # reassign config sections for convenience
         self.conf1 = configs['General']
-        self.conf2 = configs['Calibration']
+        self.run_type = self.conf1.get("run_type")
+        self.conf2 = configs.get({
+            "calib": "Calibration",
+            "regionalization": "Regionalization"
+        }.get(self.run_type))
         self.conf3 = configs['DataFile']
 
         # get the parallel section
@@ -99,16 +146,23 @@ class RealizationBuilder:
         # Use parallel ngen only when the number of processors is greater than 1
         self.parallelSec = configs['Parallel'] if self.config.has_section("Parallel") and int(self.parallelSec['nprocs']) > 1 else None
 
-    def _parse_time(self):
-        # Retrieve time period
-        self.time_period = {"run_time_period": {"calib": [self.conf2['calib_start_period'], self.conf2['calib_end_period']],
-                                                "valid": [self.conf2['valid_start_period'], self.conf2['valid_end_period']]},
-                            "evaluation_time_period": {"calib": [self.conf2['calib_eval_start_period'], self.conf2['calib_eval_end_period']],
-                                                       "valid": [self.conf2['valid_eval_start_period'], self.conf2['valid_eval_end_period']],
-                                                       "full": [self.conf2['full_eval_start_period'], self.conf2['full_eval_end_period']]}}
+        # Parse attribute file
+        self.attr_file = self.conf3['attributes_file']
 
-    def _parse_general_settings(self):
-        # Retrieve general settings
+    def _parse_time(self):
+        # Retrieve time period for calibration
+        if self.run_type == 'calib':
+            self.time_period = {"run_time_period": {"calib": [self.conf2['calib_start_period'], self.conf2['calib_end_period']],
+                                                    "valid": [self.conf2['valid_start_period'], self.conf2['valid_end_period']]},
+                                "evaluation_time_period": {"calib": [self.conf2['calib_eval_start_period'], self.conf2['calib_eval_end_period']],
+                                                           "valid": [self.conf2['valid_eval_start_period'], self.conf2['valid_eval_end_period']],
+                                                           "full": [self.conf2['full_eval_start_period'], self.conf2['full_eval_end_period']]}}
+        # Retrieve time period for regionalization
+        elif self.run_type == 'regionalization':
+            self.time_period = {"run_time_period": {"region": [self.conf2['start_period'], self.conf2['end_period']]}}
+
+    def _parse_calib_settings(self):
+        # Retrieve general settings for calibration
         algorithm = self.conf2['optimization_algorithm'].lower()
         swarm_size = int(self.conf2['swarm_size'])
         strategy = {'type': 'estimation', 'algorithm': algorithm}
@@ -122,9 +176,6 @@ class RealizationBuilder:
         self.general_cfg = {'strategy': strategy, 'name': self.conf1['run_type'], 'log': True, 'workdir': None, 'yaml_file': None,
                             'start_iteration': int(self.conf2['start_iteration']), 'iterations': int(self.conf2['number_iteration']),
                             'restart': int(self.conf2['restart'])}
-
-        # Parse attribute file
-        self.attr_file = self.conf3['attributes_file']
 
     def _parse_modules(self):
 
@@ -172,7 +223,87 @@ class RealizationBuilder:
 
         # rearrange modules in order of hydrologic processes
         self.modules = [m1 for m1 in settings.modules_all['module'] if m1 in self.modules]
+
+        # Reorder "sft" and "smp"
+        if "sft" in self.modules and "smp" in self.modules:
+            smp_index = self.modules.index("smp")
+            sft_index = self.modules.index("sft")
+            if smp_index > sft_index:
+                self.modules.remove("smp")
+                self.modules.insert(sft_index, "smp")
+
         logger.info(f"Final list of modules in formulation: {self.modules}\n")
+
+    def _parse_reg_modules(self):
+        # Retrieve modules from regionalization formulation assignment file
+        # This could potentially be combined with _parse_modules to not repeat code
+        logger.info(f"Available module names: {settings.modules_all['name_ui'].tolist()}")
+        self.grp_to_form = {}
+
+        for idx, row in self.reg_df.iterrows():
+            modules0 = [x.replace(" ", "") for x in re.split('-', row['formulation'])]
+            modules = []
+            invalid_modules = []
+
+            # Ensure modules match possible options provided in settings
+            for m1 in modules0:
+                # Catch abbreviations (this could also be performed by modifying settings.modules_all)
+                if m1.lower() in ('noah', 'nom'):
+                    m1 = 'noah-owp-modular'
+                elif m1.lower() == 'cfes':
+                    m1 = 'cfe-s'
+                elif m1.lower() == 'cfex':
+                    m1 = 'cfe-x'
+                elif m1.lower() in ('sacsma', 'sac'):
+                    m1 = 'sac-sma'
+                elif m1.lower() in ('snow17'):
+                    m1 = 'snow-17'
+
+                filtered = settings.modules_all.loc[settings.modules_all['name_ui'] == m1.lower(), 'module']
+
+                if filtered.empty:
+                    invalid_modules.append(m1)
+
+                else:
+                    modules.append(filtered.iloc[0])
+
+            # Raise an error if any invalid modules were found
+            if invalid_modules:
+                raise ValueError(f"Invalid module(s) found: {', '.join(invalid_modules)}. Please check your configuration.")
+
+            # add sloth if CFE or LASAM is selected
+            module_found = [x for x in ['cfes', 'cfex', 'lasam'] if x in modules]
+            if len(module_found) == 1 and 'sloth' not in modules:
+                logger.info(f"CFE or LASAM is used in the formulation. SLOTH added to module list: {row['group']}")
+                modules = ['sloth'] + modules
+
+            # make sure SMP and SFT are always selected together
+            if 'smp' in modules and 'sft' not in modules:
+                logger.info(f"SMP and SFT must be selected together. SFT added to module list: {row['group']}")
+                modules = modules + ['sft']
+            if 'sft' in modules and 'smp' not in modules:
+                logger.info(f"SMP and SFT must be selected together. SMP added to module list: {row['group']}")
+                modules = modules + ['smp']
+
+            # always ensure troute is included
+            if 'troute' not in modules:
+                logger.info(f"T-Route must be included in the formulation. T-Route added to module list: {row['group']}")
+                modules = modules + ['troute']
+
+            # rearrange modules in order of hydrologic processes
+            modules = [m1 for m1 in settings.modules_all['module'] if m1 in modules]
+            logger.info(f"Final list of modules in formulation for {row['group']}: {modules}\n")
+
+            # Reorder "sft" and "smp"
+            if "sft" in modules and "smp" in modules:
+                smp_index = modules.index("smp")
+                sft_index = modules.index("sft")
+                if smp_index > sft_index:
+                    modules.remove("smp")
+                    modules.insert(sft_index, "smp")
+
+            # Store with regionalization group id
+            self.grp_to_form[row['group']] = modules
 
     def _validate_processes(self):
         # check modules selected for each process
@@ -191,10 +322,54 @@ class RealizationBuilder:
             if (p1 in ['Evapotranspiration', 'Rainfall_runoff']) and (len(mods) == 0):
                 raise Exception(f'At least one module must be selected for {p1} process')
 
+    def _validate_reg_processes(self):
+        # check modules selected for each process
+        procs = []
+        for p1 in settings.modules_all['process']:
+            procs = list(set(procs + p1))
+
+        # Loop through formulation group dictionary
+        for grp, form in self.grp_to_form.items():
+            for p1 in procs:
+                mods = [m1 for m1 in form if p1 in settings.modules_all.loc[settings.modules_all['module'] == m1, 'process'].values[0]]
+
+                # make sure only one module is selected for each process (except for Soil_moisture and Glacier_snow)
+                if len(mods) > 1 and p1 not in ['Soil_moisture', 'Glacier_snow']:
+                    raise Exception(f'Only one module can be selected for {p1} process: {grp}')
+
+                # one and only one module must be selected for rainfall-runoff and PET
+                if (p1 in ['Evapotranspiration', 'Rainfall_runoff']) and (len(mods) == 0):
+                    raise Exception(f'At least one module must be selected for {p1} process: {grp}')
+
+    def _map_cat_to_grp(self):
+        # Relate catchments and their groups
+        self.cat_to_grp = {}
+        for grp, cats in self.grp_to_cat.items():
+            for cat in cats:
+                self.cat_to_grp[cat] = grp
+
+    def _map_cat_to_form(self):
+        # Relate catchments and their formulations
+        self.cat_to_form = {}
+        for cat, grp in self.cat_to_grp.items():
+            self.cat_to_form[cat] = self.grp_to_form[grp]
+
+    def _map_mod_to_cat(self):
+        # Find the catchments that use each module
+        self.mod_to_cat = defaultdict(list)
+        for cat, modules in self.cat_to_form.items():
+            for module in modules:
+                self.mod_to_cat[module].append(cat)
+
     def _set_lib_paths(self):
         # library files for all modules included in the formulation
         self.lib_file = {}
-        modules1 = [m1 for m1 in self.modules if m1 != 'troute']
+        if self.run_type == 'calib':
+            modules1 = [m1 for m1 in self.modules if m1 != 'troute']
+        elif self.run_type == 'regionalization':
+            modules1 = list(set(m1 for form in self.grp_to_form.values() for m1 in form if m1 != 'troute'))
+            self.all_mod = modules1.copy()
+
         for m1 in modules1:
             m2 = settings.modules_all.loc[settings.modules_all['module'] == m1, 'name_ui'].iloc[0]
             m2 = m2 if m2 not in ['cfe-s', 'cfe-x'] else 'cfe'
@@ -204,6 +379,14 @@ class RealizationBuilder:
         # Create Input directory
         self.basin = self.conf1['basin']
         run_dir = os.path.join(self.conf1['main_dir'], '_'.join([self.conf2['objective_function'], self.conf2['optimization_algorithm']]))
+        self.work_dir = os.path.join(run_dir, self.conf1['formulation'] + '/' + self.basin)
+        self.input_dir = os.path.join(self.work_dir, 'Input/')
+        os.makedirs(self.input_dir, exist_ok=True)
+
+    def _create_reg_input_dir(self):
+        # Create Input directory
+        self.basin = self.conf1['basin']
+        run_dir = os.path.join(self.conf1['main_dir'], 'regionalization')
         self.work_dir = os.path.join(run_dir, self.conf1['formulation'] + '/' + self.basin)
         self.input_dir = os.path.join(self.work_dir, 'Input/')
         os.makedirs(self.input_dir, exist_ok=True)
@@ -287,6 +470,7 @@ class RealizationBuilder:
         self.real_config = update_troute(self.real_config, self.out_dir)
 
     def _init_config_hooks(self):
+        # NOT IN USE: Generate BMI configs using NOAA OWP ngen_config_gen repo 
         from mswm.config_gen.hook_providers import DefaultHookProvider
 
         # Initialize ngen_config_gen hook provider
@@ -302,6 +486,7 @@ class RealizationBuilder:
         self.hook_provider = DefaultHookProvider(hf=self.hf, hf_lnk_data=self.hf_lnk_data)
 
     def _get_module_hooks(self):
+        # NOT IN USE: Generate BMI configs using NOAA OWP ngen_config_gen repo 
         from mswm.config_gen.models.cfes import Cfes
         from mswm.config_gen.models.cfex import Cfex
         from mswm.config_gen.models.pet import Pet
@@ -316,6 +501,7 @@ class RealizationBuilder:
         }
 
     def _create_bmi_configs_ngen_config_gen(self):
+        # NOT IN USE: Generate BMI configs using NOAA OWP ngen_config_gen repo 
 
         self.run_configs = ['_troute_config_calib.yaml', '_troute_config_valid_control.yaml', '_troute_config_valid_best.yaml']
         modules1 = self.modules.copy()
@@ -362,9 +548,9 @@ class RealizationBuilder:
                     # from EDS (or the user) with correct time period and/or paths
                     # For SMP, the depth to output soil moisture may need to be adjusted
                     if m1 == 'noah':
-                        gfun.create_noah_input_template(self.catids, self.time_period, self.conf3[m1 + '_parameter_dir'], mod_input_dir, self.conf3[m2 + "_bmi_dir"])
+                        gfun.create_noah_input_template(self.catids, self.time_period, self.conf3[m1 + '_parameter_dir'], mod_input_dir, self.conf3[m2 + "_bmi_dir"], self.run_type)
                     elif m1 == 'ueb':
-                        gfun.create_ueb_input(self.catids, self.time_period, self.attr_file, self.conf3[m1 + '_parameter_dir'], mod_input_dir, self.conf3[m2 + "_bmi_dir"])
+                        gfun.create_ueb_input(self.catids, self.time_period, self.attr_file, self.conf3[m1 + '_parameter_dir'], mod_input_dir, self.conf3[m2 + "_bmi_dir"], self.run_type)
                     elif m1 in ['sac', 'snow17']:
                         gfun.change_sac_snow17_input(m1, self.catids, mod_input_dir, self.conf3[m2 + "_bmi_dir"])
                     elif m1 == 'lasam':
@@ -372,6 +558,9 @@ class RealizationBuilder:
                     elif m1 == "smp" and self.output_dict['output_sm']:
                         self.output_dict['sm_profile_depth'] = gfun.change_smp_input(self.catids, mod_input_dir, self.conf3[m2 + "_bmi_dir"],
                                                                                      self.output_dict['sm_frac_depth'], self.output_dict['sm_profile_depth'])
+                    elif m1 == "sft":
+                        # Modify SFT inputs to ensure ice_fraction_scheme matches rainfall_runoff model
+                        gfun.change_sft_input(self.catids, modules1, mod_input_dir, bmi_dir, self.run_type)
                     else:
                         # Create symbolic link to copy existing bmi config files to input directory
                         logger.info(f'{m2}: create symlink from {bmi_dir} to {mod_input_dir}')
@@ -435,7 +624,6 @@ class RealizationBuilder:
                 pass
             # Create bmi configs for topmodel
             elif m1 in ['topmodel']:
-                os.makedirs(mod_input_dir, exist_ok=True)
                 if bmi_dir == '' or not os.path.exists(bmi_dir):
                     # Create topmodel input from attribute file
                     gfun.create_topmodel_input(self.catids, self.attr_file, self.gpkg_file, mod_input_dir)
@@ -456,17 +644,20 @@ class RealizationBuilder:
 
                     # Modify existing BMI config files from EDFS or the user with correct time period and/or paths
                     if m1 == 'noah':
-                        gfun.create_noah_input_template(self.catids, self.time_period, self.conf3[m1 + '_parameter_dir'], mod_input_dir, self.conf3[m2 + "_bmi_dir"])
+                        gfun.create_noah_input_template(self.catids, self.time_period, self.conf3[m1 + '_parameter_dir'], mod_input_dir, self.conf3[m2 + "_bmi_dir"], self.run_type)
                     elif m1 == 'ueb':
-                        gfun.create_ueb_input(self.catids, self.time_period, self.attr_file, self.conf3[m1 + '_parameter_dir'], mod_input_dir, self.conf3[m2 + "_bmi_dir"])
+                        gfun.create_ueb_input(self.catids, self.time_period, self.attr_file, self.conf3[m1 + '_parameter_dir'], mod_input_dir, self.conf3[m2 + "_bmi_dir"], self.run_type)
                     elif m1 in ['sac', 'snow17']:
                         gfun.change_sac_snow17_input(m1, self.catids, mod_input_dir, self.conf3[m2 + "_bmi_dir"])
                     elif m1 == 'lasam':
                         gfun.change_lasam_input(self.catids, mod_input_dir, self.conf3[m2 + "_bmi_dir"], self.conf3['lasam_parameter_dir'])
-                    elif m1 == "smp" and self.output_dict['output_sm']:
+                    elif m1 == 'smp' and self.output_dict['output_sm']:
                         # For SMP, the depth to output soil moisture may need to be adjusted
                         self.output_dict['sm_profile_depth'] = gfun.change_smp_input(self.catids, mod_input_dir, self.conf3[m2 + "_bmi_dir"],
                                                                                      self.output_dict['sm_frac_depth'], self.output_dict['sm_profile_depth'])
+                    elif m1 == 'sft':
+                        # Modify SFT inputs to ensure ice_fraction_scheme matches rainfall_runoff model
+                        gfun.change_sft_input(self.catids, modules1, mod_input_dir, bmi_dir, self.run_type)
                     else:
                         # Create symbolic link
                         logger.info(f'{m2}: create symlink from {bmi_dir} to {mod_input_dir}')
@@ -474,9 +665,9 @@ class RealizationBuilder:
 
             else:
                 if m1 in ['cfes', 'cfex']:
-                    gfun.create_cfe_input(self.catids, self.modules, self.attr_file, mod_input_dir)
+                    gfun.create_cfe_input(self.catids, self.modules, self.attr_file, mod_input_dir, self.run_type)
                 elif m1 == 'ueb':
-                    gfun.create_ueb_input(self.catids, self.time_period, self.attr_file, self.conf3[m1 + '_parameter_dir'], mod_input_dir, '')
+                    gfun.create_ueb_input(self.catids, self.time_period, self.attr_file, self.conf3[m1 + '_parameter_dir'], mod_input_dir, '', self.run_type)
                 elif m1 == 'snow17':
                     gfun.create_snow17_input(self.catids, self.attr_file, self.gpkg_file, self.conf3[m1 + '_parameter_dir'], mod_input_dir)
                 elif m1 == "pet":
@@ -484,7 +675,7 @@ class RealizationBuilder:
                 elif m1 == "sac":
                     gfun.create_sac_input(self.catids, self.attr_file, self.gpkg_file, self.conf3[m1 + '_parameter_dir'], mod_input_dir)
                 elif m1 == 'noah':
-                    gfun.create_noah_input(self.catids, self.time_period, self.attr_file, self.conf3[m1 + '_parameter_dir'], mod_input_dir)
+                    gfun.create_noah_input(self.catids, self.time_period, self.attr_file, self.conf3[m1 + '_parameter_dir'], mod_input_dir, self.run_type)
                 elif m1 == 'sft':
                     sft_dir = os.path.join(self.input_dir, 'sft_input')
                     smp_dir = os.path.join(self.input_dir, 'smp_input')
@@ -507,16 +698,16 @@ class RealizationBuilder:
                     else:
                         # If CFE BMI config files not provided and cfe not in modules, create cfe input files
                         cfe_dir = os.path.join(self.input_dir, 'cfe-s' + '_input')
-                        gfun.create_cfe_input(self.catids, ['cfes'] + [self.modules], self.attr_file, cfe_dir)
+                        gfun.create_cfe_input(self.catids, ['cfes'] + [self.modules], self.attr_file, cfe_dir, self.run_type)
                         # raise Exception('Folder for CFE BMI config files needs to be provided, via either cfe-s_bmi_dir or cfe-x_bmi_dir')
 
                     # Create sft input
-                    gfun.create_sft_smp_input(self.catids, self.modules, self.attr_file, cfe_dir, self.conf3['forcing_dir'], sft_dir, smp_dir)
+                    gfun.create_sft_smp_input(self.catids, self.modules, self.attr_file, cfe_dir, self.conf3['forcing_dir'], sft_dir, smp_dir, self.run_type)
 
                 elif m1 == 'smp':
                     continue
                 elif m1 == 'lasam':
-                    gfun.create_lasam_input(self.catids, self.modules, mod_input_dir, self.conf3['lasam_parameter_dir'])
+                    gfun.create_lasam_input(self.catids, self.modules, mod_input_dir, self.conf3['lasam_parameter_dir'], self.run_type)
 
                 elif m1 == 'troute':
                     for file_name, run_name in zip(self.run_configs, ['calib', 'valid', 'valid']):
@@ -531,33 +722,214 @@ class RealizationBuilder:
                 if m1 != 'troute':
                     logger.info(f'{m1}: input config files created at: {mod_input_dir}')
 
+    def _create_reg_bmi_configs(self):
+
+        self.run_configs = ['_troute_config_region.yaml']
+
+        # Retrieve unique modules in all formulations, maintaining formulation order
+        mod_all = list(dict.fromkeys(item for lst in self.grp_to_form.values() for item in lst))
+
+        # Ensure cfes and cfex are first in mod_all
+        if 'cfes' in mod_all:
+            mod_all = ['cfes'] + [m1 for m1 in mod_all if m1 != 'cfes']
+        if 'cfex' in mod_all:
+            mod_all = ['cfex'] + [m1 for m1 in mod_all if m1 != 'cfex']
+
+        # loop through modules to create input files
+        for m1 in mod_all:
+
+            # module name used by the UI
+            m2 = settings.modules_all.loc[settings.modules_all['module'] == m1, 'name_ui'].iloc[0]
+
+            # define and store module input directory
+            mod_input_dir = os.path.join(self.input_dir, m2 + '_input')
+            if os.path.isdir(mod_input_dir):
+                if os.path.islink(mod_input_dir):
+                    os.unlink(mod_input_dir)
+
+            # Store input dir in dictionary
+            bmi_dir = self.conf3.get(m2 + '_bmi_dir')
+
+            # Retrieve catchments that use each module
+            cat_mod = self.mod_to_cat[m1]
+
+            # If module requires full formulation, retrieve formulation for each catchment
+            if m1 in ['cfes', 'cfex', 'sft', 'lasam']:
+                form_cat = [self.cat_to_form[cat] for cat in cat_mod]
+
+            # Modify existing BMI config files if filepaths provided (ignoring troute for now)
+            # Skip config generation for sloth
+            if m1 in ['sloth']:
+                pass
+            # Create bmi configs for topmodel
+            elif m1 in ['topmodel']:
+                if bmi_dir == '' or not os.path.exists(bmi_dir):
+                    # Create topmodel input from attribute file
+                    gfun.create_topmodel_input(cat_mod, self.attr_file, self.gpkg_file, mod_input_dir)
+                else:
+                    # Modify existing topmodel inputs
+                    for catID in cat_mod:
+                        run_file = os.path.join(bmi_dir, '{}_topmodel'.format(catID) + '.run')
+                        params_file = os.path.join(bmi_dir, '{}_topmodel_params'.format(catID) + '.dat')
+                        subcat_file = os.path.join(bmi_dir, '{}_topmodel_subcat'.format(catID) + '.dat')
+                        gfun.change_topmodel_input(catID, run_file, params_file, subcat_file, mod_input_dir)
+
+            elif m1 != 'troute' and bmi_dir and os.path.isdir(bmi_dir):
+
+                if not os.listdir(bmi_dir):
+                    raise ValueError(f'BMI folder {bmi_dir} cannot be empty')
+                else:
+
+                    # Modify existing BMI config files from EDFS or the user with correct time period and/or paths
+                    if m1 == 'noah':
+                        gfun.create_noah_input_template(cat_mod, self.time_period, self.conf3[m1 + '_parameter_dir'], mod_input_dir, self.conf3[m2 + "_bmi_dir"], self.run_type)
+                    elif m1 == 'ueb':
+                        gfun.create_ueb_input(cat_mod, self.time_period, self.attr_file, self.conf3[m1 + '_parameter_dir'], mod_input_dir, self.conf3[m2 + "_bmi_dir"], self.run_type)
+                    elif m1 in ['sac', 'snow17']:
+                        gfun.change_sac_snow17_input(m1, cat_mod, mod_input_dir, self.conf3[m2 + "_bmi_dir"])
+                    elif m1 == 'lasam':
+                        gfun.change_lasam_input(cat_mod, mod_input_dir, self.conf3[m2 + "_bmi_dir"], self.conf3['lasam_parameter_dir'])
+                    elif m1 == "smp" and self.output_dict['output_sm']:
+                        # For SMP, the depth to output soil moisture may need to be adjusted
+                        self.output_dict['sm_profile_depth'] = gfun.change_smp_input(cat_mod, mod_input_dir, self.conf3[m2 + "_bmi_dir"],
+                                                                                     self.output_dict['sm_frac_depth'], self.output_dict['sm_profile_depth'])
+                    # Modify existing SFT inputs to match rainfall runoff model
+                    elif m1 == "sft":
+                        # Loop through schemes that could be paired with SFT (CFES/CFEX/LASAM)
+                        # SFT could be paired with CFES/CFEX/LASAM simulatenously in different formulations, so configs must be generated separately
+                        for scheme in ['cfes', 'cfex', 'lasam']:
+                            # Retrieve formulation groups where CFES/CFEX/LASAM co-occur with SFT
+                            scheme_sft_grps = [grp for grp, mods in self.grp_to_form.items() if scheme in mods and 'sft' in mods]
+                            if scheme_sft_grps:
+                                # Update CFE bmi dir with correct scheme for formulation (Schaake/Xinanjiang)
+                                if scheme == 'cfes' or scheme == 'lasam':
+                                    scheme_bmi_var = 'cfe-s'
+                                elif scheme == 'cfex':
+                                    scheme_bmi_var = 'cfe-x'
+                                else:
+                                    raise Exception('SMP/SFT only implemented when CFE-S, CFE-X, or LASAM are selected')
+
+                                # Retrieve catchments and formulations corresponding to scheme
+                                scheme_cat = [cat for grp in scheme_sft_grps for cat in self.grp_to_cat[grp]]
+                                scheme_form = [self.cat_to_form[cat] for cat in scheme_cat]
+
+                                # Form CFE input dir
+                                cfe_dir = os.path.join(self.input_dir, scheme_bmi_var + '_input')
+
+                                # If LASAM is selected, create cfe input files required for sft (assume ice_fraction_scheme is cfes)
+                                if scheme not in ('cfes', 'cfex'):
+                                    scheme_form_cfes = [form + ['cfes'] for form in scheme_form]
+                                    gfun.create_cfe_input(scheme_cat, scheme_form_cfes, self.attr_file, cfe_dir, self.run_type)
+
+                                # Create SFT inputs
+                                gfun.change_sft_input(scheme_cat, scheme_form, mod_input_dir, bmi_dir, self.run_type)
+
+                    else:
+                        # Create symbolic link to catchments with formulation
+                        os.makedirs(mod_input_dir, exist_ok=True)
+                        logger.info(f'{m2}: create symlink from {bmi_dir} to {mod_input_dir}')
+
+                        # Only link files for required catchments, rather than all files
+                        # Could go back to symlinking all files if this causes performance issues
+                        for cat in cat_mod:
+                            file_match = list(Path(bmi_dir).glob(f"*{cat}*"))
+                            for fp in file_match:
+                                dest = Path(mod_input_dir) / fp.name
+                                if not dest.exists():
+                                    os.symlink(fp.resolve(), dest)
+
+            else:
+                if m1 in ['cfes', 'cfex']:
+                    gfun.create_cfe_input(cat_mod, form_cat, self.attr_file, mod_input_dir, self.run_type)
+                elif m1 == 'ueb':
+                    gfun.create_ueb_input(cat_mod, self.time_period, self.attr_file, self.conf3[m1 + '_parameter_dir'], mod_input_dir, '', self.run_type)
+                elif m1 == 'snow17':
+                    gfun.create_snow17_input(cat_mod, self.attr_file, self.gpkg_file, self.conf3[m1 + '_parameter_dir'], mod_input_dir)
+                elif m1 == "pet":
+                    gfun.create_pet_input(cat_mod, self.attr_file, mod_input_dir)
+                elif m1 == "sac":
+                    gfun.create_sac_input(cat_mod, self.attr_file, self.gpkg_file, self.conf3[m1 + '_parameter_dir'], mod_input_dir)
+                elif m1 == 'noah':
+                    gfun.create_noah_input(cat_mod, self.time_period, self.attr_file, self.conf3[m1 + '_parameter_dir'], mod_input_dir, self.run_type)
+                elif m1 == 'sft':
+                    sft_dir = os.path.join(self.input_dir, 'sft_input')
+                    smp_dir = os.path.join(self.input_dir, 'smp_input')
+
+                    # Loop through schemes that could be paired with SFT (CFES/CFEX/LASAM)
+                    # SFT could be paired with CFES/CFEX/LASAM simulatenously in different formulations, so configs must be generated separately
+                    for scheme in ['cfes', 'cfex', 'lasam']:
+                        # Retrieve formulation groups where CFES/CFEX/LASAM co-occur with SFT
+                        scheme_sft_grps = [grp for grp, mods in self.grp_to_form.items() if scheme in mods and 'sft' in mods]
+                        if scheme_sft_grps:
+                            # Update CFE bmi dir with correct scheme for formulation (Schaake/Xinanjiang)
+                            if scheme == 'cfes' or scheme == 'lasam':
+                                scheme_bmi_var = 'cfe-s'
+                            elif scheme == 'cfex':
+                                scheme_bmi_var = 'cfe-x'
+                            else:
+                                raise Exception('SMP/SFT only implemented when CFE-S, CFE-X, or LASAM are selected')
+
+                            # Retrieve catchments and formulations corresponding to scheme
+                            scheme_cat = [cat for grp in scheme_sft_grps for cat in self.grp_to_cat[grp]]
+                            scheme_form = [self.cat_to_form[cat] for cat in scheme_cat]
+
+                            # Form CFE input dir
+                            cfe_dir = os.path.join(self.input_dir, scheme_bmi_var + '_input')
+
+                            # If LASAM is selected, create cfe input files required for sft (assume ice_fraction_scheme is cfes)
+                            if scheme not in ('cfes', 'cfex'):
+                                scheme_form_cfes = [form + ['cfes'] for form in scheme_form]
+                                gfun.create_cfe_input(scheme_cat, scheme_form_cfes, self.attr_file, cfe_dir, self.run_type)
+
+                            # Create SFT/SMP inputs
+                            gfun.create_sft_smp_input(scheme_cat, scheme_form, self.attr_file, cfe_dir, self.conf3['forcing_dir'], sft_dir, smp_dir, self.run_type)
+
+                # Skip smp, inputs created in tandem with sft
+                elif m1 == 'smp':
+                    continue
+                elif m1 == 'lasam':
+                    gfun.create_lasam_input(cat_mod, form_cat, mod_input_dir, self.conf3['lasam_parameter_dir'], self.run_type)
+
+                elif m1 == 'troute':
+                    for file_name, run_name in zip(self.run_configs, ['region']):
+                        routing_config_file = os.path.join(self.work_dir + '/Input', '{}'.format(self.basin) + file_name)
+                        run_name1 = file_name.replace('_troute_config_', '').replace('.yaml', '')
+                        if len(self.time_period['run_time_period'][run_name][0]) != 0 & len(self.time_period['run_time_period'][run_name][0]):
+                            run_range = pd.to_datetime(self.time_period['run_time_period'][run_name])
+                            nts = len(pd.date_range(start=run_range[0], end=run_range[1], freq='5min')) - 1
+                            gfun.create_troute_config(self.gpkg_file, routing_config_file, self.time_period['run_time_period'][run_name][0], nts)
+                            logger.info(f'troute config file for {run_name1} is created at: {routing_config_file}')
+
+                if m1 != 'troute':
+                    logger.info(f'{m1}: input config files created at: {mod_input_dir}')
+
     def _write_calib_realization(self):
-        # Create model realization file
+        # Create model realization file for calibration
         self.realization_file = self.work_dir + '/{}'.format(self.basin) + '_realization_config_bmi_calib.json'
         routing_config_file = os.path.join(self.work_dir + '/Input', '{}'.format(self.basin) + self.run_configs[0])
         bmi_dir = {}
-        # modules1 = [m1 for m1 in self.modules if m1 not in ['sloth','troute']]
         for m1 in self.modules:
             m2 = settings.modules_all.loc[settings.modules_all['module'] == m1, 'name_ui'].iloc[0]
             bmi_dir[m1] = os.path.join(self.input_dir, m2 + '_input')
         rt_dict = {"routing": {"t_route_config_file_with_path": routing_config_file}}
 
-        # "smp" must be before "sft" in the realization file
-        if "sft" in self.modules and "smp" in self.modules:
-            smp_index = self.modules.index("smp")
-            sft_index = self.modules.index("sft")
-            if smp_index > sft_index:
-                self.modules.remove("smp")
-                self.modules.insert(sft_index, "smp")
-
         gfun.create_realization_file(self.work_dir, self.lib_file, bmi_dir, self.forcing_path, self.realization_file,
                                      self.modules, self.time_period, rt_dict, self.output_dict)
 
-    def _write_fcst_realization(self):
-        # save the new realization file
-        self.realization_file = Path(self.out_dir, os.path.basename(self.real_input_file))
-        with open(self.realization_file, 'w') as outfile:
-            json.dump(self.real_config, outfile, indent=4, separators=(", ", ": "), sort_keys=False)
+    def _write_region_realization(self):
+        # Create model realization file for regionalization
+        self.realization_file = self.work_dir + '/{}'.format(self.basin) + '_realization_config_bmi_region.json'
+        routing_config_file = os.path.join(self.work_dir + '/Input', '{}'.format(self.basin) + self.run_configs[0])
+
+        # Set BMI config directories
+        bmi_dir = {}
+        for m1 in self.all_mod:
+            m2 = settings.modules_all.loc[settings.modules_all['module'] == m1, 'name_ui'].iloc[0]
+            bmi_dir[m1] = os.path.join(self.input_dir, m2 + '_input')
+        rt_dict = {"routing": {"t_route_config_file_with_path": routing_config_file}}
+
+        gfun.create_reg_realization_file(self.work_dir, self.lib_file, bmi_dir, self.forcing_path, self.realization_file,
+                                         self.time_period, rt_dict, self.output_dict, self.cat_to_grp, self.grp_to_form, self.grp_params)
 
     def _write_partition(self):
         self.part_file = gfun.create_partition_file(self.parallelSec['partition_generator_exe'],
@@ -625,13 +997,12 @@ class RealizationBuilder:
         Replicate functionality of create_input.py, saving calibration realization file to output_path and formatting other input files
         Returns output path to realization and calib_config files
         """
-        logger = logging.getLogger("create_calibration_input")
         logger.info("Building calibration realization from %s", self.input_path)
 
         self._load_config()
         self._parse_config()
         self._parse_time()
-        self._parse_general_settings()
+        self._parse_calib_settings()
         self._parse_modules()
         self._validate_processes()
         self._set_lib_paths()
@@ -648,12 +1019,36 @@ class RealizationBuilder:
 
         return self.realization_file, self.calib_config_file
 
+    def build_region_realization(self):
+        """
+        Creating regionalization realization file from formulation_assignment file generated by regionalization
+        """
+        logger.info("Building regionalization realization from %s", self.input_path)
+
+        self._load_config()
+        self._load_reg_formulation()
+        self._load_reg_catchments()
+        self._parse_config()
+        self._parse_time()
+        self._parse_reg_params()
+        self._parse_reg_modules()
+        self._validate_reg_processes()
+        self._map_cat_to_grp()
+        self._map_cat_to_form()
+        self._map_mod_to_cat()
+        self._set_lib_paths()
+        self._create_reg_input_dir()
+        self._extract_hydrofabric()
+        self._extract_forcing()
+        self._set_output_vars()
+        self._create_reg_bmi_configs()
+        self._write_region_realization()
+
     def build_fcst_realization(self):
         """
         Replicate functionality of ngen-fcst, creating realization file from validation yaml file and formatting other input files
         """
-        log_level_set()
-        logger = logging.getLogger("create_forecast_input")
+
         logger.info("Building forecast realization from %s", self.input_path)
 
         self._load_yaml()
@@ -672,7 +1067,7 @@ class RealizationBuilder:
         self._load_config()
         self._parse_config()
         self._parse_time()
-        self._parse_general_settings()
+        self._parse_cal_settings()
         self._parse_modules()
         self._validate_processes()
         self._set_lib_paths()
