@@ -257,7 +257,7 @@ def create_cfe_input(
         # TODO: read these catchment-specific parameters from the NWMv3 model attributes parquet file
         # The current parquet file we have access to was likely based on NWMv2.1 and hence missing these XAJ parameters
         if scheme == 'Xinanjiang':
-            f.write("%s" % ("a_Xinanjiang_inflection_point_parameter=-0.212938\[]n"))
+            f.write("%s" % ("a_Xinanjiang_inflection_point_parameter=-0.212938[]\n"))
             f.write("%s" % ("b_Xinanjiang_shape_parameter=0.666238[]\n"))
             f.write("%s" % ("x_Xinanjiang_shape_parameter=0.02414[]\n"))
             f.write("%s" % ("urban_decimal_fraction=0.0[]\n"))
