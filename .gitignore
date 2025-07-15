@@ -86,3 +86,9 @@ dist/
 # Other
 .idea
 /git_info.json
+
+# Ngen FIles #
+#############
+cat*
+nex*
+troute*
