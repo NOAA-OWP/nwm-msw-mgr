@@ -29,7 +29,7 @@ def build_region(input_path: str, assign_path: str):
     Call RealizationBuilder class to generate realization and config files for regionalization
     """
     rb = RealizationBuilder(input_path, assign_path)
-    rb.build_
+    rb.build_region_realization()
 
 
 def main():
