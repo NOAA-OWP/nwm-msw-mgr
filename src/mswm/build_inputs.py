@@ -707,7 +707,7 @@ class RealizationBuilder:
                 elif m1 == 'smp':
                     continue
                 elif m1 == 'lasam':
-                    gfun.create_lasam_input(self.catids, self.modules, mod_input_dir, self.conf3['lasam_parameter_dir'], self.run_type)
+                    gfun.create_lasam_input(self.catids, self.modules, self.attr_file, mod_input_dir, self.conf3['lasam_parameter_dir'], self.run_type)
 
                 elif m1 == 'troute':
                     for file_name, run_name in zip(self.run_configs, ['calib', 'valid', 'valid']):
@@ -888,7 +888,7 @@ class RealizationBuilder:
                 elif m1 == 'smp':
                     continue
                 elif m1 == 'lasam':
-                    gfun.create_lasam_input(cat_mod, form_cat, mod_input_dir, self.conf3['lasam_parameter_dir'], self.run_type)
+                    gfun.create_lasam_input(cat_mod, form_cat, self.attr_file, mod_input_dir, self.conf3['lasam_parameter_dir'], self.run_type)
 
                 elif m1 == 'troute':
                     for file_name, run_name in zip(self.run_configs, ['region']):
