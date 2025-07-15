@@ -49,16 +49,19 @@ __all__ = [
     'create_noah_input',
     'create_noah_input_template',
     'create_sft_smp_input',
-    'change_smp_input',
-    'create_lasam_input',
-    'change_lasam_input',
     'create_snow17_input',
     'create_ueb_input',
     'create_sac_input',
     'change_sac_snow17_input',
     'create_pet_input',
+    'create_lasam_input',
+    'change_lasam_input',
+    'change_smp_input',
+    'change_sft_input',
     'change_topmodel_input',
+    'create_topmodel_input',
     'create_troute_config',
+    'create_reg_realization_file',
     'create_realization_file',
     'create_calib_config_file',
     'create_partition_file',
@@ -198,7 +201,7 @@ def create_cfe_input(
     scheme = 'Schaake'
     if run_type == 'calib':
         mods = modules
-        if ('cfex' in mods):
+        if 'cfex' in mods:
             scheme = 'Xinanjiang'
 
     # Create bmi config files
@@ -212,46 +215,52 @@ def create_cfe_input(
             if ('cfex' in mods):
                 scheme = 'Xinanjiang'
 
+        # Set sft coupling
+        if 'sft' in mods:
+            sft_coupled = '1'
+        else:
+            sft_coupled = '0'
+
         cfe_bmi_file = os.path.join(cfe_input_dir, catID + "_bmi_config_cfe.txt")
         f = open(cfe_bmi_file, "w")
         f.write("%s" % ("forcing_file=BMI\n"))
+        f.write("%s" % ("verbosity=1\n"))
         f.write("%s" % ("surface_partitioning_scheme=" + scheme + "\n"))
-        f.write("%s" % ("soil_params.depth=2.0[m]\n"))
+        f.write("%s" % ("surface_runoff_scheme=GIUH\n"))
+        f.write("%s" % ("DEBUG=0\n"))
+        f.write("%s" % ("num_timesteps=1\n"))
+        if 'cfes' in mods:
+            f.write("%s" % ("is_sft_coupled=" + sft_coupled + "\n"))
+            f.write("%s" % ("ice_content_threshold=0.15\n"))
+        f.write("%s" % ("alpha_fc=0.33\n"))
+        f.write("%s" % ("Cgw=" + str(dfa.loc[catID]['gw_Coeff'] * 3600 * 1e-6) + "[m/hr]\n"))
+        f.write("%s" % ("expon=" + str(dfa.loc[catID]['gw_Expon']) + "[]\n"))
+        f.write("%s" % ("giuh_ordinates=0.55, 0.25, 0.2[]\n"))
+        f.write("%s" % ("gw_storage=0.05[m/m]\n"))
+        f.write("%s" % ("K_lf=0.01[]\n"))
+        f.write("%s" % ("K_nash=0.03[]\n"))
+        f.write("%s" % ("max_gw_storage=" + str(dfa.loc[catID]['gw_Zmax'] / 1000.) + "[m]\n"))
+        f.write("%s" % ("nash_storage=0.0,0.0[]\n"))
+        f.write("%s" % ("refkdt=" + str(dfa.loc[catID]['refkdt']) + "[]\n"))
         f.write("%s" % ("soil_params.b=" + str(dfa.loc[catID]['bexp_soil_layers_stag=1']) + "[]\n"))
-        f.write("%s" % ("soil_params.satdk=" + str(dfa.loc[catID]['dksat_soil_layers_stag=1']) + "[m s-1]\n"))
+        f.write("%s" % ("soil_params.depth=2.0[m]\n"))
+        f.write("%s" % ("soil_params.expon=1[]\n"))
+        f.write("%s" % ("soil_params.expon_secondary=1[]\n"))
+        f.write("%s" % ("soil_params.satdk=" + str(dfa.loc[catID]['dksat_soil_layers_stag=1']) + "[m/s]\n"))
         f.write("%s" % ("soil_params.satpsi=" + str(dfa.loc[catID]['psisat_soil_layers_stag=1']) + "[m]\n"))
         f.write("%s" % ("soil_params.slop=" + str(dfa.loc[catID]['slope']) + "[m/m]\n"))
         f.write("%s" % ("soil_params.smcmax=" + str(dfa.loc[catID]['smcmax_soil_layers_stag=1']) + "[m/m]\n"))
         f.write("%s" % ("soil_params.wltsmc=" + str(dfa.loc[catID]['smcwlt_soil_layers_stag=1']) + "[m/m]\n"))
-        f.write("%s" % ("soil_params.expon=1.0[]\n"))
-        f.write("%s" % ("soil_params.expon_secondary=1.0[]\n"))
-        f.write("%s" % ("refkdt=" + str(dfa.loc[catID]['refkdt']) + "\n"))
-        f.write("%s" % ("max_gw_storage=" + str(dfa.loc[catID]['gw_Zmax'] / 1000.) + "[m]\n"))
-        f.write("%s" % ("Cgw=" + str(dfa.loc[catID]['gw_Coeff'] * 3600 * 1e-6) + "[m h-1]\n"))
-        f.write("%s" % ("expon=" + str(dfa.loc[catID]['gw_Expon']) + "[]\n"))
-        f.write("%s" % ("gw_storage=0.05[m/m]\n"))
-        f.write("%s" % ("alpha_fc=0.33\n"))
-        f.write("%s" % ("soil_storage=0.05[m/m]\n"))
-        f.write("%s" % ("K_nash=0.03[]\n"))
-        f.write("%s" % ("K_lf=0.01[]\n"))
-        f.write("%s" % ("nash_storage=0.0,0.0\n"))
-        f.write("%s" % ("num_timesteps=1\n"))
-        f.write("%s" % ("verbosity=1\n"))
-        f.write("%s" % ("DEBUG=0\n"))
-        f.write("%s" % ("giuh_ordinates=0.55,0.25,0.2\n"))
-        f.write("%s" % ("surface_runoff_scheme=GIUH\n"))
-
-        if 'sft' in mods:
-            f.write("%s" % ("sft_coupled=true\n"))
-            f.write("%s" % ("ice_content_threshold=0.3\n"))
+        f.write("%s" % ("soil_storage=0.5[m/m]\n"))
 
         # add the new parameters for cfex
         # TODO: read these catchment-specific parameters from the NWMv3 model attributes parquet file
         # The current parquet file we have access to was likely based on NWMv2.1 and hence missing these XAJ parameters
-        f.write("%s" % ("a_Xinanjiang_inflection_point_parameter=-0.212938\n"))
-        f.write("%s" % ("b_Xinanjiang_shape_parameter=0.666238\n"))
-        f.write("%s" % ("x_Xinanjiang_shape_parameter=0.02414\n"))
-        f.write("%s" % ("urban_decimal_fraction=0.0\n"))
+        if scheme == 'Xinanjiang':
+            f.write("%s" % ("a_Xinanjiang_inflection_point_parameter=-0.212938\[]n"))
+            f.write("%s" % ("b_Xinanjiang_shape_parameter=0.666238[]\n"))
+            f.write("%s" % ("x_Xinanjiang_shape_parameter=0.02414[]\n"))
+            f.write("%s" % ("urban_decimal_fraction=0.0[]\n"))
 
         f.close()
 
@@ -1077,8 +1086,6 @@ def create_lasam_input(
         catID = catids[i]
         mods = modules[i]
 
-        # cfe_file_catID = glob.glob(os.path.join(cfe_bmi_dir, catID + '*.txt'))[0]
-        # df = pd.read_table(cfe_file_catID,  delimiter='=', names=["Params","Values"], index_col=0)
         lasam_lst_catID = lasam_lst.copy()
         lasam_lst_catID[9] = lasam_lst_catID[9] + str(df_soil.loc[catID]['category'])
 
