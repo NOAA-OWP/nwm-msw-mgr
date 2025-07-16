@@ -707,7 +707,7 @@ class RealizationBuilder:
                 elif m1 == 'smp':
                     continue
                 elif m1 == 'lasam':
-                    gfun.create_lasam_input(self.catids, self.modules, mod_input_dir, self.conf3['lasam_parameter_dir'], self.run_type)
+                    gfun.create_lasam_input(self.catids, self.modules, self.attr_file, mod_input_dir, self.conf3['lasam_parameter_dir'], self.run_type)
 
                 elif m1 == 'troute':
                     for file_name, run_name in zip(self.run_configs, ['calib', 'valid', 'valid']):
@@ -888,7 +888,7 @@ class RealizationBuilder:
                 elif m1 == 'smp':
                     continue
                 elif m1 == 'lasam':
-                    gfun.create_lasam_input(cat_mod, form_cat, mod_input_dir, self.conf3['lasam_parameter_dir'], self.run_type)
+                    gfun.create_lasam_input(cat_mod, form_cat, self.attr_file, mod_input_dir, self.conf3['lasam_parameter_dir'], self.run_type)
 
                 elif m1 == 'troute':
                     for file_name, run_name in zip(self.run_configs, ['region']):
@@ -930,6 +930,12 @@ class RealizationBuilder:
 
         gfun.create_reg_realization_file(self.work_dir, self.lib_file, bmi_dir, self.forcing_path, self.realization_file,
                                          self.time_period, rt_dict, self.output_dict, self.cat_to_grp, self.grp_to_form, self.grp_params)
+
+    def _write_fcst_realization(self):
+        # save the new realization file
+        self.realization_file = Path(self.out_dir, os.path.basename(self.real_input_file))
+        with open(self.realization_file, 'w') as outfile:
+            json.dump(self.real_config, outfile, indent=4, separators=(", ", ": "), sort_keys=False)
 
     def _write_partition(self):
         self.part_file = gfun.create_partition_file(self.parallelSec['partition_generator_exe'],
