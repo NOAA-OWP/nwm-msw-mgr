@@ -2054,7 +2054,8 @@ def create_reg_realization_file(
         catmain[catID]["formulations"] = [cat_configs]
 
         # Update forcing file path for catchment
-        catmain[catID]["forcing"] = {"path": forcing_dir + "/" + catID + ".csv"}
+        catmain[catID]["forcing"] = {"path": forcing_dir + "/" + catID + ".csv",
+                                     "provider": "CsvPerFeature"}
 
     # We do not need a formulation section in global to run the regionalization realization.
     # If we want a global formulation, add this code back in
