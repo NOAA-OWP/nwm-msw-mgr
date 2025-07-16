@@ -1021,6 +1021,7 @@ def create_pet_input(
 def create_lasam_input(
         catids: List[str],
         modules: Union[List[str], List[List[str]]],
+        attr_file: Union[str, Path],
         input_dir: Union[str, Path],
         param_dir: Union[str, Path],
         run_type: str
@@ -1031,6 +1032,7 @@ def create_lasam_input(
     ----------
     catids : catchment IDs in the basin
     modules: list of modules or a list of formulations for each catchment
+    attr_file: file containing model parameter attributes
     input_dir : directory for the lasam input configuration file
     param_dir: directory for static lasam parameter files
     run_type: type of run (calib or regionalization)
@@ -1068,26 +1070,31 @@ def create_lasam_input(
                  'ponded_depth_max=1.1[cm]',
                  'use_closed_form_G=false',
                  'layer_soil_type=',
-                 'max_soil_types=25',
+                 'max_soil_types=18',
                  'wilting_point_psi=15495.0[cm]',
-                 'giuh_ordinates=0.55,0.25,0.2',
-                 'sft_coupled=' + sft_coupled_str,
+                 'giuh_ordinates=0.55,0.25,0.2',  # Where should this be supplied from?
+                 'sft_coupled=',
                  'soil_z=10,30,100.0,200.0[cm]',
                  'calib_params=true',
                  'field_capacity_psi=340.9[cm]',
                  ]
 
-    # Read soil class file
-    df_soil = pd.read_csv(soil_class_file)
-    df_soil.set_index("id", inplace=True)
+    # # Read soil class file
+    # df_soil = pd.read_csv(soil_class_file)
+    # df_soil.set_index("id", inplace=True)
+
+    # Read hydrofabric attribute file
+    dfa = pd.read_parquet(attr_file)
+    dfa.set_index("divide_id", inplace=True)
 
     # Create bmi config file
     for i in range(len(catids)):
         catID = catids[i]
         mods = modules[i]
 
+        # Insert soil type
         lasam_lst_catID = lasam_lst.copy()
-        lasam_lst_catID[9] = lasam_lst_catID[9] + str(df_soil.loc[catID]['category'])
+        lasam_lst_catID[9] = lasam_lst_catID[9] + str(dfa.loc[catID]['ISLTYP'])
 
         if run_type == 'regionalization':
             # Check if sft is in use
@@ -2047,7 +2054,8 @@ def create_reg_realization_file(
         catmain[catID]["formulations"] = [cat_configs]
 
         # Update forcing file path for catchment
-        catmain[catID]["forcing"] = {"path": forcing_dir + "/" + catID + ".csv"}
+        catmain[catID]["forcing"] = {"path": forcing_dir + "/" + catID + ".csv",
+                                     "provider": "CsvPerFeature"}
 
     # We do not need a formulation section in global to run the regionalization realization.
     # If we want a global formulation, add this code back in
