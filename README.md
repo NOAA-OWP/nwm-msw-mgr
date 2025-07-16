@@ -1,7 +1,7 @@
 # MSWM - Model Setup Workflow Manager
 
 ## Description
-The Model Setup Workflow Manager generates realization and configuration filesfor running ngen in calibration, validation, forecast, and regionalization modes. mswm can either be run from the command line or called directly by ngen model runs.
+The Model Setup Workflow Manager generates realization and configuration files for running ngen in calibration, validation, forecast, and regionalization modes. mswm can either be run from the command line or called directly by ngen model runs.
 
 ## Installation
 
