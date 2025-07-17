@@ -165,7 +165,7 @@ def create_walk_file(
 def create_cfe_input(
         catids: List[str],
         modules: Union[List[str], List[List[str]]],
-        attr_file: Union[str, Path],
+        dfa: Union[str, Path],
         cfe_input_dir: Union[str, Path],
         run_type: str
 ) -> None:
@@ -175,7 +175,7 @@ def create_cfe_input(
     ----------
     catids : catchment IDs in the basin
     modules: list of modules in the formulation
-    attr_file : file containing model parameter attributes
+    dfa: dataframe containing model parameter attributes
     cfe_input_dir: directory to save configuration files
     run_type: type of run (calib or regionalization)
 
@@ -192,10 +192,6 @@ def create_cfe_input(
     """
 
     os.makedirs(cfe_input_dir, exist_ok=True)
-
-    # Read hydrofabric attribute file
-    dfa = pd.read_parquet(attr_file)
-    dfa.set_index("divide_id", inplace=True)
 
     # surface partitioning scheme
     scheme = 'Schaake'
@@ -233,24 +229,24 @@ def create_cfe_input(
             f.write("%s" % ("is_sft_coupled=" + sft_coupled + "\n"))
             f.write("%s" % ("ice_content_threshold=0.15\n"))
         f.write("%s" % ("alpha_fc=0.33\n"))
-        f.write("%s" % ("Cgw=" + str(dfa.loc[catID]['gw_Coeff'] * 3600 * 1e-6) + "[m/hr]\n"))
-        f.write("%s" % ("expon=" + str(dfa.loc[catID]['gw_Expon']) + "[]\n"))
+        f.write("%s" % ("Cgw=" + str(dfa.loc[catID]['mean.Coeff'] * 3600 * 1e-6) + "[m/hr]\n"))
+        f.write("%s" % ("expon=" + str(dfa.loc[catID]['mode.Expon']) + "[]\n"))
         f.write("%s" % ("giuh_ordinates=0.55, 0.25, 0.2[]\n"))
         f.write("%s" % ("gw_storage=0.05[m/m]\n"))
         f.write("%s" % ("K_lf=0.01[]\n"))
         f.write("%s" % ("K_nash=0.03[]\n"))
-        f.write("%s" % ("max_gw_storage=" + str(dfa.loc[catID]['gw_Zmax'] / 1000.) + "[m]\n"))
+        f.write("%s" % ("max_gw_storage=" + str(dfa.loc[catID]['mean.Zmax'] / 1000.) + "[m]\n"))
         f.write("%s" % ("nash_storage=0.0,0.0[]\n"))
-        f.write("%s" % ("refkdt=" + str(dfa.loc[catID]['refkdt']) + "[]\n"))
-        f.write("%s" % ("soil_params.b=" + str(dfa.loc[catID]['bexp_soil_layers_stag=1']) + "[]\n"))
+        f.write("%s" % ("refkdt=" + str(dfa.loc[catID]['mean.refkdt']) + "[]\n"))
+        f.write("%s" % ("soil_params.b=" + str(dfa.loc[catID]['mode.bexp_soil_layers_stag=1']) + "[]\n"))
         f.write("%s" % ("soil_params.depth=2.0[m]\n"))
         f.write("%s" % ("soil_params.expon=1[]\n"))
         f.write("%s" % ("soil_params.expon_secondary=1[]\n"))
-        f.write("%s" % ("soil_params.satdk=" + str(dfa.loc[catID]['dksat_soil_layers_stag=1']) + "[m/s]\n"))
-        f.write("%s" % ("soil_params.satpsi=" + str(dfa.loc[catID]['psisat_soil_layers_stag=1']) + "[m]\n"))
-        f.write("%s" % ("soil_params.slop=" + str(dfa.loc[catID]['slope']) + "[m/m]\n"))
-        f.write("%s" % ("soil_params.smcmax=" + str(dfa.loc[catID]['smcmax_soil_layers_stag=1']) + "[m/m]\n"))
-        f.write("%s" % ("soil_params.wltsmc=" + str(dfa.loc[catID]['smcwlt_soil_layers_stag=1']) + "[m/m]\n"))
+        f.write("%s" % ("soil_params.satdk=" + str(dfa.loc[catID]['geom_mean.dksat_soil_layers_stag=1']) + "[m/s]\n"))
+        f.write("%s" % ("soil_params.satpsi=" + str(dfa.loc[catID]['geom_mean.psisat_soil_layers_stag=1']) + "[m]\n"))
+        f.write("%s" % ("soil_params.slop=" + str(dfa.loc[catID]['mean.slope_1km']) + "[m/m]\n"))
+        f.write("%s" % ("soil_params.smcmax=" + str(dfa.loc[catID]['mean.smcmax_soil_layers_stag=1']) + "[m/m]\n"))
+        f.write("%s" % ("soil_params.wltsmc=" + str(dfa.loc[catID]['mean.smcwlt_soil_layers_stag=1']) + "[m/m]\n"))
         f.write("%s" % ("soil_storage=0.5[m/m]\n"))
 
         # add the new parameters for cfex
@@ -268,7 +264,7 @@ def create_cfe_input(
 def create_noah_input(
         catids: List[str],
         time_period: dict,
-        attr_file: Union[str, Path],
+        dfa: Union[str, Path],
         param_dir_source: Union[str, Path],
         noah_input_dir: Union[str, Path],
         run_type: str
@@ -279,7 +275,7 @@ def create_noah_input(
     ----------
     catids : catchment IDs in the basin
     time_period : simulation and evaluation time period
-    attr_file: file containing model parameter attributes
+    dfa: dataframe containing model parameter attributes
     param_dir_source : source directory containing Noah-OWP-Modular parameter files
     noah_input_dir: directory to save configuration files
     run_type: type of run (calib or regionalization)
@@ -299,10 +295,6 @@ def create_noah_input(
         if not os.path.exists(dst):
             os.symlink(src, dst)
 
-    # Read hydrofabric attribute file
-    dfa = pd.read_parquet(attr_file)
-    dfa.set_index("divide_id", inplace=True)
-
     # Files for either the calibration and validation run or the regionalization run
     if run_type == 'calib':
         run_list = ['calib', 'valid']
@@ -319,12 +311,12 @@ def create_noah_input(
 
             # Specify options for namelist file
             for catID in catids:
-                tslp = dfa.loc[catID]['slope_mean']
-                azimuth = dfa.loc[catID]['aspect_c_mean']
-                lat = dfa.loc[catID]['Y']
-                lon = dfa.loc[catID]['X']
-                isltype = dfa.loc[catID]["ISLTYP"]
-                vegtype = dfa.loc[catID]["IVGTYP"]
+                tslp = dfa.loc[catID]['mean.slope']
+                azimuth = dfa.loc[catID]['circ_mean.aspect']
+                lat = dfa.loc[catID].geometry.y
+                lon = dfa.loc[catID].geometry.x
+                isltype = int(dfa.loc[catID]["mode.ISLTYP"])
+                vegtype = int(dfa.loc[catID]["mode.IVGTYP"])
                 sfctype = 2 if vegtype == 16 else 1
                 nom_lst = ['&timing',
                            "  " + "dt".ljust(19) + "= 3600.0" + "                       ! timestep [seconds]",
@@ -482,7 +474,8 @@ def create_noah_input_template(
 def create_sft_smp_input(
         catids: List[str],
         modules: Union[List[str], List[List[str]]],
-        attr_file: Union[str, Path],
+        dfa: Union[str, Path],
+        attr_parquet: Union[str, Path],
         cfe_dir: Union[str, Path],
         forcing_dir: Union[str, Path],
         sft_dir: Union[str, Path],
@@ -495,7 +488,7 @@ def create_sft_smp_input(
     ----------
     catids : catchment IDs in the basin
     modules: list of modules in the formulation
-    attr_file : file containing model parameter attributes
+    dfa : dataframe containing model parameter attributes
     cfe_dir : directory containing cfe bmi configuration files
     forcing_dir : directory containing forcing files
     sft_dir : directory for writing sft bmi configuration files
@@ -511,9 +504,9 @@ def create_sft_smp_input(
     os.makedirs(sft_dir, exist_ok=True)
     os.makedirs(smp_dir, exist_ok=True)
 
-    # Read attribute file
-    dfa = pd.read_parquet(attr_file)
-    dfa.set_index('divide_id', inplace=True)
+    # Read hydrofabric attribute file
+    df_parquet = pd.read_parquet(attr_parquet)
+    df_parquet.set_index("divide_id", inplace=True)
 
     # Ice fraction scheme
     icefscheme = 'Schaake'
@@ -546,7 +539,7 @@ def create_sft_smp_input(
                    'soil_params.smcmax=' + df.loc['soil_params.smcmax'].iloc[0],
                    'soil_params.b=' + df.loc['soil_params.b'].iloc[0],
                    'soil_params.satpsi=' + df.loc['soil_params.satpsi'].iloc[0],
-                   'soil_params.quartz=' + str(dfa.loc[catID][[x for x in dfa.columns.to_list() if 'quartz' in x]].mean()) + '[]',
+                   'soil_params.quartz=' + str(df_parquet.loc[catID][[x for x in df_parquet.columns.to_list() if 'quartz' in x]].mean()) + '[]',  # soil_params.quartz not available in divide-attributes
                    'ice_fraction_scheme=' + icefscheme,
                    'soil_z=0.1,0.3,1.0,2.0[m]',
                    'soil_temperature=' + ','.join([str(mtemp)] * 4) + '[K]',
@@ -572,7 +565,7 @@ def create_sft_smp_input(
 
 def create_snow17_input(
         catids: List[str],
-        attr_file: Union[str, Path],
+        dfa: Union[str, Path],
         gpkg_file: Union[str, Path],
         param_dir_source: Union[str, Path],
         snow17_input_dir: str
@@ -582,7 +575,7 @@ def create_snow17_input(
     Parameters
     ----------
     catids : catchment IDs in the basin
-    attr_file: file containing model parameter attributes
+    dfa: dataframe containing model parameter attributes
     gpkg_file: GeoPackage hydrofabric file
     param_dir_source : directory containing snow17 parameter files
     snow17_input_dir : directory for the snow17 bmi configuration files
@@ -593,10 +586,6 @@ def create_snow17_input(
 
    """
     os.makedirs(snow17_input_dir, exist_ok=True)
-
-    # Read hydrofabric attribute file
-    dfa = pd.read_parquet(attr_file)
-    dfa.set_index("divide_id", inplace=True)
 
     # Read geopackage divides
     df_divide = gpd.read_file(gpkg_file, layer="divides")
@@ -612,8 +601,8 @@ def create_snow17_input(
         # Set catchment-specific snow17 config parameters
         param_list = ['hru_id ' + catID,
                       'hru_area ' + str(df_divide.loc[catID]['areasqkm']),
-                      'latitude ' + str(dfa.loc[catID]['Y']),
-                      'elev ' + str(dfa.loc[catID]['elevation_mean']),
+                      'latitude ' + str(dfa.loc[catID].geometry.y),
+                      'elev ' + str(dfa.loc[catID]['mean.elevation']),
                       'scf 1.100',
                       'mfmax ' + str(params_df.loc[catID]['MFMAX']),
                       'mfmin ' + str(params_df.loc[catID]['MFMIN']),
@@ -679,7 +668,7 @@ def create_snow17_input(
 def create_ueb_input(
         catids: List[str],
         time_period: dict,
-        attr_file: Union[str, Path],
+        dfa: Union[str, Path],
         param_dir_source: Union[str, Path],
         ueb_input_dir: str,
         bmi_dir: Union[str, Path],
@@ -691,7 +680,7 @@ def create_ueb_input(
     ----------
     catids : catchment IDs in the basin
     time_period: simulation time period
-    attr_file: file containing model parameter attributes
+    dfa: dataframe containing model parameter attributes
     param_dir_source : directory containing UEB parameter files
     ueb_input_dir : directory for the UEB bmi configuration file
     bmi_dir: directory path containing existing sitevar files (e.g., from EDS)
@@ -718,10 +707,6 @@ def create_ueb_input(
                 os.symlink(src, dst)
                 logger.info(f'Creating symlink from {src} to {dst}')
 
-    # Read hydrofabric attribute file
-    dfa = pd.read_parquet(attr_file)
-    dfa.set_index("divide_id", inplace=True)
-
     # sitevars file
     for catID in catids:
         # Set sitevars file from EDFS BMI dir if it exists
@@ -744,10 +729,10 @@ def create_ueb_input(
         else:  # create the sitevars file based on a template file
 
             # retrieve slope, aspect, lat and lon from precomputed attributes file
-            tslp = dfa.loc[catID]['slope_mean']
-            azimuth = dfa.loc[catID]['aspect_c_mean']
-            lat = dfa.loc[catID]['Y']
-            lon = dfa.loc[catID]['X']
+            tslp = dfa.loc[catID]['mean.slope']
+            azimuth = dfa.loc[catID]['circ_mean.aspect']
+            lat = dfa.loc[catID].geometry.y
+            lon = dfa.loc[catID].geometry.x
 
             temp_file = Path(param_dir_source, 'ueb_sitevars.dat').resolve(strict=True)
             with open(temp_file) as f:
@@ -777,7 +762,7 @@ def create_ueb_input(
                 input_file = os.path.join(ueb_input_dir, 'ueb-init-' + catID + '_' + run_name + '.dat')
                 site_file = os.path.join(ueb_input_dir, 'ueb_sitevars-' + catID + '.dat')
                 input_list = [
-                    'UEBGrid Model Driver Test for TWDEF',
+                    'UEBGrid Model Driver Test for TWDEF',  # TODO does this need to be updated?
                     const_files['params'],
                     site_file,
                     const_files['inputctr'],
@@ -799,7 +784,6 @@ def create_ueb_input(
 
 def create_sac_input(
         catids: List[str],
-        attr_file: Union[str, Path],
         gpkg_file: Union[str, Path],
         param_dir_source: Union[str, Path],
         sac_input_dir: str
@@ -809,7 +793,6 @@ def create_sac_input(
     Parameters
     ----------
     catids : catchment IDs in the basin
-    attr_file: file containing model parameter attributes
     gpkg_file: GeoPackage hydrofabric file
     param_dir_source : directory for sac parameter file
     sac_input_dir : directory for the sac bmi configuration file
@@ -820,10 +803,6 @@ def create_sac_input(
 
     """
     os.makedirs(sac_input_dir, exist_ok=True)
-
-    # Read hydrofabric attribute file
-    dfa = pd.read_parquet(attr_file)
-    dfa.set_index("divide_id", inplace=True)
 
     # Read geopackage divides
     df_divide = gpd.read_file(gpkg_file, layer="divides")
@@ -964,7 +943,7 @@ def change_sac_snow17_input(
 
 def create_pet_input(
         catids: List[str],
-        attr_file: Union[str, Path],
+        dfa: Union[str, Path],
         pet_input_dir: str
 ) -> None:
     """ Create BMI configuration file for pet
@@ -972,7 +951,7 @@ def create_pet_input(
     Parameters
     ----------
     catids : catchment IDs in the basin
-    attr_file: file containing model parameter attributes
+    dfa: dataframe containing model parameter attributes
     pet_input_dir : directory for the pet input files
 
     Returns
@@ -981,10 +960,6 @@ def create_pet_input(
 
     """
     os.makedirs(pet_input_dir, exist_ok=True)
-
-    # Read hydrofabric attribute file
-    dfa = pd.read_parquet(attr_file)
-    dfa.set_index("divide_id", inplace=True)
 
     for catID in catids:
 
@@ -1004,9 +979,9 @@ def create_pet_input(
                     'surface_longwave_emissivity=1.0',
                     'surface_shortwave_albedo=0.22',
                     'cloud_base_height_known=FALSE',
-                    'latitude_degrees=' + str(dfa.loc[catID]['Y']),
-                    'longitude_degrees=' + str(dfa.loc[catID]['X']),
-                    'site_elevation_m=' + str(dfa.loc[catID]['elevation_mean']),
+                    'latitude_degrees=' + str(dfa.loc[catID].geometry.y),
+                    'longitude_degrees=' + str(dfa.loc[catID].geometry.x),
+                    'site_elevation_m=' + str(dfa.loc[catID]['mean.elevation']),
                     'time_step_size_s=3600',
                     'num_timesteps=720',  # This needs to be set from the input files, possibly for calib and valid
                     'shortwave_radiation_provided=0']
@@ -1021,7 +996,7 @@ def create_pet_input(
 def create_lasam_input(
         catids: List[str],
         modules: Union[List[str], List[List[str]]],
-        attr_file: Union[str, Path],
+        dfa: Union[str, Path],
         input_dir: Union[str, Path],
         param_dir: Union[str, Path],
         run_type: str
@@ -1032,7 +1007,7 @@ def create_lasam_input(
     ----------
     catids : catchment IDs in the basin
     modules: list of modules or a list of formulations for each catchment
-    attr_file: file containing model parameter attributes
+    dfa: dataframe containing model parameter attributes
     input_dir : directory for the lasam input configuration file
     param_dir: directory for static lasam parameter files
     run_type: type of run (calib or regionalization)
@@ -1079,14 +1054,6 @@ def create_lasam_input(
                  'field_capacity_psi=340.9[cm]',
                  ]
 
-    # # Read soil class file
-    # df_soil = pd.read_csv(soil_class_file)
-    # df_soil.set_index("id", inplace=True)
-
-    # Read hydrofabric attribute file
-    dfa = pd.read_parquet(attr_file)
-    dfa.set_index("divide_id", inplace=True)
-
     # Create bmi config file
     for i in range(len(catids)):
         catID = catids[i]
@@ -1094,7 +1061,7 @@ def create_lasam_input(
 
         # Insert soil type
         lasam_lst_catID = lasam_lst.copy()
-        lasam_lst_catID[9] = lasam_lst_catID[9] + str(dfa.loc[catID]['ISLTYP'])
+        lasam_lst_catID[9] = lasam_lst_catID[9] + str(int(dfa.loc[catID]['mode.ISLTYP']))
 
         if run_type == 'regionalization':
             # Check if sft is in use
@@ -1398,7 +1365,7 @@ def change_topmodel_input(
 
 def create_topmodel_input(
         catids: List[str],
-        attr_file: Union[str, Path],
+        dfa: Union[str, Path],
         gpkg_file: Union[str, Path],
         inputDir: Union[str, Path],
 ) -> None:
@@ -1407,7 +1374,7 @@ def create_topmodel_input(
     Parameters
     ----------
     catids : catchment IDs in the basin
-    attr_file: file containing model parameter attributes
+    dfa: dataframe containing model parameter attributes
     gpkg_file: GeoPackage hydrofabric file
     inputDir: directory for writing topmodel bmi configuration files
 
@@ -1416,17 +1383,12 @@ def create_topmodel_input(
     None
 
     """
+
     os.makedirs(inputDir, exist_ok=True)
 
-    # Read hydrofabric attribute file
-    dfa = pd.read_parquet(attr_file)
-    dfa.set_index("divide_id", inplace=True)
-
-    # Read geopackage divides and divides_attributes file
+    # Read geopackage divides file
     df_divide = gpd.read_file(gpkg_file, layer="divides")
     df_divide.set_index('divide_id', inplace=True)
-    df_attr = gpd.read_file(gpkg_file, layer='divide-attributes')
-    df_attr.set_index('divide_id', inplace=True)
 
     # loop through all catchments
     for catID in catids:
@@ -1436,7 +1398,7 @@ def create_topmodel_input(
         imap = 1
         yes_print_output = 1
         area = 1
-        twi = json.loads(df_attr.loc[catID]['dist_4.twi'])
+        twi = json.loads(dfa.loc[catID]['dist_4.twi'])
         twi_df = pd.DataFrame(twi)
         num_topodex_values = len(twi)
         num_channels = 1
