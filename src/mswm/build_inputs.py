@@ -147,7 +147,7 @@ class RealizationBuilder:
         self.parallelSec = configs['Parallel'] if self.config.has_section("Parallel") and int(self.parallelSec['nprocs']) > 1 else None
 
         # Parse attribute file
-        self.attr_file = self.conf3['attributes_file']
+        self.attr_parquet = self.conf3['attributes_file']
 
     def _parse_time(self):
         # Retrieve time period for calibration
@@ -402,7 +402,18 @@ class RealizationBuilder:
         if not os.path.exists(self.cat_file):
             logger.info(f'Creating symlink from {self.gpkg_file} to {self.cat_file}')
             os.symlink(self.gpkg_file, self.cat_file)
-        gfun.create_walk_file(self.basin, self.gpkg_file, self.walk_file)
+        if self.run_type != 'regionalization':
+            gfun.create_walk_file(self.basin, self.gpkg_file, self.walk_file)
+
+        # Read catchment parameter values from geopackage divide-attributes
+        attr_input = gpd.read_file(self.gpkg_file, layer='divide-attributes')
+        attr_input.set_index("divide_id", inplace=True)
+
+        # Reproject to WGS84 for X,Y coordinates
+        self.attr_file = gpd.GeoDataFrame(attr_input,
+                                          geometry=gpd.points_from_xy(attr_input['centroid_x'], attr_input['centroid_y']),
+                                          crs="EPSG:5070")
+        self.attr_file = self.attr_file.to_crs("EPSG:4326")
 
     def _extract_forcing(self):
         # Extract forcing files
@@ -470,7 +481,7 @@ class RealizationBuilder:
         self.real_config = update_troute(self.real_config, self.out_dir)
 
     def _init_config_hooks(self):
-        # NOT IN USE: Generate BMI configs using NOAA OWP ngen_config_gen repo 
+        # NOT IN USE: Generate BMI configs using NOAA OWP ngen_config_gen repo
         from mswm.config_gen.hook_providers import DefaultHookProvider
 
         # Initialize ngen_config_gen hook provider
@@ -486,7 +497,7 @@ class RealizationBuilder:
         self.hook_provider = DefaultHookProvider(hf=self.hf, hf_lnk_data=self.hf_lnk_data)
 
     def _get_module_hooks(self):
-        # NOT IN USE: Generate BMI configs using NOAA OWP ngen_config_gen repo 
+        # NOT IN USE: Generate BMI configs using NOAA OWP ngen_config_gen repo
         from mswm.config_gen.models.cfes import Cfes
         from mswm.config_gen.models.cfex import Cfex
         from mswm.config_gen.models.pet import Pet
@@ -501,7 +512,7 @@ class RealizationBuilder:
         }
 
     def _create_bmi_configs_ngen_config_gen(self):
-        # NOT IN USE: Generate BMI configs using NOAA OWP ngen_config_gen repo 
+        # NOT IN USE: Generate BMI configs using NOAA OWP ngen_config_gen repo
 
         self.run_configs = ['_troute_config_calib.yaml', '_troute_config_valid_control.yaml', '_troute_config_valid_best.yaml']
         modules1 = self.modules.copy()
@@ -673,7 +684,7 @@ class RealizationBuilder:
                 elif m1 == "pet":
                     gfun.create_pet_input(self.catids, self.attr_file, mod_input_dir)
                 elif m1 == "sac":
-                    gfun.create_sac_input(self.catids, self.attr_file, self.gpkg_file, self.conf3[m1 + '_parameter_dir'], mod_input_dir)
+                    gfun.create_sac_input(self.catids, self.gpkg_file, self.conf3[m1 + '_parameter_dir'], mod_input_dir)
                 elif m1 == 'noah':
                     gfun.create_noah_input(self.catids, self.time_period, self.attr_file, self.conf3[m1 + '_parameter_dir'], mod_input_dir, self.run_type)
                 elif m1 == 'sft':
@@ -702,7 +713,7 @@ class RealizationBuilder:
                         # raise Exception('Folder for CFE BMI config files needs to be provided, via either cfe-s_bmi_dir or cfe-x_bmi_dir')
 
                     # Create sft input
-                    gfun.create_sft_smp_input(self.catids, self.modules, self.attr_file, cfe_dir, self.conf3['forcing_dir'], sft_dir, smp_dir, self.run_type)
+                    gfun.create_sft_smp_input(self.catids, self.modules, self.attr_file, self.attr_parquet, cfe_dir, self.conf3['forcing_dir'], sft_dir, smp_dir, self.run_type)
 
                 elif m1 == 'smp':
                     continue
@@ -848,7 +859,7 @@ class RealizationBuilder:
                 elif m1 == "pet":
                     gfun.create_pet_input(cat_mod, self.attr_file, mod_input_dir)
                 elif m1 == "sac":
-                    gfun.create_sac_input(cat_mod, self.attr_file, self.gpkg_file, self.conf3[m1 + '_parameter_dir'], mod_input_dir)
+                    gfun.create_sac_input(cat_mod, self.gpkg_file, self.conf3[m1 + '_parameter_dir'], mod_input_dir)
                 elif m1 == 'noah':
                     gfun.create_noah_input(cat_mod, self.time_period, self.attr_file, self.conf3[m1 + '_parameter_dir'], mod_input_dir, self.run_type)
                 elif m1 == 'sft':
@@ -882,7 +893,7 @@ class RealizationBuilder:
                                 gfun.create_cfe_input(scheme_cat, scheme_form_cfes, self.attr_file, cfe_dir, self.run_type)
 
                             # Create SFT/SMP inputs
-                            gfun.create_sft_smp_input(scheme_cat, scheme_form, self.attr_file, cfe_dir, self.conf3['forcing_dir'], sft_dir, smp_dir, self.run_type)
+                            gfun.create_sft_smp_input(scheme_cat, scheme_form, self.attr_file, self.attr_parquet, cfe_dir, self.conf3['forcing_dir'], sft_dir, smp_dir, self.run_type)
 
                 # Skip smp, inputs created in tandem with sft
                 elif m1 == 'smp':
