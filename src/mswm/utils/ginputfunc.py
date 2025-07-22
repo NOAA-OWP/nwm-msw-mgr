@@ -177,7 +177,7 @@ def create_cfe_input(
     modules: list of modules in the formulation
     dfa: dataframe containing model parameter attributes
     cfe_input_dir: directory to save configuration files
-    run_type: type of run (calib or regionalization)
+    run_type: type of run (calib, regionalization, or default)
 
     Returns
     ----------
@@ -195,7 +195,7 @@ def create_cfe_input(
 
     # surface partitioning scheme
     scheme = 'Schaake'
-    if run_type == 'calib':
+    if run_type != 'regionalization':
         mods = modules
         if 'cfex' in mods:
             scheme = 'Xinanjiang'
@@ -216,6 +216,15 @@ def create_cfe_input(
             sft_coupled = '1'
         else:
             sft_coupled = '0'
+
+        # # TODO Temporary fix: set bexp value to very small value if it equals 0. Otherwise SMP raises an error
+        # bexp_val = dfa.loc[catID]['mode.bexp_soil_layers_stag=1']
+        # if bexp_val <= 0:
+        #     bexp_val = 0.001
+
+        # satpsi_val = dfa.loc[catID]['geom_mean.psisat_soil_layers_stag=1']
+        # if satpsi_val <= 0:
+        #     satpsi_val = 0.001
 
         cfe_bmi_file = os.path.join(cfe_input_dir, catID + "_bmi_config_cfe.txt")
         f = open(cfe_bmi_file, "w")
@@ -239,11 +248,13 @@ def create_cfe_input(
         f.write("%s" % ("nash_storage=0.0,0.0[]\n"))
         f.write("%s" % ("refkdt=" + str(dfa.loc[catID]['mean.refkdt']) + "[]\n"))
         f.write("%s" % ("soil_params.b=" + str(dfa.loc[catID]['mode.bexp_soil_layers_stag=1']) + "[]\n"))
+        # f.write("%s" % ("soil_params.b=" + str(bexp_val) + "[]\n"))
         f.write("%s" % ("soil_params.depth=2.0[m]\n"))
         f.write("%s" % ("soil_params.expon=1[]\n"))
         f.write("%s" % ("soil_params.expon_secondary=1[]\n"))
         f.write("%s" % ("soil_params.satdk=" + str(dfa.loc[catID]['geom_mean.dksat_soil_layers_stag=1']) + "[m/s]\n"))
         f.write("%s" % ("soil_params.satpsi=" + str(dfa.loc[catID]['geom_mean.psisat_soil_layers_stag=1']) + "[m]\n"))
+        # f.write("%s" % ("soil_params.satpsi=" + str(satpsi_val) + "[m]\n"))
         f.write("%s" % ("soil_params.slop=" + str(dfa.loc[catID]['mean.slope_1km']) + "[m/m]\n"))
         f.write("%s" % ("soil_params.smcmax=" + str(dfa.loc[catID]['mean.smcmax_soil_layers_stag=1']) + "[m/m]\n"))
         f.write("%s" % ("soil_params.wltsmc=" + str(dfa.loc[catID]['mean.smcwlt_soil_layers_stag=1']) + "[m/m]\n"))
@@ -278,7 +289,7 @@ def create_noah_input(
     dfa: dataframe containing model parameter attributes
     param_dir_source : source directory containing Noah-OWP-Modular parameter files
     noah_input_dir: directory to save configuration files
-    run_type: type of run (calib or regionalization)
+    run_type: type of run (calib, regionalization, or default)
 
     Returns
     ----------
@@ -300,6 +311,8 @@ def create_noah_input(
         run_list = ['calib', 'valid']
     elif run_type == 'regionalization':
         run_list = ['region']
+    elif run_type == 'default':
+        run_list = ['default']
 
     for run_name in run_list:
         if time_period['run_time_period'][run_name][0] and time_period['run_time_period'][run_name][1]:
@@ -409,7 +422,7 @@ def create_noah_input_template(
     param_dir_source : source directory containing Noah-OWP-Modular parameter files
     input_dir: directory to save configuration files
     template_bmi_dir: directory to template BMI files
-    run_type: type of run (calib or regionalization)
+    run_type: type of run (calib, regionalization, or default)
 
     Returns
     ----------
@@ -437,6 +450,8 @@ def create_noah_input_template(
         run_list = ['calib', 'valid']
     elif run_type == 'regionalization':
         run_list = ['region']
+    elif run_type == 'default':
+        run_list = ['default']
 
     for run_name in run_list:
         if time_period['run_time_period'][run_name][0] and time_period['run_time_period'][run_name][1]:
@@ -493,7 +508,7 @@ def create_sft_smp_input(
     forcing_dir : directory containing forcing files
     sft_dir : directory for writing sft bmi configuration files
     smp_dir : directory for writing smp bmi configuration files
-    run_type: type of run (calib or regionalization)
+    run_type: type of run (calib, regionalization, or default)
 
     Returns
     ----------
@@ -510,7 +525,7 @@ def create_sft_smp_input(
 
     # Ice fraction scheme
     icefscheme = 'Schaake'
-    if run_type == 'calib':
+    if run_type != 'regionalization':
         mods = modules
         if ('cfex' in mods):
             icefscheme = 'Xinanjiang'
@@ -519,6 +534,13 @@ def create_sft_smp_input(
     for i in range(len(catids)):
 
         catID = catids[i]
+
+        # Check if catID is in parquet file (some catchments are missing). This will eventually be replaced when parquet file is not needed for quartz values
+        # Set soil_params.quartz value
+        if catID in df_parquet.index:
+            quartz_val = str(df_parquet.loc[catID][[x for x in df_parquet.columns.to_list() if 'quartz' in x]].mean()) + '[]'  # soil_params.quartz not available in divide-attributes
+        else:
+            quartz_val = '0[]'
 
         # Set module list for each catchment during regionalization
         if run_type == 'regionalization':
@@ -539,14 +561,17 @@ def create_sft_smp_input(
                    'soil_params.smcmax=' + df.loc['soil_params.smcmax'].iloc[0],
                    'soil_params.b=' + df.loc['soil_params.b'].iloc[0],
                    'soil_params.satpsi=' + df.loc['soil_params.satpsi'].iloc[0],
-                   'soil_params.quartz=' + str(df_parquet.loc[catID][[x for x in df_parquet.columns.to_list() if 'quartz' in x]].mean()) + '[]',  # soil_params.quartz not available in divide-attributes
+                   'soil_params.quartz=' + quartz_val,
                    'ice_fraction_scheme=' + icefscheme,
                    'soil_z=0.1,0.3,1.0,2.0[m]',
-                   'soil_temperature=' + ','.join([str(mtemp)] * 4) + '[K]',
+                   'soil_temperature=' + ','.join([str(mtemp)] * 4) + '[K]'
                    ]
         sft_bmi_file = os.path.join(sft_dir, catID + '_bmi_config_sft.txt')
         with open(sft_bmi_file, "w") as f:
             f.writelines('\n'.join(sft_lst))
+
+        # if float(df.loc['soil_params.b'].iloc[0][:-2]) < 0:
+        #     raise ValueError(f"Invalid b: {catID}")
 
         # Create smp list
         smp_lst = ['verbosity=none',
@@ -684,7 +709,7 @@ def create_ueb_input(
     param_dir_source : directory containing UEB parameter files
     ueb_input_dir : directory for the UEB bmi configuration file
     bmi_dir: directory path containing existing sitevar files (e.g., from EDS)
-    run_type: type of run (calib or regionalization)
+    run_type: type of run (calib, regionalization, or default)
 
     Returns
     ----------
@@ -750,6 +775,8 @@ def create_ueb_input(
         run_list = ['calib', 'valid']
     elif run_type == 'regionalization':
         run_list = ['region']
+    elif run_type == 'default':
+        run_list = ['default']
 
     for run_name in run_list:
         if time_period['run_time_period'][run_name][0] and time_period['run_time_period'][run_name][1]:
@@ -1010,7 +1037,7 @@ def create_lasam_input(
     dfa: dataframe containing model parameter attributes
     input_dir : directory for the lasam input configuration file
     param_dir: directory for static lasam parameter files
-    run_type: type of run (calib or regionalization)
+    run_type: type of run (calib, regionalization, or default)
 
     Returns
     ----------
@@ -1054,19 +1081,25 @@ def create_lasam_input(
                  'field_capacity_psi=340.9[cm]',
                  ]
 
+    # Set module list for non-regionalization run
+    if run_type != 'regionalization':
+        mods = modules
+
     # Create bmi config file
     for i in range(len(catids)):
         catID = catids[i]
-        mods = modules[i]
+
+        # Set module list for each catchment during regionalization
+        if run_type == 'regionalization':
+            mods = modules[i]
 
         # Insert soil type
         lasam_lst_catID = lasam_lst.copy()
         lasam_lst_catID[9] = lasam_lst_catID[9] + str(int(dfa.loc[catID]['mode.ISLTYP']))
 
-        if run_type == 'regionalization':
-            # Check if sft is in use
-            sft_coupled_str = 'true' if 'sft' in mods else 'false'
-            lasam_lst_catID[13] = 'sft_coupled=' + sft_coupled_str
+        # Check if sft is in use
+        sft_coupled_str = 'true' if 'sft' in mods else 'false'
+        lasam_lst_catID[13] = 'sft_coupled=' + sft_coupled_str
 
         # lasam_lst_catID[12] = lasam_lst_catID[12] + df.loc['giuh_ordinates'][0]
         lasam_bmi_file = os.path.join(input_dir, catID + '_bmi_config_lasam.txt')
@@ -1259,7 +1292,7 @@ def change_sft_input(
     modules: list of modules in the formulation
     input_dir: directory for writing sft bmi configuration files
     bmi_dir : directory containing bmi configuration files
-    run_type: type of run (calib or regionalization)
+    run_type: type of run (calib, regionalization, or default)
 
     Returns
     ----------
@@ -1272,7 +1305,7 @@ def change_sft_input(
 
     # Ice fraction scheme
     icefscheme = 'Schaake'
-    if run_type == 'calib':
+    if run_type != 'regionalization':
         mods = modules
         if ('cfex' in mods):
             icefscheme = 'Xinanjiang'
@@ -2085,6 +2118,7 @@ def create_realization_file(
         time_period: dict,
         rt_dict: dict,
         output_dict: dict,
+        run_type: str
 ) -> None:
     """
     Create realization file for the specified model and module
@@ -2100,6 +2134,7 @@ def create_realization_file(
     time_period : simulation and evaluation time period
     rt_dict : routing model source file directory and configuration file
     output_dict: whether to output certain variables (currently SWE and soil moisture)
+    run_type: type of run (calib, regionalization, or default)
 
     Returns
     ----------
@@ -2116,10 +2151,6 @@ def create_realization_file(
 
     model_configs = {}
 
-    # smp_cfg_path_str = None
-    # if 'smp' in modules:
-    #     smp_cfg_path_str = os.path.join(bmi_dir['smp'], '{{id}}_bmi_config_smp.txt')
-
     # noah
     if 'noah' in modules:
         model_configs['noah'] = {"name": "bmi_fortran",
@@ -2127,7 +2158,7 @@ def create_realization_file(
                                             "model_type_name": get_model_type_name('noah'),
                                             "main_output_variable": "QINSUR",
                                             "library_file": lib_mod['noah'],
-                                            "init_config": os.path.join(bmi_dir['noah'], '{{id}}_calib.input'),
+                                            "init_config": os.path.join(bmi_dir['noah'], '{{id}}_' + run_type + '.input'),
                                             "allow_exceed_end_time": True, "fixed_time_step": False, "uses_forcing_file": False,
                                             "variables_names_map": {
                                                 "PRCPNONC": "atmosphere_water__liquid_equivalent_precipitation_rate",
@@ -2218,7 +2249,7 @@ def create_realization_file(
                                     "name": "bmi_c++",
                                     "model_type_name": get_model_type_name('ueb'),
                                     "library_file": lib_mod['ueb'],
-                                    "init_config": os.path.join(bmi_dir['ueb'], 'ueb-init-{{id}}_calib.dat'),
+                                    "init_config": os.path.join(bmi_dir['ueb'], 'ueb-init-{{id}}_' + run_type + '.dat'),
                                     "allow_exceed_end_time": True, "fixed_time_step": False, "uses_forcing_file": False,
                                     "main_output_variable": "SWIT",
                                     "variables_names_map": {
@@ -2378,8 +2409,8 @@ def create_realization_file(
                     "forcing": {"file_pattern": ".*{{id}}.*.csv", "path": forcing_dir, "provider": "CsvPerFeature"}}}
 
     # time object
-    t = {"time": {"start_time": time_period['run_time_period']['calib'][0],
-                  "end_time": time_period['run_time_period']['calib'][1], "output_interval": 3600}}
+    t = {"time": {"start_time": time_period['run_time_period'][run_type][0],
+                  "end_time": time_period['run_time_period'][run_type][1], "output_interval": 3600}}
     g.update(t)
 
     # routing object
