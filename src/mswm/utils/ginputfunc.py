@@ -11,6 +11,7 @@ import glob
 import json
 import os
 import subprocess
+import logging
 import shutil
 from pathlib import Path
 from typing import List, Union, Dict
@@ -22,6 +23,9 @@ import yaml
 
 from tempfile import mkstemp
 from mswm.utils import settings
+
+
+logger = logging.getLogger(__name__)
 
 
 def replace_path(source_file_path, par_path, data_type_codes):
