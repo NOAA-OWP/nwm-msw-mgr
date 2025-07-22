@@ -9,7 +9,6 @@ import datetime
 import fnmatch
 import glob
 import json
-import logging
 import os
 import subprocess
 import shutil
@@ -23,8 +22,6 @@ import yaml
 
 from tempfile import mkstemp
 from mswm.utils import settings
-
-logger = logging.getLogger('createInput')
 
 
 def replace_path(source_file_path, par_path, data_type_codes):
@@ -218,13 +215,13 @@ def create_cfe_input(
             sft_coupled = '0'
 
         # # TODO Temporary fix: set bexp value to very small value if it equals 0. Otherwise SMP raises an error
-        # bexp_val = dfa.loc[catID]['mode.bexp_soil_layers_stag=1']
-        # if bexp_val <= 0:
-        #     bexp_val = 0.001
+        bexp_val = dfa.loc[catID]['mode.bexp_soil_layers_stag=1']
+        if bexp_val <= 0:
+            bexp_val = 0.001
 
-        # satpsi_val = dfa.loc[catID]['geom_mean.psisat_soil_layers_stag=1']
-        # if satpsi_val <= 0:
-        #     satpsi_val = 0.001
+        satpsi_val = dfa.loc[catID]['geom_mean.psisat_soil_layers_stag=1']
+        if satpsi_val <= 0:
+            satpsi_val = 0.001
 
         cfe_bmi_file = os.path.join(cfe_input_dir, catID + "_bmi_config_cfe.txt")
         f = open(cfe_bmi_file, "w")
@@ -247,14 +244,14 @@ def create_cfe_input(
         f.write("%s" % ("max_gw_storage=" + str(dfa.loc[catID]['mean.Zmax'] / 1000.) + "[m]\n"))
         f.write("%s" % ("nash_storage=0.0,0.0[]\n"))
         f.write("%s" % ("refkdt=" + str(dfa.loc[catID]['mean.refkdt']) + "[]\n"))
-        f.write("%s" % ("soil_params.b=" + str(dfa.loc[catID]['mode.bexp_soil_layers_stag=1']) + "[]\n"))
-        # f.write("%s" % ("soil_params.b=" + str(bexp_val) + "[]\n"))
+        # f.write("%s" % ("soil_params.b=" + str(dfa.loc[catID]['mode.bexp_soil_layers_stag=1']) + "[]\n"))
+        f.write("%s" % ("soil_params.b=" + str(bexp_val) + "[]\n"))
         f.write("%s" % ("soil_params.depth=2.0[m]\n"))
         f.write("%s" % ("soil_params.expon=1[]\n"))
         f.write("%s" % ("soil_params.expon_secondary=1[]\n"))
         f.write("%s" % ("soil_params.satdk=" + str(dfa.loc[catID]['geom_mean.dksat_soil_layers_stag=1']) + "[m/s]\n"))
-        f.write("%s" % ("soil_params.satpsi=" + str(dfa.loc[catID]['geom_mean.psisat_soil_layers_stag=1']) + "[m]\n"))
-        # f.write("%s" % ("soil_params.satpsi=" + str(satpsi_val) + "[m]\n"))
+        # f.write("%s" % ("soil_params.satpsi=" + str(dfa.loc[catID]['geom_mean.psisat_soil_layers_stag=1']) + "[m]\n"))
+        f.write("%s" % ("soil_params.satpsi=" + str(satpsi_val) + "[m]\n"))
         f.write("%s" % ("soil_params.slop=" + str(dfa.loc[catID]['mean.slope_1km']) + "[m/m]\n"))
         f.write("%s" % ("soil_params.smcmax=" + str(dfa.loc[catID]['mean.smcmax_soil_layers_stag=1']) + "[m/m]\n"))
         f.write("%s" % ("soil_params.wltsmc=" + str(dfa.loc[catID]['mean.smcwlt_soil_layers_stag=1']) + "[m/m]\n"))

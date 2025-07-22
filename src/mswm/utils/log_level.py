@@ -35,11 +35,11 @@ def log_level_set():
         BASE_DIR = Path(__file__).resolve().parent.parent
 
         if Path("/ngencerf/data").exists():
-            log_file_dir = Path(f'/ngencerf/data/run-logs/ngen_fcst_{create_timestamp()}/')
+            log_file_dir = Path(f'/ngencerf/data/run-logs/mswm_{create_timestamp()}/')
         else:
-            log_file_dir = Path(BASE_DIR) / f'run-logs/ngen_fcst_{create_timestamp()}/'
+            log_file_dir = Path(BASE_DIR) / f'run-logsmswm_{create_timestamp()}/'
 
-        log_file_name = "ngen_fcst.log"
+        log_file_name = "mswm.log"
         os.makedirs(log_file_dir, exist_ok=True)
         logFilePath = os.path.join(log_file_dir, log_file_name)
         try:
@@ -52,7 +52,7 @@ def log_level_set():
         logging.basicConfig(
             force=True,
             level=log_level,
-            format='%(asctime)s.%(msecs)03d NGEN_FCST %(levelname)s    %(message)s',
+            format='%(asctime)s.%(msecs)03d MSWM %(levelname)s    %(message)s',
             datefmt='%Y-%m-%dT%H:%M:%S',
             handlers=[
                 logging.FileHandler(logFilePath, mode='a'),  # Log to a file
