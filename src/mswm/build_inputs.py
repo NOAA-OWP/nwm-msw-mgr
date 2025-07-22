@@ -125,9 +125,14 @@ class RealizationBuilder:
         # reassign config sections for convenience
         self.conf1 = configs['General']
         self.run_type = self.conf1.get("run_type")
+
+        if self.run_type not in ('calib', 'regionalization', 'default'):
+            raise ValueError("Run type not in available options: calib, regionalization, default ")
+
         self.conf2 = configs.get({
             "calib": "Calibration",
-            "regionalization": "Regionalization"
+            "regionalization": "Regionalization",
+            "default": "Default"
         }.get(self.run_type))
         self.conf3 = configs['DataFile']
 
@@ -160,6 +165,9 @@ class RealizationBuilder:
         # Retrieve time period for regionalization
         elif self.run_type == 'regionalization':
             self.time_period = {"run_time_period": {"region": [self.conf2['start_period'], self.conf2['end_period']]}}
+        # Retrieve time period for default
+        elif self.run_type == 'default':
+            self.time_period = {"run_time_period": {"default": [self.conf2['start_period'], self.conf2['end_period']]}}
 
     def _parse_calib_settings(self):
         # Retrieve general settings for calibration
@@ -364,29 +372,27 @@ class RealizationBuilder:
     def _set_lib_paths(self):
         # library files for all modules included in the formulation
         self.lib_file = {}
-        if self.run_type == 'calib':
-            modules1 = [m1 for m1 in self.modules if m1 != 'troute']
-        elif self.run_type == 'regionalization':
+        if self.run_type == 'regionalization':
             modules1 = list(set(m1 for form in self.grp_to_form.values() for m1 in form if m1 != 'troute'))
             self.all_mod = modules1.copy()
+        else:
+            modules1 = [m1 for m1 in self.modules if m1 != 'troute']
 
         for m1 in modules1:
             m2 = settings.modules_all.loc[settings.modules_all['module'] == m1, 'name_ui'].iloc[0]
             m2 = m2 if m2 not in ['cfe-s', 'cfe-x'] else 'cfe'
             self.lib_file[m1] = self.conf3[m2 + '_lib']
 
-    def _create_calib_input_dir(self):
-        # Create Input directory
+    def _create_input_dir(self):
+        # Create input directory
         self.basin = self.conf1['basin']
-        run_dir = os.path.join(self.conf1['main_dir'], '_'.join([self.conf2['objective_function'], self.conf2['optimization_algorithm']]))
-        self.work_dir = os.path.join(run_dir, self.conf1['formulation'] + '/' + self.basin)
-        self.input_dir = os.path.join(self.work_dir, 'Input/')
-        os.makedirs(self.input_dir, exist_ok=True)
+        if self.run_type == 'calib':
+            run_dir = os.path.join(self.conf1['main_dir'], '_'.join([self.conf2['objective_function'], self.conf2['optimization_algorithm']]))
+        elif self.run_type == 'regionalization':
+            run_dir = os.path.join(self.conf1['main_dir'], 'regionalization')
+        elif self.run_type == 'default':
+            run_dir = os.path.join(self.conf1['main_dir'], 'default')
 
-    def _create_reg_input_dir(self):
-        # Create Input directory
-        self.basin = self.conf1['basin']
-        run_dir = os.path.join(self.conf1['main_dir'], 'regionalization')
         self.work_dir = os.path.join(run_dir, self.conf1['formulation'] + '/' + self.basin)
         self.input_dir = os.path.join(self.work_dir, 'Input/')
         os.makedirs(self.input_dir, exist_ok=True)
@@ -402,7 +408,7 @@ class RealizationBuilder:
         if not os.path.exists(self.cat_file):
             logger.info(f'Creating symlink from {self.gpkg_file} to {self.cat_file}')
             os.symlink(self.gpkg_file, self.cat_file)
-        if self.run_type != 'regionalization':
+        if self.run_type == 'calib':
             gfun.create_walk_file(self.basin, self.gpkg_file, self.walk_file)
 
         # Read catchment parameter values from geopackage divide-attributes
@@ -608,7 +614,11 @@ class RealizationBuilder:
 
     def _create_bmi_configs(self):
         # always create CFE inputs first since sft/smp need data from CFE inputs if they are selected
-        self.run_configs = ['_troute_config_calib.yaml', '_troute_config_valid_control.yaml', '_troute_config_valid_best.yaml']
+        if self.run_type == 'calib':
+            self.run_configs = ['_troute_config_calib.yaml', '_troute_config_valid_control.yaml', '_troute_config_valid_best.yaml']
+        elif self.run_type == 'default':
+            self.run_configs = ['_troute_config_default.yaml']
+
         modules1 = self.modules.copy()
         if 'cfes' in self.modules:
             modules1 = ['cfes'] + [m1 for m1 in self.modules if m1 != 'cfes']
@@ -721,7 +731,12 @@ class RealizationBuilder:
                     gfun.create_lasam_input(self.catids, self.modules, self.attr_file, mod_input_dir, self.conf3['lasam_parameter_dir'], self.run_type)
 
                 elif m1 == 'troute':
-                    for file_name, run_name in zip(self.run_configs, ['calib', 'valid', 'valid']):
+                    if self.run_type == 'calib':
+                        run_names = ['calib', 'valid', 'valid']
+                    elif self.run_type == 'default':
+                        run_names = ['default']
+
+                    for file_name, run_name in zip(self.run_configs, run_names):
                         routing_config_file = os.path.join(self.work_dir + '/Input', '{}'.format(self.basin) + file_name)
                         run_name1 = file_name.replace('_troute_config_', '').replace('.yaml', '')
                         if len(self.time_period['run_time_period'][run_name][0]) != 0 & len(self.time_period['run_time_period'][run_name][0]):
@@ -914,9 +929,9 @@ class RealizationBuilder:
                 if m1 != 'troute':
                     logger.info(f'{m1}: input config files created at: {mod_input_dir}')
 
-    def _write_calib_realization(self):
-        # Create model realization file for calibration
-        self.realization_file = self.work_dir + '/{}'.format(self.basin) + '_realization_config_bmi_calib.json'
+    def _write_realization(self):
+        # Create model realization file
+        self.realization_file = self.work_dir + '/{}'.format(self.basin) + '_realization_config_bmi_' + self.run_type + '.json'
         routing_config_file = os.path.join(self.work_dir + '/Input', '{}'.format(self.basin) + self.run_configs[0])
         bmi_dir = {}
         for m1 in self.modules:
@@ -925,7 +940,7 @@ class RealizationBuilder:
         rt_dict = {"routing": {"t_route_config_file_with_path": routing_config_file}}
 
         gfun.create_realization_file(self.work_dir, self.lib_file, bmi_dir, self.forcing_path, self.realization_file,
-                                     self.modules, self.time_period, rt_dict, self.output_dict)
+                                     self.modules, self.time_period, rt_dict, self.output_dict, self.run_type)
 
     def _write_region_realization(self):
         # Create model realization file for regionalization
@@ -1023,18 +1038,16 @@ class RealizationBuilder:
         self._parse_modules()
         self._validate_processes()
         self._set_lib_paths()
-        self._create_calib_input_dir()
+        self._create_input_dir()
         self._extract_hydrofabric()
         self._extract_forcing()
         self._extract_streamflow_obs()
         self._set_output_vars()
         self._create_bmi_configs()
-        self._write_calib_realization()
+        self._write_realization()
         self._write_partition()
         self._create_calib_model_dict()
         self._write_calib_configuration()
-
-        return self.realization_file, self.calib_config_file
 
     def build_region_realization(self):
         """
@@ -1054,7 +1067,7 @@ class RealizationBuilder:
         self._map_cat_to_form()
         self._map_mod_to_cat()
         self._set_lib_paths()
-        self._create_reg_input_dir()
+        self._create_input_dir()
         self._extract_hydrofabric()
         self._extract_forcing()
         self._set_output_vars()
@@ -1077,18 +1090,36 @@ class RealizationBuilder:
         self._update_fcst_troute()
         self._write_fcst_realization()
 
-        return self.realization_file
+    def build_default_realization(self):
+        """
+        Create realization and BMI config files using default parameter values for each catchment
+        """
+
+        logger.info("Building default realization from %s", self.input_path)
+
+        self._load_config()
+        self._parse_config()
+        self._parse_time()
+        self._parse_modules()
+        self._validate_processes()
+        self._set_lib_paths()
+        self._create_input_dir()
+        self._extract_hydrofabric()
+        self._extract_forcing()
+        self._set_output_vars()
+        self._create_bmi_configs()
+        self._write_realization()
 
     def run_testing(self):
 
         self._load_config()
         self._parse_config()
         self._parse_time()
-        self._parse_cal_settings()
+        self._parse_calib_settings()
         self._parse_modules()
         self._validate_processes()
         self._set_lib_paths()
-        self._create_calib_input_dir()
+        self._create_input_dir()
         self._extract_hydrofabric()
         self._extract_forcing()
         self._extract_streamflow_obs()
