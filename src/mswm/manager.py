@@ -8,6 +8,14 @@ import argparse
 from mswm.build_inputs import RealizationBuilder
 
 
+def build_default(input_path: str):
+    """
+    Call RealizationBuilder class to generate realization and config files with default parameters
+    """
+    rb = RealizationBuilder(input_path)
+    rb.build_default_realization()
+
+
 def build_calib(input_path: str):
     """
     Call RealizationBuilder class to generate initial calibration realization and config files
@@ -38,6 +46,10 @@ def main():
                                      description="Model Setup Workflow Manager command-line")
     subparser = parser.add_subparsers(dest="command", required=True, help="Available commands")
 
+    # subcommand: build_default
+    build_default_sub = subparser.add_parser("build_default", help="Create default realization")
+    build_default_sub.add_argument("input_path", help="Input configuration file")
+
     # subcommand: build_calib
     build_calib_sub = subparser.add_parser("build_calib", help="Create calibration realization")
     build_calib_sub.add_argument("input_path", help="Input configuration file")
@@ -57,7 +69,9 @@ def main():
     args = parser.parse_args()
 
     # Parser logic
-    if args.command == "build_calib":
+    if args.command == "build_default":
+        build_default(args.input_path)
+    elif args.command == "build_calib":
         build_calib(args.input_path)
     elif args.command == "build_region":
         build_region(args.input_path, args.assign_path)
