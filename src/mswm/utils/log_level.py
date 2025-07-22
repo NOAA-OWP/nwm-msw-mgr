@@ -37,7 +37,7 @@ def log_level_set():
         if Path("/ngencerf/data").exists():
             log_file_dir = Path(f'/ngencerf/data/run-logs/mswm_{create_timestamp()}/')
         else:
-            log_file_dir = Path(BASE_DIR) / f'run-logsmswm_{create_timestamp()}/'
+            log_file_dir = Path(BASE_DIR) / f'run-logs/mswm_{create_timestamp()}/'
 
         log_file_name = "mswm.log"
         os.makedirs(log_file_dir, exist_ok=True)
