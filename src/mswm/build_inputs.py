@@ -15,10 +15,12 @@ from collections import defaultdict
 
 from mswm.utils import ginputfunc as gfun
 from mswm.utils import settings
+from mswm.utils.log_level import log_level_set
 from mswm.utils.process_forcing import update_forcing_in_realization
 from mswm.utils.update_bmi_config import update_noah_ueb, update_troute
 
 
+log_level_set()
 logger = logging.getLogger(__name__)
 
 
@@ -1079,7 +1081,6 @@ class RealizationBuilder:
         """
         Replicate functionality of ngen-fcst, creating realization file from validation yaml file and formatting other input files
         """
-
         logger.info("Building forecast realization from %s", self.input_path)
 
         self._load_yaml()
