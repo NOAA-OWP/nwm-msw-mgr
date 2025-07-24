@@ -231,20 +231,20 @@ def create_cfe_input(
         f = open(cfe_bmi_file, "w")
         f.write("%s" % ("forcing_file=BMI\n"))
         f.write("%s" % ("verbosity=1\n"))
-        f.write("%s" % ("surface_partitioning_scheme=" + scheme + "\n"))
+        f.write("%s" % ("surface_water_partitioning_scheme=" + scheme + "\n"))
         f.write("%s" % ("surface_runoff_scheme=GIUH\n"))
         f.write("%s" % ("DEBUG=0\n"))
         f.write("%s" % ("num_timesteps=1\n"))
         if 'cfes' in mods:
             f.write("%s" % ("is_sft_coupled=" + sft_coupled + "\n"))
             f.write("%s" % ("ice_content_threshold=0.15\n"))
-        f.write("%s" % ("alpha_fc=0.33\n"))
+        f.write("%s" % ("alpha_fc=0.33\n"))  # TODO Update per soil type
         f.write("%s" % ("Cgw=" + str(dfa.loc[catID]['mean.Coeff'] * 3600 * 1e-6) + "[m/hr]\n"))
         f.write("%s" % ("expon=" + str(dfa.loc[catID]['mode.Expon']) + "[]\n"))
         f.write("%s" % ("giuh_ordinates=0.55, 0.25, 0.2[]\n"))
         f.write("%s" % ("gw_storage=0.05[m/m]\n"))
         f.write("%s" % ("K_lf=0.01[]\n"))
-        f.write("%s" % ("K_nash=0.03[]\n"))
+        f.write("%s" % ("K_nash=0.003[1/m]\n"))
         f.write("%s" % ("max_gw_storage=" + str(dfa.loc[catID]['mean.Zmax'] / 1000.) + "[m]\n"))
         f.write("%s" % ("nash_storage=0.0,0.0[]\n"))
         f.write("%s" % ("refkdt=" + str(dfa.loc[catID]['mean.refkdt']) + "[]\n"))
@@ -308,7 +308,7 @@ def create_noah_input(
             os.symlink(src, dst)
 
     # Files for either the calibration and validation run or the regionalization run
-    if run_type == 'calib':
+    if run_type == 'calibration':
         run_list = ['calib', 'valid']
     elif run_type == 'regionalization':
         run_list = ['region']
@@ -447,7 +447,7 @@ def create_noah_input_template(
                 logger.info(f'Creating symlink from {src} to {dst}')
 
     # Files for either the calibration and validation run or the regionalization run
-    if run_type == 'calib':
+    if run_type == 'calibration':
         run_list = ['calib', 'valid']
     elif run_type == 'regionalization':
         run_list = ['region']
@@ -772,7 +772,7 @@ def create_ueb_input(
                 outfile.writelines(lines)
 
     # ueb-init files need to be created for both calibration and validation runs or regionalization runs
-    if run_type == 'calib':
+    if run_type == 'calibration':
         run_list = ['calib', 'valid']
     elif run_type == 'regionalization':
         run_list = ['region']
@@ -859,7 +859,7 @@ def create_sac_input(
                       'rexp ' + str(params_df.loc[catID]['REXP']),
                       'pctim 0.0000',
                       'pfree ' + str(params_df.loc[catID]['PFREE']),
-                      'riva 0.0100',
+                      'riva 0.000',
                       'side 0.0000',
                       'rserv 0.3000']
 
@@ -2151,6 +2151,10 @@ def create_realization_file(
             os.symlink(value, lib_mod_link)
 
     model_configs = {}
+
+    # Abbreviate calibration run_type name for file names/time period
+    if run_type == 'calibration':
+        run_type = 'calib'
 
     # noah
     if 'noah' in modules:

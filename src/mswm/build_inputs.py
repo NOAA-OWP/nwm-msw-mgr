@@ -129,14 +129,12 @@ class RealizationBuilder:
         self.conf1 = configs['General']
         self.run_type = self.conf1.get("run_type")
 
-        if self.run_type not in ('calib', 'regionalization', 'default'):
-            raise ValueError("Run type not in available options: calib, regionalization, default ")
+        if self.run_type not in ('calibration', 'regionalization', 'default'):
+            raise ValueError("Run type not in available options: calibration, regionalization, default ")
 
-        self.conf2 = configs.get({
-            "calib": "Calibration",
-            "regionalization": "Regionalization",
-            "default": "Default"
-        }.get(self.run_type))
+        # Load run_type specific config section
+        if self.run_type in ('calibration', 'regionalization'):
+            self.conf2 = configs.get(self.run_type.capitalize())
         self.conf3 = configs['DataFile']
 
         # get the parallel section
@@ -159,7 +157,7 @@ class RealizationBuilder:
 
     def _parse_time(self):
         # Retrieve time period for calibration
-        if self.run_type == 'calib':
+        if self.run_type == 'calibration':
             self.time_period = {"run_time_period": {"calib": [self.conf2['calib_start_period'], self.conf2['calib_end_period']],
                                                     "valid": [self.conf2['valid_start_period'], self.conf2['valid_end_period']]},
                                 "evaluation_time_period": {"calib": [self.conf2['calib_eval_start_period'], self.conf2['calib_eval_end_period']],
@@ -167,10 +165,10 @@ class RealizationBuilder:
                                                            "full": [self.conf2['full_eval_start_period'], self.conf2['full_eval_end_period']]}}
         # Retrieve time period for regionalization
         elif self.run_type == 'regionalization':
-            self.time_period = {"run_time_period": {"region": [self.conf2['start_period'], self.conf2['end_period']]}}
+            self.time_period = {"run_time_period": {"region": [self.conf1['start_period'], self.conf1['end_period']]}}
         # Retrieve time period for default
         elif self.run_type == 'default':
-            self.time_period = {"run_time_period": {"default": [self.conf2['start_period'], self.conf2['end_period']]}}
+            self.time_period = {"run_time_period": {"default": [self.conf1['start_period'], self.conf1['end_period']]}}
 
     def _parse_calib_settings(self):
         # Retrieve general settings for calibration
@@ -184,7 +182,7 @@ class RealizationBuilder:
             strategy.update({'parameters': {'pool': swarm_size, 'particles': swarm_size}})
 
         # Set general config
-        self.general_cfg = {'strategy': strategy, 'name': self.conf1['run_type'], 'log': True, 'workdir': None, 'yaml_file': None,
+        self.general_cfg = {'strategy': strategy, 'name': 'calib', 'log': True, 'workdir': None, 'yaml_file': None,
                             'start_iteration': int(self.conf2['start_iteration']), 'iterations': int(self.conf2['number_iteration']),
                             'restart': int(self.conf2['restart'])}
 
@@ -389,14 +387,14 @@ class RealizationBuilder:
     def _create_input_dir(self):
         # Create input directory
         self.basin = self.conf1['basin']
-        if self.run_type == 'calib':
+        if self.run_type == 'calibration':
             run_dir = os.path.join(self.conf1['main_dir'], '_'.join([self.conf2['objective_function'], self.conf2['optimization_algorithm']]))
         elif self.run_type == 'regionalization':
             run_dir = os.path.join(self.conf1['main_dir'], 'regionalization')
         elif self.run_type == 'default':
             run_dir = os.path.join(self.conf1['main_dir'], 'default')
 
-        self.work_dir = os.path.join(run_dir, self.conf1['formulation'] + '/' + self.basin)
+        self.work_dir = os.path.join(run_dir, self.conf1['run_name'] + '/' + self.basin)
         self.input_dir = os.path.join(self.work_dir, 'Input/')
         os.makedirs(self.input_dir, exist_ok=True)
 
@@ -411,7 +409,7 @@ class RealizationBuilder:
         if not os.path.exists(self.cat_file):
             logger.info(f'Creating symlink from {self.gpkg_file} to {self.cat_file}')
             os.symlink(self.gpkg_file, self.cat_file)
-        if self.run_type == 'calib':
+        if self.run_type == 'calibration':
             gfun.create_walk_file(self.basin, self.gpkg_file, self.walk_file)
 
         # Read catchment parameter values from geopackage divide-attributes
@@ -459,11 +457,11 @@ class RealizationBuilder:
         # whether to output SWE or soil moisture (default to False)
         self.output_dict = dict()
         for s1 in ['output_swe', 'output_sm']:
-            if (s1 not in self.conf2.keys()) or (self.conf2[s1] is None) or (self.conf2[s1] == ''):
+            if (s1 not in self.conf1.keys()) or (self.conf1[s1] is None) or (self.conf1[s1] == ''):
                 self.output_dict[s1] = False
-            elif self.conf2[s1].lower() == 'true':
+            elif self.conf1[s1].lower() == 'true':
                 self.output_dict[s1] = True
-            elif self.conf2[s1].lower() == 'false':
+            elif self.conf1[s1].lower() == 'false':
                 self.output_dict[s1] = False
             else:
                 raise ValueError(f'Invalid value provided for {s1}')
@@ -473,8 +471,8 @@ class RealizationBuilder:
         self.output_dict['sm_profile_depth'] = 0.1
         if self.output_dict['output_sm']:
             for s1 in ['sm_profile_depth', 'sm_frac_depth']:
-                if (s1 in self.conf2.keys()) and (self.conf2[s1] != ''):
-                    self.output_dict[s1] = float(self.conf2[s1])
+                if (s1 in self.conf1.keys()) and (self.conf1[s1] != ''):
+                    self.output_dict[s1] = float(self.conf1[s1])
 
     def _update_fcst_realization(self):
         # Update forcing and time related info in realization file
@@ -617,7 +615,7 @@ class RealizationBuilder:
 
     def _create_bmi_configs(self):
         # always create CFE inputs first since sft/smp need data from CFE inputs if they are selected
-        if self.run_type == 'calib':
+        if self.run_type == 'calibration':
             self.run_configs = ['_troute_config_calib.yaml', '_troute_config_valid_control.yaml', '_troute_config_valid_best.yaml']
         elif self.run_type == 'default':
             self.run_configs = ['_troute_config_default.yaml']
@@ -734,7 +732,7 @@ class RealizationBuilder:
                     gfun.create_lasam_input(self.catids, self.modules, self.attr_file, mod_input_dir, self.conf3['lasam_parameter_dir'], self.run_type)
 
                 elif m1 == 'troute':
-                    if self.run_type == 'calib':
+                    if self.run_type == 'calibration':
                         run_names = ['calib', 'valid', 'valid']
                     elif self.run_type == 'default':
                         run_names = ['default']
@@ -934,7 +932,12 @@ class RealizationBuilder:
 
     def _write_realization(self):
         # Create model realization file
-        self.realization_file = self.work_dir + '/{}'.format(self.basin) + '_realization_config_bmi_' + self.run_type + '.json'
+        if self.run_type == 'calibration':
+            file_suffix = 'calib'
+        else:
+            file_suffix = self.run_type
+
+        self.realization_file = self.work_dir + '/{}'.format(self.basin) + '_realization_config_bmi_' + file_suffix + '.json'
         routing_config_file = os.path.join(self.work_dir + '/Input', '{}'.format(self.basin) + self.run_configs[0])
         bmi_dir = {}
         for m1 in self.modules:
@@ -980,8 +983,8 @@ class RealizationBuilder:
                            'catchments': self.cat_file, 'nexus': self.nexus_file,
                            'crosswalk': self.walk_file, 'obsflow': self.obsflow_file, 'strategy': 'uniform', 'params': None,
                            'eval_params': {'objective': self.conf2['objective_function'],
-                                           'evaluation_start': self.time_period['evaluation_time_period'][self.conf1['run_type']][0],
-                                           'evaluation_stop': self.time_period['evaluation_time_period'][self.conf1['run_type']][1],
+                                           'evaluation_start': self.time_period['evaluation_time_period']['calib'][0],
+                                           'evaluation_stop': self.time_period['evaluation_time_period']['calib'][1],
                                            'valid_start_time': self.time_period['run_time_period']['valid'][0],
                                            'valid_end_time': self.time_period['run_time_period']['valid'][1],
                                            'valid_eval_start_time': self.time_period['evaluation_time_period']['valid'][0],
@@ -1016,7 +1019,7 @@ class RealizationBuilder:
         # items related to running from GUI
         for s1 in ['calibration_run_id', 'ngen_cerf', 'auth_token']:
             try:
-                general_dict[s1] = self.conf1[s1]
+                general_dict[s1] = self.conf2[s1]
             except KeyError as e:
                 logger.error(f"Exception: Key not found: {str(e)}")
                 return 1
@@ -1025,7 +1028,7 @@ class RealizationBuilder:
         general_dict['ngen_cerf'] = True if general_dict['ngen_cerf'].lower() == 'true' else False
 
         # Create calibration config file
-        gfun.create_calib_config_file(self.conf3['calib_parameter_file'], self.modules, self.work_dir, general_dict, self.model_dict, self.calib_config_file)
+        gfun.create_calib_config_file(self.conf2['calib_parameter_file'], self.modules, self.work_dir, general_dict, self.model_dict, self.calib_config_file)
 
     def build_calib_realization(self):
         """
@@ -1111,25 +1114,3 @@ class RealizationBuilder:
         self._set_output_vars()
         self._create_bmi_configs()
         self._write_realization()
-
-    def run_testing(self):
-
-        self._load_config()
-        self._parse_config()
-        self._parse_time()
-        self._parse_calib_settings()
-        self._parse_modules()
-        self._validate_processes()
-        self._set_lib_paths()
-        self._create_input_dir()
-        self._extract_hydrofabric()
-        self._extract_forcing()
-        self._extract_streamflow_obs()
-        self._set_output_vars()
-        self._init_config_hooks()
-        self._get_module_hooks()
-        self._create_bmi_configs_ngen_config_gen()
-        self._write_calib_realization()
-        self._write_partition()
-        self._create_calib_model_dict()
-        self._write_calib_configuration()
