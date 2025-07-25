@@ -18,6 +18,7 @@ from mswm.utils import settings
 from mswm.utils.log_level import log_level_set
 from mswm.utils.process_forcing import update_forcing_in_realization
 from mswm.utils.update_bmi_config import update_noah_ueb, update_troute
+from mswm.utils.input_configuration import input_config
 
 
 log_level_set()
@@ -43,6 +44,20 @@ class RealizationBuilder:
         # Raise error if config file is empty
         if not {section: dict(self.config[section]) for section in self.config.sections()}:
             raise ValueError('Config file is empty')
+
+    def _validate_config(self):
+        # Convert input.config to dictionary
+        # configs = {sec: dict(self.config[sec]) for sec in self.config.sections()}
+        configs = {}
+        for sec in self.config.sections():
+            configs[sec] = {}
+            for key, val in self.config.items(sec):
+                # Strip trailing whitespaces from optional variables
+                val_strip = val.strip()
+                configs[sec][key] = val_strip if val_strip else None
+
+        # Validate input.config structure and variables using Pydantic
+        self.input_configs = input_config(**configs).dict()
 
     def _load_yaml(self):
         import yaml
@@ -120,13 +135,9 @@ class RealizationBuilder:
         logger.info(f'New run directory created at: {self.out_dir}')
 
     def _parse_config(self):
-        # convert inputs to dictionary
-        configs = {}
-        for sec in self.config.sections():
-            configs[sec] = dict(self.config[sec])
 
         # reassign config sections for convenience
-        self.conf1 = configs['General']
+        self.conf1 = self.input_configs['General']
         self.run_type = self.conf1.get("run_type")
 
         if self.run_type not in ('calibration', 'regionalization', 'default'):
@@ -134,11 +145,11 @@ class RealizationBuilder:
 
         # Load run_type specific config section
         if self.run_type in ('calibration', 'regionalization'):
-            self.conf2 = configs.get(self.run_type.capitalize())
-        self.conf3 = configs['DataFile']
+            self.conf2 = self.input_configs.get(self.run_type.capitalize())
+        self.conf3 = self.input_configs['DataFile']
 
         # get the parallel section
-        self.parallelSec = configs['Parallel'] if self.config.has_section("Parallel") else None
+        self.parallelSec = self.input_configs['Parallel'] if 'Parallel' in self.input_configs else None
 
         # check the Parallel section values
         if self.parallelSec:
@@ -150,7 +161,7 @@ class RealizationBuilder:
                 raise ValueError("Parallel section has no partition_generator_exe!")
 
         # Use parallel ngen only when the number of processors is greater than 1
-        self.parallelSec = configs['Parallel'] if self.config.has_section("Parallel") and int(self.parallelSec['nprocs']) > 1 else None
+        self.parallelSec = self.input_configs['Parallel'] if 'Parallel' in self.input_configs and int(self.parallelSec['nprocs']) > 1 else None
 
         # Parse attribute file
         self.attr_parquet = self.conf3['attributes_file']
@@ -390,7 +401,7 @@ class RealizationBuilder:
         for m1 in modules1:
             m2 = settings.modules_all.loc[settings.modules_all['module'] == m1, 'name_ui'].iloc[0]
             m2 = m2 if m2 not in ['cfe-s', 'cfe-x'] else 'cfe'
-            self.lib_file[m1] = self.conf3[m2 + '_lib']
+            self.lib_file[m1] = self.conf3[m2.replace("-", "_") + '_lib']
 
     def _create_input_dir(self):
         # Create input directory
@@ -452,12 +463,11 @@ class RealizationBuilder:
 
     def _extract_streamflow_obs(self):
         # Extract streamflow observation
-        if 'obs_dir' in self.conf3.keys():
-            if self.conf3['obs_dir'] != '':
-                obs = pd.read_csv(os.path.join(self.conf3['obs_dir'], self.basin + '_hourly_discharge.csv'))[['dateTime', 'q_cms']]
-                obs = obs.rename(columns={'dateTime': 'value_date', 'q_cms': 'obs_flow'})
-                self.obsflow_file = self.input_dir + '{}'.format(self.basin) + '_hourly_discharge.csv'
-                obs.to_csv(self.obsflow_file, index=False)
+        if 'obs_dir' in self.conf3.keys() and self.conf3['obs_dir'] is not None:
+            obs = pd.read_csv(os.path.join(self.conf3['obs_dir'], self.basin + '_hourly_discharge.csv'))[['dateTime', 'q_cms']]
+            obs = obs.rename(columns={'dateTime': 'value_date', 'q_cms': 'obs_flow'})
+            self.obsflow_file = self.input_dir + '{}'.format(self.basin) + '_hourly_discharge.csv'
+            obs.to_csv(self.obsflow_file, index=False)
         else:
             self.obsflow_file = None
 
@@ -467,12 +477,8 @@ class RealizationBuilder:
         for s1 in ['output_swe', 'output_sm']:
             if (s1 not in self.conf1.keys()) or (self.conf1[s1] is None) or (self.conf1[s1] == ''):
                 self.output_dict[s1] = False
-            elif self.conf1[s1].lower() == 'true':
-                self.output_dict[s1] = True
-            elif self.conf1[s1].lower() == 'false':
-                self.output_dict[s1] = False
             else:
-                raise ValueError(f'Invalid value provided for {s1}')
+                self.output_dict[s1] = self.conf1[s1]
 
         # define depth (in meters) to output soil moisture at
         self.output_dict['sm_frac_depth'] = 0.4
@@ -549,12 +555,12 @@ class RealizationBuilder:
                     os.unlink(mod_input_dir)
 
             # make symlinks to existing input files or create new input files
-            bmi_dir = self.conf3.get(m2 + '_bmi_dir')
+            bmi_dir = self.conf3.get(m2.replace('-', '_') + '_bmi_dir')
             if m1 in ['sloth']:
                 pass
             elif m1 in ['topmodel']:
                 os.makedirs(mod_input_dir, exist_ok=True)
-                if bmi_dir == '' or not os.path.exists(bmi_dir):
+                if bmi_dir is None or not os.path.exists(bmi_dir):
                     # Create topmodel input from attribute file
                     gfun.create_topmodel_input(self.catids, self.attr_file, self.gpkg_file, mod_input_dir)
                 else:
@@ -574,15 +580,15 @@ class RealizationBuilder:
                     # from EDS (or the user) with correct time period and/or paths
                     # For SMP, the depth to output soil moisture may need to be adjusted
                     if m1 == 'noah':
-                        gfun.create_noah_input_template(self.catids, self.time_period, self.conf3[m1 + '_parameter_dir'], mod_input_dir, self.conf3[m2 + "_bmi_dir"], self.run_type)
+                        gfun.create_noah_input_template(self.catids, self.time_period, self.conf3[m1 + '_parameter_dir'], mod_input_dir, bmi_dir, self.run_type)
                     elif m1 == 'ueb':
-                        gfun.create_ueb_input(self.catids, self.time_period, self.attr_file, self.conf3[m1 + '_parameter_dir'], mod_input_dir, self.conf3[m2 + "_bmi_dir"], self.run_type)
+                        gfun.create_ueb_input(self.catids, self.time_period, self.attr_file, self.conf3[m1 + '_parameter_dir'], mod_input_dir, bmi_dir, self.run_type)
                     elif m1 in ['sac', 'snow17']:
-                        gfun.change_sac_snow17_input(m1, self.catids, mod_input_dir, self.conf3[m2 + "_bmi_dir"])
+                        gfun.change_sac_snow17_input(m1, self.catids, mod_input_dir, bmi_dir)
                     elif m1 == 'lasam':
-                        gfun.change_lasam_input(self.catids, mod_input_dir, self.conf3[m2 + "_bmi_dir"], self.conf3['lasam_parameter_dir'])
+                        gfun.change_lasam_input(self.catids, mod_input_dir, bmi_dir, self.conf3['lasam_parameter_dir'])
                     elif m1 == "smp" and self.output_dict['output_sm']:
-                        self.output_dict['sm_profile_depth'] = gfun.change_smp_input(self.catids, mod_input_dir, self.conf3[m2 + "_bmi_dir"],
+                        self.output_dict['sm_profile_depth'] = gfun.change_smp_input(self.catids, mod_input_dir, bmi_dir,
                                                                                      self.output_dict['sm_frac_depth'], self.output_dict['sm_profile_depth'])
                     elif m1 == "sft":
                         # Modify SFT inputs to ensure ice_fraction_scheme matches rainfall_runoff model
@@ -647,14 +653,14 @@ class RealizationBuilder:
                     os.unlink(mod_input_dir)
 
             # make symlinks to existing input files or create new input files
-            bmi_dir = self.conf3.get(m2 + '_bmi_dir')
+            bmi_dir = self.conf3.get(m2.replace('-', '_') + '_bmi_dir')
 
             # Skip config generation for sloth
             if m1 in ['sloth']:
                 pass
             # Create bmi configs for topmodel
             elif m1 in ['topmodel']:
-                if bmi_dir == '' or not os.path.exists(bmi_dir):
+                if bmi_dir is None or not os.path.exists(bmi_dir):
                     # Create topmodel input from attribute file
                     gfun.create_topmodel_input(self.catids, self.attr_file, self.gpkg_file, mod_input_dir)
                 else:
@@ -674,17 +680,17 @@ class RealizationBuilder:
 
                     # Modify existing BMI config files from EDFS or the user with correct time period and/or paths
                     if m1 == 'noah':
-                        gfun.create_noah_input_template(self.catids, self.time_period, self.conf3[m1 + '_parameter_dir'], mod_input_dir, self.conf3[m2 + "_bmi_dir"], self.run_type)
+                        gfun.create_noah_input_template(self.catids, self.time_period, self.conf3[m1 + '_parameter_dir'], mod_input_dir, bmi_dir, self.run_type)
                     elif m1 == 'ueb':
-                        gfun.create_ueb_input(self.catids, self.time_period, self.attr_file, self.conf3[m1 + '_parameter_dir'], mod_input_dir, self.conf3[m2 + "_bmi_dir"], self.run_type)
+                        gfun.create_ueb_input(self.catids, self.time_period, self.attr_file, self.conf3[m1 + '_parameter_dir'], mod_input_dir, bmi_dir, self.run_type)
                     elif m1 in ['sac', 'snow17']:
-                        gfun.change_sac_snow17_input(m1, self.catids, mod_input_dir, self.conf3[m2 + "_bmi_dir"])
+                        gfun.change_sac_snow17_input(m1, self.catids, mod_input_dir, bmi_dir)
                     elif m1 == 'lasam':
-                        gfun.change_lasam_input(self.catids, mod_input_dir, self.conf3[m2 + "_bmi_dir"], self.conf3['lasam_parameter_dir'])
+                        gfun.change_lasam_input(self.catids, mod_input_dir, bmi_dir, self.conf3['lasam_parameter_dir'])
                     elif m1 == 'smp' and self.output_dict['output_sm']:
                         # For SMP, the depth to output soil moisture may need to be adjusted
-                        self.output_dict['sm_profile_depth'] = gfun.change_smp_input(self.catids, mod_input_dir, self.conf3[m2 + "_bmi_dir"],
-                                                                                     self.output_dict['sm_frac_depth'], self.output_dict['sm_profile_depth'])
+                        self.output_dict['sm_profile_depth'] = gfun.change_smp_input(self.catids, mod_input_dir, bmi_dir, self.output_dict['sm_frac_depth'],
+                                                                                     self.output_dict['sm_profile_depth'])
                     elif m1 == 'sft':
                         # Modify SFT inputs to ensure ice_fraction_scheme matches rainfall_runoff model
                         gfun.change_sft_input(self.catids, modules1, mod_input_dir, bmi_dir, self.run_type)
@@ -699,7 +705,7 @@ class RealizationBuilder:
                 elif m1 == 'ueb':
                     gfun.create_ueb_input(self.catids, self.time_period, self.attr_file, self.conf3[m1 + '_parameter_dir'], mod_input_dir, '', self.run_type)
                 elif m1 == 'snow17':
-                    gfun.create_snow17_input(self.catids, self.attr_file, self.gpkg_file, self.conf3[m1 + '_parameter_dir'], mod_input_dir)
+                    gfun.create_snow17_input(self.catids, self.attr_file, self.gpkg_file, self.conf3[m2.replace("-", "_") + '_parameter_dir'], mod_input_dir)
                 elif m1 == "pet":
                     gfun.create_pet_input(self.catids, self.attr_file, mod_input_dir)
                 elif m1 == "sac":
@@ -713,21 +719,21 @@ class RealizationBuilder:
                     # Update CFE bmi dir with correct scheme (Schaake/Xinanjiang)
                     if ('cfes' in self.modules):
                         # If bmi_dir not provided by input file, create from input dir
-                        if self.conf3['cfe-s_bmi_dir'] == '':
+                        if self.conf3['cfe_s_bmi_dir'] is None:
                             cfe_dir = os.path.join(self.input_dir, 'cfe-s_input')
                         # If bmi_dir provided by input file, use that path
                         else:
-                            cfe_dir = self.conf3['cfe-s_bmi_dir']
+                            cfe_dir = self.conf3['cfe_s_bmi_dir']
                     elif ('cfex' in self.modules):
                         # If bmi_dir not provided by input file, create from input dir
-                        if self.conf3['cfe-x_bmi_dir'] == '':
+                        if self.conf3['cfe_x_bmi_dir'] is None:
                             cfe_dir = os.path.join(self.input_dir, 'cfe-x_input')
                         # If bmi_dir provided by input file, use that path
                         else:
-                            cfe_dir = self.conf3['cfe-x_bmi_dir']
+                            cfe_dir = self.conf3['cfe_x_bmi_dir']
                     else:
                         # If CFE BMI config files not provided and cfe not in modules, create cfe input files
-                        cfe_dir = os.path.join(self.input_dir, 'cfe-s' + '_input')
+                        cfe_dir = os.path.join(self.input_dir, 'cfe-s_input')
                         gfun.create_cfe_input(self.catids, ['cfes'] + [self.modules], self.attr_file, cfe_dir, self.run_type)
                         # raise Exception('Folder for CFE BMI config files needs to be provided, via either cfe-s_bmi_dir or cfe-x_bmi_dir')
 
@@ -783,7 +789,7 @@ class RealizationBuilder:
                     os.unlink(mod_input_dir)
 
             # Store input dir in dictionary
-            bmi_dir = self.conf3.get(m2 + '_bmi_dir')
+            bmi_dir = self.conf3.get(m2.replace('-', '_') + '_bmi_dir')
 
             # Retrieve catchments that use each module
             cat_mod = self.mod_to_cat[m1]
@@ -798,7 +804,7 @@ class RealizationBuilder:
                 pass
             # Create bmi configs for topmodel
             elif m1 in ['topmodel']:
-                if bmi_dir == '' or not os.path.exists(bmi_dir):
+                if bmi_dir is None or not os.path.exists(bmi_dir):
                     # Create topmodel input from attribute file
                     gfun.create_topmodel_input(cat_mod, self.attr_file, self.gpkg_file, mod_input_dir)
                 else:
@@ -817,16 +823,16 @@ class RealizationBuilder:
 
                     # Modify existing BMI config files from EDFS or the user with correct time period and/or paths
                     if m1 == 'noah':
-                        gfun.create_noah_input_template(cat_mod, self.time_period, self.conf3[m1 + '_parameter_dir'], mod_input_dir, self.conf3[m2 + "_bmi_dir"], self.run_type)
+                        gfun.create_noah_input_template(cat_mod, self.time_period, self.conf3[m1 + '_parameter_dir'], mod_input_dir, bmi_dir, self.run_type)
                     elif m1 == 'ueb':
-                        gfun.create_ueb_input(cat_mod, self.time_period, self.attr_file, self.conf3[m1 + '_parameter_dir'], mod_input_dir, self.conf3[m2 + "_bmi_dir"], self.run_type)
+                        gfun.create_ueb_input(cat_mod, self.time_period, self.attr_file, self.conf3[m1 + '_parameter_dir'], mod_input_dir, bmi_dir, self.run_type)
                     elif m1 in ['sac', 'snow17']:
-                        gfun.change_sac_snow17_input(m1, cat_mod, mod_input_dir, self.conf3[m2 + "_bmi_dir"])
+                        gfun.change_sac_snow17_input(m1, cat_mod, mod_input_dir, bmi_dir)
                     elif m1 == 'lasam':
-                        gfun.change_lasam_input(cat_mod, mod_input_dir, self.conf3[m2 + "_bmi_dir"], self.conf3['lasam_parameter_dir'])
+                        gfun.change_lasam_input(cat_mod, mod_input_dir, bmi_dir, self.conf3['lasam_parameter_dir'])
                     elif m1 == "smp" and self.output_dict['output_sm']:
                         # For SMP, the depth to output soil moisture may need to be adjusted
-                        self.output_dict['sm_profile_depth'] = gfun.change_smp_input(cat_mod, mod_input_dir, self.conf3[m2 + "_bmi_dir"],
+                        self.output_dict['sm_profile_depth'] = gfun.change_smp_input(cat_mod, mod_input_dir, bmi_dir,
                                                                                      self.output_dict['sm_frac_depth'], self.output_dict['sm_profile_depth'])
                     # Modify existing SFT inputs to match rainfall runoff model
                     elif m1 == "sft":
@@ -879,7 +885,7 @@ class RealizationBuilder:
                 elif m1 == 'ueb':
                     gfun.create_ueb_input(cat_mod, self.time_period, self.attr_file, self.conf3[m1 + '_parameter_dir'], mod_input_dir, '', self.run_type)
                 elif m1 == 'snow17':
-                    gfun.create_snow17_input(cat_mod, self.attr_file, self.gpkg_file, self.conf3[m1 + '_parameter_dir'], mod_input_dir)
+                    gfun.create_snow17_input(cat_mod, self.attr_file, self.gpkg_file, self.conf3[m2.replace("-", "_") + '_parameter_dir'], mod_input_dir)
                 elif m1 == "pet":
                     gfun.create_pet_input(cat_mod, self.attr_file, mod_input_dir)
                 elif m1 == "sac":
@@ -1015,7 +1021,7 @@ class RealizationBuilder:
 
         # Set NWM retrospective
         if 'nwmretro_file' in self.conf3.keys():
-            if self.conf3['nwmretro_file'] != '':
+            if self.conf3['nwmretro_file'] is not None:
                 self.model_dict['nwmflow'] = self.conf3['nwmretro_file']
 
     def _write_calib_configuration(self):
@@ -1026,14 +1032,7 @@ class RealizationBuilder:
 
         # items related to running from GUI
         for s1 in ['calibration_run_id', 'ngen_cerf', 'auth_token']:
-            try:
-                general_dict[s1] = self.conf2[s1]
-            except KeyError as e:
-                logger.error(f"Exception: Key not found: {str(e)}")
-                return 1
-
-        general_dict['calibration_run_id'] = int(general_dict['calibration_run_id'])
-        general_dict['ngen_cerf'] = True if general_dict['ngen_cerf'].lower() == 'true' else False
+            general_dict[s1] = self.conf2[s1]
 
         # Create calibration config file
         gfun.create_calib_config_file(self.conf2['calib_parameter_file'], self.modules, self.work_dir, general_dict, self.model_dict, self.calib_config_file)
@@ -1046,6 +1045,7 @@ class RealizationBuilder:
         logger.info("Building calibration realization from %s", self.input_path)
 
         self._load_config()
+        self._validate_config()
         self._parse_config()
         self._parse_time()
         self._parse_calib_settings()
@@ -1070,6 +1070,7 @@ class RealizationBuilder:
         logger.info("Building regionalization realization from %s", self.input_path)
 
         self._load_config()
+        self._validate_config()
         self._load_reg_formulation()
         self._load_reg_catchments()
         self._parse_config()
@@ -1111,6 +1112,7 @@ class RealizationBuilder:
         logger.info("Building default realization from %s", self.input_path)
 
         self._load_config()
+        self._validate_config()
         self._parse_config()
         self._parse_time()
         self._parse_modules()
