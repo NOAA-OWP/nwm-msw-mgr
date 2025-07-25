@@ -230,6 +230,10 @@ class RealizationBuilder:
             logger.info("T-Route must be included in the formulation. T-Route added to module list")
             self.modules = self.modules + ['troute']
 
+        # make sure SMP, SFT, SAC-SMA, and LASAM are not paired with PET, as PET does not provide the required inputs
+        if any(m in self.modules for m in ('smp', 'sft', 'sac-sma', 'lasam')) and 'pet' in self.modules:
+            raise ValueError("PET does not supply the required inputs for SMP, SFT, SAC-SMA, and LASAM. Add NOAH-OWP-Modular to formulation.")
+
         # rearrange modules in order of hydrologic processes
         self.modules = [m1 for m1 in settings.modules_all['module'] if m1 in self.modules]
 
@@ -298,6 +302,10 @@ class RealizationBuilder:
             if 'troute' not in modules:
                 logger.info(f"T-Route must be included in the formulation. T-Route added to module list: {row['group']}")
                 modules = modules + ['troute']
+
+            # make sure SMP, SFT, SAC-SMA, and LASAM are not paired with PET, as PET does not provide the required inputs
+            if any(m in modules for m in ('smp', 'sft', 'sac-sma', 'lasam')) and 'pet' in modules:
+                raise ValueError("PET does not supply the required inputs for SMP, SFT, SAC-SMA, and LASAM. Add NOAH-OWP-Modular to formulation.")
 
             # rearrange modules in order of hydrologic processes
             modules = [m1 for m1 in settings.modules_all['module'] if m1 in modules]

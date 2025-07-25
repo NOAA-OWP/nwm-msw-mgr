@@ -658,6 +658,7 @@ def create_snow17_input(
         with open(param_file, "w") as f:
             f.writelines('\n'.join(param_list))
 
+        # Namelist file is only used when module is run separately from ngen
         input_list = ['&SNOW17_CONTROL',
                       '! === run control file for snow17bmi v. 1.x ===',
                       '',
@@ -869,6 +870,7 @@ def create_sac_input(
         with open(param_file, "w") as f:
             f.writelines('\n'.join(param_list))
 
+        # Namelist file is only used when module is run separately from ngen
         input_list = ['&SAC_CONTROL',
                       '! === run control file for sacbmi v. 1.x ===',
                       '',
