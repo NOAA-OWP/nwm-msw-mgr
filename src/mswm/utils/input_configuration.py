@@ -194,6 +194,15 @@ class DataFileConfig(StrictBaseModel):
     ueb_lib: Optional[str] = None
 
 
+class ParallelConfig(StrictBaseModel):
+    """
+    Input.config Parallel section requirement
+    """
+    parallel_ngen_exe: str
+    partition_generator_exe: str
+    nprocs: int
+
+
 class InputConfig(StrictBaseModel):
     """
     Class to organize input.config section requirements
@@ -202,6 +211,7 @@ class InputConfig(StrictBaseModel):
     Regionalization: Optional[RegionConfig] = None
     Calibration: Optional[CalibConfig] = None
     DataFile: DataFileConfig
+    Parallel: Optional[ParallelConfig] = None
 
     # Check optional sections are present
     # Root_validator skips if another value fails

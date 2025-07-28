@@ -149,19 +149,11 @@ class RealizationBuilder:
         self.conf3 = self.input_configs['DataFile']
 
         # get the parallel section
-        self.parallelSec = self.input_configs['Parallel'] if 'Parallel' in self.input_configs else None
-
-        # check the Parallel section values
-        if self.parallelSec:
-            if 'nprocs' not in self.parallelSec:
-                raise ValueError("Parallel section has no nprocs!")
-            if 'parallel_ngen_exe' not in self.parallelSec:
-                raise ValueError("Parallel section has no parallel_ngen_exe!")
-            if 'partition_generator_exe' not in self.parallelSec:
-                raise ValueError("Parallel section has no partition_generator_exe!")
+        self.parallelSec = self.input_configs.get('Parallel')
 
         # Use parallel ngen only when the number of processors is greater than 1
-        self.parallelSec = self.input_configs['Parallel'] if 'Parallel' in self.input_configs and int(self.parallelSec['nprocs']) > 1 else None
+        if not self.parallelSec or self.parallelSec.get("nprocs", 0) < 2:
+            self.parallelSec = None
 
         # Parse attribute file
         self.attr_parquet = self.conf3['attributes_file']
