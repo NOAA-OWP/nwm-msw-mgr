@@ -18,7 +18,7 @@ from mswm.utils import settings
 from mswm.utils.log_level import log_level_set
 from mswm.utils.process_forcing import update_forcing_in_realization
 from mswm.utils.update_bmi_config import update_noah_ueb, update_troute
-from mswm.utils.input_configuration import input_config
+from mswm.utils.input_configuration import InputConfig
 
 
 log_level_set()
@@ -57,7 +57,7 @@ class RealizationBuilder:
                 configs[sec][key] = val_strip if val_strip else None
 
         # Validate input.config structure and variables using Pydantic
-        self.input_configs = input_config(**configs).dict()
+        self.input_configs = InputConfig(**configs).dict()
 
     def _load_yaml(self):
         import yaml

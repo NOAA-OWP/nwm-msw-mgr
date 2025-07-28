@@ -42,7 +42,7 @@ class StrictBaseModel(BaseModel):
         return values
 
 
-class general_config(StrictBaseModel):
+class GeneralConfig(StrictBaseModel):
     """
     Input.config general section requirement
     """
@@ -74,14 +74,14 @@ class general_config(StrictBaseModel):
         return values
 
 
-class region_config(StrictBaseModel):
+class RegionConfig(StrictBaseModel):
     """
     Input.config regionalization section requirement
     """
     form_assign_file: Optional[str]
 
 
-class calib_config(StrictBaseModel):
+class CalibConfig(StrictBaseModel):
     """
     Input.config calibration section requirement
     """
@@ -153,7 +153,7 @@ class calib_config(StrictBaseModel):
         return values
 
 
-class datafile_config(StrictBaseModel):
+class DataFileConfig(StrictBaseModel):
     """
     Input.config DataFile section requirement
     """
@@ -194,14 +194,14 @@ class datafile_config(StrictBaseModel):
     ueb_lib: Optional[str] = None
 
 
-class input_config(StrictBaseModel):
+class InputConfig(StrictBaseModel):
     """
     Class to organize input.config section requirements
     """
-    General: general_config
-    Regionalization: Optional[region_config] = None
-    Calibration: Optional[calib_config] = None
-    DataFile: datafile_config
+    General: GeneralConfig
+    Regionalization: Optional[RegionConfig] = None
+    Calibration: Optional[CalibConfig] = None
+    DataFile: DataFileConfig
 
     # Check optional sections are present
     # Root_validator skips if another value fails
