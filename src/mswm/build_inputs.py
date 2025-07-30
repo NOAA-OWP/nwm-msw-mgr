@@ -51,14 +51,25 @@ class RealizationBuilder:
                 raise
 
         # Read input config file
-        self.config = configparser.ConfigParser()
-        self.config.read(self.input_path)
+        try:
+            self.config = configparser.ConfigParser()
+            self.config.read(self.input_path)
+        except FileNotFoundError as e:
+            logger.critical(f"Input file not found: {self.input_path}\n{e}")
+            raise
+        except configparser.Error as e:
+            logger.critical(f"ConfigParser error reading config file: {self.input_path}\n{e}")
+            raise
+        except Exception as e:
+            logger.critical(f"Unexpected error loading config: {self.input_path}\n{e}")
+            raise
+
         logger.info(f"Input.config file loaded from {self.input_path}")
 
         # Raise error if config file is empty
         if not {section: dict(self.config[section]) for section in self.config.sections()}:
             try:
-                raise ValueError('Input.config file is empty or contains no valid sections')
+                raise ValueError(f'Input.config file is empty or contains no valid sections: {self.input_path}')
             except ValueError as e:
                 logger.critical(e)
                 raise
@@ -80,7 +91,7 @@ class RealizationBuilder:
         try:
             self.input_configs = InputConfig(**configs).dict()
         except ValidationError as e:
-            logger.critical(f"Input.config Pydantic validation failed: {e}")
+            logger.critical(f"Input.config Pydantic validation failed: {self.input_path}{e}")
             raise
         logger.info("Input.config validated successfully")
 
@@ -99,18 +110,20 @@ class RealizationBuilder:
                 raise
 
         # Read the yaml-based configuration file
-        with open(self.config_yaml) as file:
-            self.conf = yaml.safe_load(file)
-        logger.info(f"Configuration yaml file loaded:  {self.config_yaml}")
+        try:
+            with open(self.config_yaml) as file:
+                self.conf = yaml.safe_load(file)
+        except FileNotFoundError as e:
+            logger.critical(f'Config file does not exist: {self.config_yaml}\n{e}')
+            raise
+        except yaml.YAMLError as e:
+            logger.critical(f"YAML parsing error in config file: {self.input_path}\n{e}")
+            raise
+        except Exception as e:
+            logger.critical(f"Unexpected error loading config at: {self.input_path}\n{e}")
+            raise
 
-    def _load_realization(self):
-        """
-        Load realization json file
-        """
-        # Read realization file
-        self.real_input_file.resolve(strict=True)
-        with open(self.real_input_file) as fp:
-            self.real_config = json.load(fp)
+        logger.info(f"Configuration yaml file loaded:  {self.config_yaml}")
 
     def _load_reg_formulation(self):
         """
@@ -243,16 +256,45 @@ class RealizationBuilder:
         Read realization file, hydrofabric gpkg and ngen executable paths from yaml file
         """
         # Set realization file path
-        self.real_input_file = Path(self.conf['model']['realization'])
+        try:
+            self.real_input_file = Path(self.conf['model']['realization']).absolute()
 
-        # Get hydrofabric gpkg paths
-        self.gpkg_cats = self.conf['model']['catchments']
-        self.gpkg_nexus = self.conf['model']['nexus']
+            # Get hydrofabric gpkg paths
+            self.gpkg_cats = self.conf['model']['catchments']
+            self.gpkg_nexus = self.conf['model']['nexus']
 
-        # Get ngen executable path
-        self.ngen_exe = self.conf['model']['binary']
+            # Get ngen executable path
+            self.ngen_exe = self.conf['model']['binary']
+        except Exception as e:
+            logger.critical(f"Yaml config calib file is missing fields: {self.input_path}\n{e}")
+            raise
 
         logger.info("Yaml file parsed")
+
+    def _load_realization(self):
+        """
+        Load realization json file
+        """
+        # Confirm realization file exists
+        if not self.real_input_file.exists():
+            try:
+                raise FileNotFoundError(f'Realization input file does not exist: {self.real_input_file}')
+            except FileNotFoundError as e:
+                logger.critical(e)
+                raise
+
+        # Read realization file
+        try:
+            with open(self.real_input_file) as fp:
+                self.real_config = json.load(fp)
+        except FileNotFoundError as e:
+            logger.critical(f"Realization input file does not exist: {self.real_input_file}\n{e}")
+            raise
+        except json.JSONDecodeError as e:
+            logger.critical(f"Error parsing json from realization file: {self.real_input_file}\n{e}")
+            raise
+        except Exception as e:
+            logger.critical(f"Unexpected error reading realization file: {self.real_input_file}\n{e}")
 
     def _create_fcst_output_dir(self):
         """
@@ -261,6 +303,9 @@ class RealizationBuilder:
         # create output directory
         try:
             out_dir0 = Path(self.conf['general']['yaml_file']).parent.parent.resolve(strict=True)
+        except KeyError as e:
+            logger.critical(f"Yaml file path not found in config calib yaml file: {e}")
+            raise
         except FileNotFoundError as e:
             logger.critical(f"Invalid yaml file path: {self.conf['general']['yaml_file']} - {e}")
             raise
@@ -1377,8 +1422,15 @@ class RealizationBuilder:
         """
         # save the new realization file
         self.realization_file = Path(self.out_dir, os.path.basename(self.real_input_file))
-        with open(self.realization_file, 'w') as outfile:
-            json.dump(self.real_config, outfile, indent=4, separators=(", ", ": "), sort_keys=False)
+        try:
+            with open(self.realization_file, 'w') as outfile:
+                json.dump(self.real_config, outfile, indent=4, separators=(", ", ": "), sort_keys=False)
+        except TypeError as e:
+            logger.critical(f"Failed to dump realization data to JSON: {self.realization_file}\n{e}")
+            raise
+        except OSError as e:
+            logger.critical(f"Unexpected error while writing realization data to JSON: {self.realization_file}\n{e}")
+            raise
 
         logger.info(f"Realization file is created at: {self.realization_file}")
 
@@ -1533,6 +1585,8 @@ class RealizationBuilder:
         self._update_fcst_noah_ueb()
         self._update_fcst_troute()
         self._write_fcst_realization()
+
+        logger.info("Forecast run set up successfully")
 
     def build_default_realization(self):
         """

@@ -37,12 +37,20 @@ def update_forcing_in_realization(
         catids = gpd.read_file(gpkg_file, layer='divides')['divide_id'].tolist()
         cats = [c1 for c1 in catids if not Path(forc_file, c1 + '.csv').exists()]
         if len(cats) > 0:
-            raise FileNotFoundError(f'csv files not found in {forc_file} for these catchments: {cats}')
+            try:
+                raise FileNotFoundError(f'csv files not found in {forc_file} for these catchments: {cats}')
+            except FileNotFoundError as e:
+                logger.critical(e)
+                raise
         else:
             # get start and end times from one of the csv files
-            df1 = pd.read_csv(Path(forc_file, catids[0] + '.csv'))
-            start_time = pd.to_datetime(df1['Time'].iloc[0], format="%Y-%m-%d %H:%M:%S")
-            end_time = pd.to_datetime(df1['Time'].iloc[-1], format="%Y-%m-%d %H:%M:%S")
+            try:
+                df1 = pd.read_csv(Path(forc_file, catids[0] + '.csv'))
+                start_time = pd.to_datetime(df1['Time'].iloc[0], format="%Y-%m-%d %H:%M:%S")
+                end_time = pd.to_datetime(df1['Time'].iloc[-1], format="%Y-%m-%d %H:%M:%S")
+            except Exception as e:
+                logger.critical(f"Error loading csv forcing files at {forc_file}\n{e}")
+                raise
 
             # update realization file for forcing
             real_config['global']['forcing'] = dict([('file_pattern', '.*{{id}}.*.csv'),
