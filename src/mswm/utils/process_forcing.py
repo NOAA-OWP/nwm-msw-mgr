@@ -62,9 +62,15 @@ def update_forcing_in_realization(
                 real_config['global']['forcing'] = dict([('path', str(forc_file)), ('provider', 'NetCDF')])
 
         except Exception:
-            logger.error(f'{forc_file} is not a valid NetCDF file')
+            logger.critical(f'{forc_file} is not a valid NetCDF file')
+            raise
+
     else:
-        raise Exception(f'{forc_file} must be a valid NetCDF file or a folder containing a csv file for each catchment in {gpkg_file}')
+        try:
+            raise Exception(f'{forc_file} must be a valid NetCDF file or a folder containing a csv file for each catchment in {gpkg_file}')
+        except Exception as e:
+            logger.critical(e)
+            raise
 
     logger.info(f'Start time: {start_time}')
     logger.info(f'End time: {end_time}')

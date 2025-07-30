@@ -1,8 +1,11 @@
+import logging
 import glob
 import os
 from pathlib import Path
 import pandas as pd
 import yaml
+
+logger = logging.getLogger(__name__)
 
 
 def update_noah_ueb(
@@ -88,7 +91,11 @@ def update_troute(
     # make sure the source t-route config exists
     src = Path(real_config['routing']['t_route_config_file_with_path']).absolute()
     if not src.exists():
-        raise FileNotFoundError(src)
+        try:
+            raise FileNotFoundError(src)
+        except FileNotFoundError as e:
+            logger.critical(e)
+            raise
 
     with open(src) as fp1:
         rt_config = yaml.safe_load(fp1)
