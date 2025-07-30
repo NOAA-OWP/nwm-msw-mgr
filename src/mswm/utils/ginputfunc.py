@@ -110,9 +110,17 @@ def create_walk_file(
 
     if 'hl_uri' not in df_nexus.columns:
         if ('hl_uri' not in df_network.columns) and ('hl_uri' not in df_hydro.columns):
-            raise Exception(f"Gage id {gageID}: 'hl_uri' column not found in network or hydrolocations layers in {gpkg_file}")
+            try:
+                raise Exception(f"Gage id {gageID}: 'hl_uri' column not found in network or hydrolocations layers in {gpkg_file}")
+            except Exception as e:
+                logger.critical(e)
+                raise
         else:
-            raise Exception(f"Gage id {gageID} not found in 'hl_uri' column in network or hydrolocations layers in {gpkg_file}")
+            try:
+                raise Exception(f"Gage id {gageID} not found in 'hl_uri' column in network or hydrolocations layers in {gpkg_file}")
+            except Exception as e:
+                logger.critical(e)
+                raise
 
     df_nexus.set_index('id', inplace=True)
     df_flowpaths = gpd.read_file(gpkg_file, layer='flowpaths')
@@ -129,14 +137,22 @@ def create_walk_file(
             try:
                 hu_list = df_nexus.loc[nex_id, 'hl_uri']
             except KeyError:
-                raise Exception(f"Gage id {gageID}: nex_id '{nex_id}' could not be accessed in df_nexus when retrieving hl_uri for file {gpkg_file}")
+                try:
+                    raise Exception(f"Gage id {gageID}: nex_id '{nex_id}' could not be accessed in df_nexus when retrieving hl_uri for file {gpkg_file}")
+                except Exception as e:
+                    logger.critical(e)
+                    raise
 
             if isinstance(hu_list, str) or hu_list is None:
                 hu_list = [hu_list]
             elif isinstance(hu_list, pd.Series):
                 hu_list = list(hu_list)
             else:
-                raise Exception(f"Gage id {gageID}: Unsupported return value for hl_uri; must be None, str, or pd.Series (got {type(hu_list)}) for file {gpkg_file}")
+                try:
+                    raise Exception(f"Gage id {gageID}: Unsupported return value for hl_uri; must be None, str, or pd.Series (got {type(hu_list)}) for file {gpkg_file}")
+                except Exception as e:
+                    logger.critical(e)
+                    raise
             for hu in hu_list:
                 if hu and hu.lower().startswith('gage'):
                     if len(hu.split(',')) > 1 and gageID in hu:
@@ -466,9 +482,18 @@ def create_noah_input_template(
             for catID in catids:
                 file1 = glob.glob(os.path.join(template_bmi_dir, '*' + catID + '*.input'))
                 if len(file1) == 0:
-                    raise ValueError(f'No template BMI file found for {catID} in {template_bmi_dir}')
+                    try:
+                        raise ValueError(f'No template BMI file found for {catID} in {template_bmi_dir}')
+                    except ValueError as e:
+                        logger.critical(e)
+                        raise
                 elif len(file1) > 1:
-                    raise ValueError(f'More than one template BMI file found for {catID} in {template_bmi_dir}')
+                    try:
+                        raise ValueError(f'More than one template BMI file found for {catID} in {template_bmi_dir}')
+                    except ValueError as e:
+                        logger.critical(e)
+                        raise
+
                 with open(file1[0]) as f:
                     lines = f.readlines()
 
@@ -570,9 +595,6 @@ def create_sft_smp_input(
         sft_bmi_file = os.path.join(sft_dir, catID + '_bmi_config_sft.txt')
         with open(sft_bmi_file, "w") as f:
             f.writelines('\n'.join(sft_lst))
-
-        # if float(df.loc['soil_params.b'].iloc[0][:-2]) < 0:
-        #     raise ValueError(f"Invalid b: {catID}")
 
         # Create smp list
         smp_lst = ['verbosity=none',
@@ -726,7 +748,11 @@ def create_ueb_input(
     for par in const_file_str:
         src = Path(param_dir_source, 'ueb_' + par + '.dat').absolute()
         if not os.path.exists(src):
-            raise FileNotFoundError(src)
+            try:
+                raise FileNotFoundError(src)
+            except FileNotFoundError as e:
+                logger.critical(e)
+                raise
         dst = os.path.join(ueb_input_dir, 'ueb_' + par + '.dat')
         const_files.update({par: dst})
         with open(src) as f:
@@ -741,9 +767,18 @@ def create_ueb_input(
         if bmi_dir != '':
             src = glob.glob(os.path.join(bmi_dir, 'ueb_sitevars*' + catID + '*'))
             if len(src) == 0:
-                raise ValueError(f'No sitevars file found for {catID} in {bmi_dir}')
+                try:
+                    raise ValueError(f'No sitevars file found for {catID} in {bmi_dir}')
+                except ValueError as e:
+                    logger.critical(e)
+                    raise
             elif len(src) > 1:
-                raise ValueError(f'More than one sitevars file found for {catID} in {bmi_dir}')
+                try:
+                    raise ValueError(f'More than one sitevars file found for {catID} in {bmi_dir}')
+                except ValueError as e:
+                    logger.critical(e)
+                    raise
+
             with open(src[0]) as f:
                 # create a symbolic link
                 if os.path.exists(site_file) or os.path.islink(site_file):
@@ -924,7 +959,11 @@ def change_sac_snow17_input(
 
     """
     if module not in ['sac', 'snow17']:
-        raise Exception('Model must be either "sac" or "snow17"')
+        try:
+            raise Exception('change_sac_snow17_input: Model must be either "sac" or "snow17"')
+        except Exception as e:
+            logger.critical(e)
+            raise
 
     # handle parameter file naming convention
     str0 = module + '_params_' if module == 'sac' else module + '_params-'
@@ -950,23 +989,40 @@ def change_sac_snow17_input(
         if os.path.exists(param_file0):
             os.symlink(param_file0, param_file)
         else:
-            raise Exception(f'Parameter file does not exist: {param_file0}')
+            try:
+                raise Exception(f'Parameter file does not exist: {param_file0}')
+            except Exception as e:
+                logger.critical(e)
+                raise
 
         # correct the path to sac parameter file in namelist input file
         if not os.path.exists(namelist_file0):
-            raise Exception(f'Namelist file does not exist: {namelist_file0}')
+            try:
+                raise Exception(f'Namelist file does not exist: {namelist_file0}')
+            except Exception as e:
+                logger.critical(e)
+                raise
+
         with open(namelist_file0) as f:
             lines0 = f.readlines()
         lines1 = copy.deepcopy(lines0)
 
         idx = [i for i, s in enumerate(lines0) if str1 in s]
         if len(idx) != 1:
-            raise Exception(f'No entry or more than one entry found for "{str1}" in namelist input file: {namelist_file0}')
+            try:
+                raise Exception(f'No entry or more than one entry found for "{str1}" in namelist input file: {namelist_file0}')
+            except Exception as e:
+                logger.critical(e)
+                raise
         lines1[idx[0]] = f'{str1}      = "{param_file}"\n'
 
         # Save to new namelist file
         if os.path.exists(namelist_file):
-            raise Exception(f'Namelist file {namelist_file} already exists')
+            try:
+                raise Exception(f'Namelist file {namelist_file} already exists')
+            except Exception as e:
+                logger.critical(e)
+                raise
         with open(namelist_file, 'w') as outfile:
             outfile.writelines(lines1)
 
@@ -1054,12 +1110,24 @@ def create_lasam_input(
     if param_dir and os.path.exists(param_dir):
         soil_param_file = os.path.join(param_dir, 'vG_default_params.dat')
         if not os.path.exists(soil_param_file):
-            raise Exception(f'Soil params file does not exist: {soil_param_file}')
+            try:
+                raise Exception(f'Soil params file does not exist: {soil_param_file}')
+            except Exception as e:
+                logger.critical(e)
+                raise
         soil_class_file = os.path.join(param_dir, 'lasam_soil_class.txt')
         if not os.path.exists(soil_class_file):
-            raise Exception(f'Soil class file does not exist: {soil_class_file}')
+            try:
+                raise Exception(f'Soil class file does not exist: {soil_class_file}')
+            except Exception as e:
+                logger.critical(e)
+                raise
     else:
-        raise Exception(f'lasam_parameter_dir does not exist: {param_dir}')
+        try:
+            raise Exception(f'lasam_parameter_dir does not exist: {param_dir}')
+        except Exception as e:
+            logger.critical(e)
+            raise
 
     # Check if sft is in use
     sft_coupled_str = 'true' if 'sft' in modules else 'false'
@@ -1139,9 +1207,17 @@ def change_lasam_input(
     if param_dir and os.path.exists(param_dir):
         param_file = os.path.join(param_dir, 'vG_default_params.dat')
         if not os.path.exists(param_file):
-            raise Exception(f'Soil_params_file does not exist: {param_file}')
+            try:
+                raise Exception(f'Soil_params_file does not exist: {param_file}')
+            except Exception as e:
+                logger.critical(e)
+                raise
     else:
-        raise Exception(f'lasam_parameter_dir does not exist: {param_dir}')
+        try:
+            raise Exception(f'lasam_parameter_dir does not exist: {param_dir}')
+        except Exception as e:
+            logger.critical(e)
+            raise
 
     # loop through all catchments
     for catID in catids:
@@ -1154,18 +1230,30 @@ def change_lasam_input(
 
         # correct the path to soil_params_file in config file
         if not os.path.exists(config_file0):
-            raise Exception(f'Namelist file does not exist: {config_file0}')
+            try:
+                raise Exception(f'Namelist file does not exist: {config_file0}')
+            except Exception as e:
+                logger.critical(e)
+                raise
         with open(config_file0) as f:
             lines0 = f.readlines()
         lines1 = copy.deepcopy(lines0)
         idx = [i for i, s in enumerate(lines0) if "soil_params_file" in s]
         if len(idx) != 1:
-            raise Exception(f'No entry or more than one entry found for "soil_params_file" in config file: {config_file0}')
+            try:
+                raise Exception(f'No entry or more than one entry found for "soil_params_file" in config file: {config_file0}')
+            except Exception as e:
+                logger.critical(e)
+                raise
         lines1[idx[0]] = f'soil_params_file={param_file}\n'
 
         # Save to new config file
         if os.path.exists(config_file):
-            raise Exception(f'Config file {config_file} already exists')
+            try:
+                raise Exception(f'Config file {config_file} already exists')
+            except Exception as e:
+                logger.critical(e)
+                raise
         with open(config_file, 'w') as outfile:
             outfile.writelines(lines1)
 
@@ -1207,7 +1295,11 @@ def change_smp_input(
 
         # read config file
         if not os.path.exists(config_file0):
-            raise Exception(f'Config file for SMP does not exist: {config_file0}')
+            try:
+                raise Exception(f'Config file for SMP does not exist: {config_file0}')
+            except Exception as e:
+                logger.critical(e)
+                raise
         with open(config_file0) as f:
             lines0 = f.readlines()
         lines1 = copy.deepcopy(lines0)
@@ -1220,19 +1312,31 @@ def change_smp_input(
         elif len(idx) == 1:
             lines1[idx[0]] = f'{str1}={sm_frac_depth}[m]\n'
         else:
-            raise Exception(f'More than one entry found for {str1} in config file: {config_file0}')
+            try:
+                raise Exception(f'More than one entry found for {str1} in config file: {config_file0}')
+            except Exception as e:
+                logger.critical(e)
+                raise
 
         # read soil depths for different layers (currently SMP is limited to 4 layers only)
         idx = [i for i, s in enumerate(lines0) if "soil_z" in s]
         if len(idx) != 1:
-            raise Exception(f'No entry or more than one entry found for "soil_z" in config file: {config_file0}')
+            try:
+                raise Exception(f'No entry or more than one entry found for "soil_z" in config file: {config_file0}')
+            except Exception as e:
+                logger.critical(e)
+                raise
         depths = lines1[idx[0]].split("=")[1].split("[")[0].split(',')
         depths = list(map(float, depths))
 
         # make sure depths are in ascending order (since they are accumulative)
         is_ascending = all(earlier <= later for earlier, later in zip(depths, depths[1:]))
         if not is_ascending:
-            raise ValueError(f'Accumulative soil layer depths in soil_z in {config_file0} must be in ascending order: {depths}')
+            try:
+                raise ValueError(f'Accumulative soil layer depths in soil_z in {config_file0} must be in ascending order: {depths}')
+            except ValueError as e:
+                logger.critical(e)
+                raise
 
         # convert depths to meters if needed
         unit1 = lines1[idx[0]].split("=")[1].split("[")[1].split(']')[0].lower()
@@ -1243,7 +1347,11 @@ def change_smp_input(
         elif unit1 == "mm":
             depths = [d / 1000 for d in depths]
         else:
-            raise ValueError(f'Unit {unit1} is not supported for soil_z in {config_file0}; supported units are m, mm, and cm')
+            try:
+                raise ValueError(f'Unit {unit1} is not supported for soil_z in {config_file0}; supported units are m, mm, and cm')
+            except ValueError as e:
+                logger.critical(e)
+                raise
 
         # adjust soil_z for soil_moisture_fraction_depth
         if not any(value == sm_frac_depth for value in depths):
@@ -1332,7 +1440,11 @@ def change_sft_input(
 
         # correct the ice_fraction_scheme depending on the catchments formulation
         if not os.path.exists(param_file0):
-            raise Exception(f'Param file does not exist: {param_file0}')
+            try:
+                raise Exception(f'Param file does not exist: {param_file0}')
+            except Exception as e:
+                logger.critical(e)
+                raise
         with open(param_file0) as f:
             lines0 = f.readlines()
         lines1 = copy.deepcopy(lines0)
@@ -2038,9 +2150,17 @@ def create_reg_realization_file(
         # determine the RR module in the current formulation
         rr_mod1 = [m1 for m1 in cat_mod if 'Rainfall_runoff' in settings.modules_all.loc[settings.modules_all['module'] == m1, 'process'].values[0]]
         if len(rr_mod1) == 0:
-            raise Exception('No rainfall-runoff module is selected')
+            try:
+                raise Exception('No rainfall-runoff module is selected')
+            except Exception as e:
+                logger.critical(e)
+                raise
         elif len(rr_mod1) > 1:
-            raise Exception(f'More than one rainfall-runoff module is selected: {rr_mod1}')
+            try:
+                raise Exception(f'More than one rainfall-runoff module is selected: {rr_mod1}')
+            except Exception as e:
+                logger.critical(e)
+                raise
         rr_mod1 = rr_mod1[0]
 
         # modules section
@@ -2402,9 +2522,17 @@ def create_realization_file(
     # determine the RR module in the current formulation
     rr_mod1 = [m1 for m1 in modules if 'Rainfall_runoff' in settings.modules_all.loc[settings.modules_all['module'] == m1, 'process'].values[0]]
     if len(rr_mod1) == 0:
-        raise Exception('No rainfall-runoff module is selected')
+        try:
+            raise Exception('No rainfall-runoff module is selected')
+        except Exception as e:
+            logger.critical(e)
+            raise
     elif len(rr_mod1) > 1:
-        raise Exception(f'More than one rainfall-runoff module is selected: {rr_mod1}')
+        try:
+            raise Exception(f'More than one rainfall-runoff module is selected: {rr_mod1}')
+        except Exception as e:
+            logger.critical(e)
+            raise
     rr_mod1 = rr_mod1[0]
 
     # modules section
@@ -2477,10 +2605,18 @@ def create_calib_config_file(
                     df_tmp['model'] = m_config
                     df_params = pd.concat([df_params, df_tmp], ignore_index=True)
         else:
-            raise Exception(f'{par_file} is not a valid file or folder with calibration parameter files for the chosen modules')
+            try:
+                raise Exception(f'{par_file} is not a valid file or folder with calibration parameter files for the chosen modules')
+            except Exception as e:
+                logger.critical(e)
+                raise
 
     if len(df_params) == 0:
-        raise Exception(f'No calibratable parameters found for the list of modules: {modules}')
+        try:
+            raise Exception(f'No calibratable parameters found for the list of modules: {modules}')
+        except Exception as e:
+            logger.critical(e)
+            raise
 
     df_params.set_index('param', inplace=True)
     calib_params = df_params.groupby('model').groups
@@ -2551,13 +2687,13 @@ def create_partition_file(
         result = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         logger.info("Command output (stdout): %s", result.stdout.decode().strip())
         if result.stderr:
-            logger.error("Command error (stderr): %s", result.stderr.decode().strip())
+            logger.critical("Command error (stderr): %s", result.stderr.decode().strip())
         result.check_returncode()  # Will raise CalledProcessError if non-zero
     except subprocess.CalledProcessError as e:
-        logger.error("Partition generator command failed with exit code %s", e.returncode)
+        logger.critical("Partition generator command failed with exit code %s", e.returncode)
         raise
     except FileNotFoundError as e:
-        logger.error("Partition generator not found '%s': %s", partition_generator, e)
+        logger.critical("Partition generator not found '%s': %s", partition_generator, e)
         raise
 
     return partition_file
