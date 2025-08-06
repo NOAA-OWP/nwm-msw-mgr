@@ -49,7 +49,7 @@ class GeneralConfig(StrictBaseModel):
     basin: str
     run_type: Literal["default", "calibration", "regionalization"]
     models: Optional[str] = None
-    run_name: str
+    formulation: Optional[str] = None
     main_dir: str
     start_period: Optional[str] = None
     end_period: Optional[str] = None
@@ -85,7 +85,7 @@ class CalibConfig(StrictBaseModel):
     """
     Input.config calibration section requirement
     """
-    optimization_algorithm: Literal["DDS", "PSO", "GWO"]
+    optimization_algorithm: Literal["dds", "pso", "gwo"]
     swarm_size: Optional[int] = None
     c1: Optional[int] = None
     c2: Optional[int] = None
@@ -113,29 +113,34 @@ class CalibConfig(StrictBaseModel):
     station_name: Optional[str] = None
     ngen_cerf: bool
     calibration_run_id: Optional[int] = None
-    auth_token: Optional[int] = None
+    auth_token: Optional[str] = None
     user_email: Optional[str] = None
     calib_parameter_file: Optional[str] = None
 
     # Check optional fields that depend on optimization_algoritm
     @root_validator
     def check_required_fields(cls, values):
+        # Normalize opt alg to lowercase
+        alg_input = values.get("optimization_algorithm")
+        if isinstance(alg_input, str):
+            values["optimization_algorithm"] = alg_input.lower()
+
         opt_alg = values.get("optimization_algorithm")
 
         # swarm_size required unless opt_alg is DDS
-        if opt_alg != "DDS" and not values.get("swarm_size"):
+        if opt_alg != "dds" and not values.get("swarm_size"):
             raise ValueError("`swarm_size` must be specified for a PSO or GWO calibration run.")
 
         # c1 required if opt_alg is PSO
-        if opt_alg == "PSO" and not values.get("c1"):
+        if opt_alg == "pso" and not values.get("c1"):
             raise ValueError("`c1` must be specified for a PSO calibration run.")
 
         # c2 required if opt_alg is PSO
-        if opt_alg == "PSO" and not values.get("c2"):
+        if opt_alg == "pso" and not values.get("c2"):
             raise ValueError("`c2` must be specified for a PSO calibration run.")
 
         # w required if opt_alg is PSO
-        if opt_alg == "PSO" and not values.get("w"):
+        if opt_alg == "pso" and not values.get("w"):
             raise ValueError("`w` must be specified for a PSO calibration run.")
 
         # restart must be 0 or 1
