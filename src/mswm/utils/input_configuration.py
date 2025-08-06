@@ -4,7 +4,7 @@ This module contains Pydantic classes to validate input.config files for the MSW
 @author: Jeff Wade
 """
 
-from pydantic import BaseModel, root_validator
+from pydantic import BaseModel, root_validator, validator
 from pathlib import Path
 from typing import Optional, Literal
 
@@ -117,14 +117,16 @@ class CalibConfig(StrictBaseModel):
     user_email: Optional[str] = None
     calib_parameter_file: Optional[str] = None
 
+    # Normalize case of optimization_algorithm
+    @validator("optimization_algorithm", pre=True)
+    def case_alg(cls, value):
+        if isinstance(value, str):
+            return value.lower()
+        return value
+
     # Check optional fields that depend on optimization_algoritm
     @root_validator
     def check_required_fields(cls, values):
-        # Normalize opt alg to lowercase
-        alg_input = values.get("optimization_algorithm")
-        if isinstance(alg_input, str):
-            values["optimization_algorithm"] = alg_input.lower()
-
         opt_alg = values.get("optimization_algorithm")
 
         # swarm_size required unless opt_alg is DDS
