@@ -26,6 +26,13 @@ from mswm.utils.input_configuration import InputConfig
 
 log_level_set()
 logger = logging.getLogger(__name__)
+if not logging.getLogger().hasHandlers():
+    # When running outside of Django, configure basic logging to stderr
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S"
+    )
 
 
 class RealizationBuilder:
@@ -701,7 +708,7 @@ class RealizationBuilder:
             run_dir = os.path.join(self.conf1['main_dir'], 'default')
 
         # Form input directory paths
-        self.work_dir = os.path.join(run_dir, self.conf1['run_name'] + '/' + self.basin)
+        self.work_dir = os.path.join(run_dir, self.conf1['formulation'] + '/' + self.basin)
         self.input_dir = os.path.join(self.work_dir, 'Input/')
 
         # Create directory
@@ -834,13 +841,12 @@ class RealizationBuilder:
             else:
                 self.output_dict[s1] = self.conf1[s1]
 
-        # define depth (in meters) to output soil moisture at
+        # define depth (in meters) for output soil moisture
         self.output_dict['sm_frac_depth'] = 0.4
         self.output_dict['sm_profile_depth'] = 0.1
-        if self.output_dict['output_sm']:
-            for s1 in ['sm_profile_depth', 'sm_frac_depth']:
-                if (s1 in self.conf1.keys()) and (self.conf1[s1] != ''):
-                    self.output_dict[s1] = float(self.conf1[s1])
+        for s1 in ['sm_profile_depth', 'sm_frac_depth']:
+            if (self.conf1[s1] is not None) and (self.conf1[s1] != ''):
+                self.output_dict[s1] = float(self.conf1[s1])
 
         logger.info("Set SWE and SM output variables")
 
