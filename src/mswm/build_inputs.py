@@ -26,6 +26,13 @@ from mswm.utils.input_configuration import InputConfig
 
 log_level_set()
 logger = logging.getLogger(__name__)
+if not logging.getLogger().hasHandlers():
+    # When running outside of Django, configure basic logging to stderr
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S"
+    )
 
 
 class RealizationBuilder:
