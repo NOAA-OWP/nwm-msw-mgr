@@ -8,6 +8,7 @@ setup(
     install_requires=[
         'geopandas~=1.0',
         'pandas',
+        'netCDF4'
     ],
 )
 
