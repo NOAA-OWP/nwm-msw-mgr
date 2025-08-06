@@ -701,7 +701,7 @@ class RealizationBuilder:
             run_dir = os.path.join(self.conf1['main_dir'], 'default')
 
         # Form input directory paths
-        self.work_dir = os.path.join(run_dir, self.conf1['run_name'] + '/' + self.basin)
+        self.work_dir = os.path.join(run_dir, self.conf1['formulation'] + '/' + self.basin)
         self.input_dir = os.path.join(self.work_dir, 'Input/')
 
         # Create directory
