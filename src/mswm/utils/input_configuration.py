@@ -44,15 +44,12 @@ class StrictBaseModel(BaseModel):
 
 class GeneralConfig(StrictBaseModel):
     """
-    Input.config general section requirement
+    Input.config general section requirement for static variables
     """
     basin: str
     run_type: Literal["default", "calibration", "regionalization"]
     models: Optional[str] = None
-    formulation: Optional[str] = None
     main_dir: str
-    start_period: Optional[str] = None
-    end_period: Optional[str] = None
     output_swe: Optional[bool] = None
     output_sm: Optional[bool] = None
     sm_profile_depth: Optional[float] = None
@@ -66,10 +63,6 @@ class GeneralConfig(StrictBaseModel):
         # Models required unless run_type is regionalization
         if run_type != "regionalization" and not values.get("models"):
             raise ValueError("`models` must be specified for a default and calibration runs.")
-
-        # Start_period and end_period required unless run_type is calibration
-        if run_type != "calibration" and (not values.get("start_period") or not values.get("end_period")):
-            raise ValueError("`start_period` and `end_period` must be specified for default and regionalization runs.")
 
         return values
 

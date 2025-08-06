@@ -36,11 +36,18 @@ if not logging.getLogger().hasHandlers():
 
 
 class RealizationBuilder:
-    def __init__(self, input_path: str, assign_path: str | None = None, forcing_path: str | None = None, output_folder: str | None = None):
+    def __init__(self, input_path: str, assign_path: str | None = None, forcing_path: str | None = None, output_folder: str | None = None,
+                 formulation: str | None = None, start_period: str | None = None, end_period: str | None = None):
         self.input_path = Path(input_path)
         self.assign_path = Path(assign_path) if assign_path else None
         self.forcing_path = Path(forcing_path) if forcing_path else None
         self.output_folder = output_folder if output_folder else None
+        self.formulation = formulation if formulation else None
+        self.start_period = start_period if start_period else None
+        self.end_period = end_period if end_period else None
+
+        # Check that start_period and end_period are valid datetimes
+
         logger.info(f"Initialized RealizationBuilder with {input_path}")
 
     def _load_config(self):
@@ -367,10 +374,10 @@ class RealizationBuilder:
                                                            "full": [self.conf2['full_eval_start_period'], self.conf2['full_eval_end_period']]}}
         # Retrieve time period for regionalization
         elif self.run_type == 'regionalization':
-            self.time_period = {"run_time_period": {"region": [self.conf1['start_period'], self.conf1['end_period']]}}
+            self.time_period = {"run_time_period": {"region": [self.start_period, self.end_period]}}
         # Retrieve time period for default
         elif self.run_type == 'default':
-            self.time_period = {"run_time_period": {"default": [self.conf1['start_period'], self.conf1['end_period']]}}
+            self.time_period = {"run_time_period": {"default": [self.start_period, self.end_period]}}
 
         # Confirm times are properly formatted and in correct order
         errors = []
@@ -710,7 +717,7 @@ class RealizationBuilder:
             run_dir = os.path.join(self.conf1['main_dir'], 'default')
 
         # Form input directory paths
-        self.work_dir = os.path.join(run_dir, self.conf1['formulation'] + '/' + self.basin)
+        self.work_dir = os.path.join(run_dir, self.formulation + '/' + self.basin)
         self.input_dir = os.path.join(self.work_dir, 'Input/')
 
         # Create directory
