@@ -679,18 +679,19 @@ class RealizationBuilder:
             m2 = m2 if m2 not in ['cfe-s', 'cfe-x'] else 'cfe'
             self.lib_file[m1] = self.conf3[m2.replace("-", "_") + '_lib']
 
-        # Confirm that library paths exist
-        errors = []
-        for mod, lib_path in self.lib_file.items():
-            if not Path(lib_path).is_file():
-                errors.append(f"Library file not found for {mod}: {lib_path}")
+        # Confirm that library paths exist if not using server
+        if not hasattr(self, 'conf2') or 'ngen_cerf' not in self.conf2 or self.conf2['ngen_cerf'] is False:
+            errors = []
+            for mod, lib_path in self.lib_file.items():
+                if not Path(lib_path).is_file():
+                    errors.append(f"Library file not found for {mod}: {lib_path}")
 
-        # Raise errors
-        if errors:
-            for e in errors:
-                logger.critical(e)
-            err_message = "\n".join(errors)
-            raise ValueError(f"Library path valdiation failed:\n{err_message}")
+            # Raise errors
+            if errors:
+                for e in errors:
+                    logger.critical(e)
+                err_message = "\n".join(errors)
+                raise ValueError(f"Library path valdiation failed:\n{err_message}")
 
         logger.info("Module libarary paths set")
 
@@ -974,6 +975,8 @@ class RealizationBuilder:
                     # For SMP, the depth to output soil moisture may need to be adjusted
                     if m1 == 'noah':
                         gfun.create_noah_input_template(self.catids, self.time_period, self.conf3[m1 + '_parameter_dir'], mod_input_dir, bmi_dir, self.run_type)
+                    elif m1 == 'topmodel':
+                        continue
                     elif m1 == 'ueb':
                         gfun.create_ueb_input(self.catids, self.time_period, self.attr_file, self.conf3[m1 + '_parameter_dir'], mod_input_dir, bmi_dir, self.run_type)
                     elif m1 in ['sac', 'snow17']:
@@ -1089,6 +1092,8 @@ class RealizationBuilder:
                     # Modify existing BMI config files from EDFS or the user with correct time period and/or paths
                     if m1 == 'noah':
                         gfun.create_noah_input_template(self.catids, self.time_period, self.conf3[m1 + '_parameter_dir'], mod_input_dir, bmi_dir, self.run_type)
+                    elif m1 == 'topmodel':
+                        continue
                     elif m1 == 'ueb':
                         gfun.create_ueb_input(self.catids, self.time_period, self.attr_file, self.conf3[m1 + '_parameter_dir'], mod_input_dir, bmi_dir, self.run_type)
                     elif m1 in ['sac', 'snow17']:
@@ -1249,6 +1254,8 @@ class RealizationBuilder:
                     # Modify existing BMI config files from EDFS or the user with correct time period and/or paths
                     if m1 == 'noah':
                         gfun.create_noah_input_template(cat_mod, self.time_period, self.conf3[m1 + '_parameter_dir'], mod_input_dir, bmi_dir, self.run_type)
+                    elif m1 == 'topmodel':
+                        continue
                     elif m1 == 'ueb':
                         gfun.create_ueb_input(cat_mod, self.time_period, self.attr_file, self.conf3[m1 + '_parameter_dir'], mod_input_dir, bmi_dir, self.run_type)
                     elif m1 in ['sac', 'snow17']:
