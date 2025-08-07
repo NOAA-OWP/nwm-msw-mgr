@@ -726,7 +726,7 @@ class RealizationBuilder:
             self.lib_file[m1] = self.conf3[m2.replace("-", "_") + '_lib']
 
         # Confirm that library paths exist if not using server
-        if hasattr(self, 'conf2') and 'ngen_cerf' in self.conf2 and self.conf2['ngen_cerf'] is False:
+        if not hasattr(self, 'conf2') or 'ngen_cerf' not in self.conf2 or self.conf2['ngen_cerf'] is False:
             errors = []
             for mod, lib_path in self.lib_file.items():
                 if not Path(lib_path).is_file():
