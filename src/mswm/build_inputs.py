@@ -679,18 +679,19 @@ class RealizationBuilder:
             m2 = m2 if m2 not in ['cfe-s', 'cfe-x'] else 'cfe'
             self.lib_file[m1] = self.conf3[m2.replace("-", "_") + '_lib']
 
-        # Confirm that library paths exist
-        errors = []
-        for mod, lib_path in self.lib_file.items():
-            if not Path(lib_path).is_file():
-                errors.append(f"Library file not found for {mod}: {lib_path}")
+        # Confirm that library paths exist if not using server
+        if hasattr(self, 'conf2') and 'ngen_cerf' in self.conf2 and self.conf2['ngen_cerf'] is False:
+            errors = []
+            for mod, lib_path in self.lib_file.items():
+                if not Path(lib_path).is_file():
+                    errors.append(f"Library file not found for {mod}: {lib_path}")
 
-        # Raise errors
-        if errors:
-            for e in errors:
-                logger.critical(e)
-            err_message = "\n".join(errors)
-            raise ValueError(f"Library path valdiation failed:\n{err_message}")
+            # Raise errors
+            if errors:
+                for e in errors:
+                    logger.critical(e)
+                err_message = "\n".join(errors)
+                raise ValueError(f"Library path valdiation failed:\n{err_message}")
 
         logger.info("Module libarary paths set")
 
