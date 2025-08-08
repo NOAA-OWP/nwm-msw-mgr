@@ -1051,7 +1051,7 @@ class RealizationBuilder:
                         if len(self.time_period['run_time_period'][run_name][0]) != 0 & len(self.time_period['run_time_period'][run_name][0]):
                             run_range = pd.to_datetime(self.time_period['run_time_period'][run_name])
                             nts = len(pd.date_range(start=run_range[0], end=run_range[1], freq='5min')) - 1
-                            gfun.create_troute_config(self.gpkg_file, routing_config_file, self.time_period['run_time_period'][run_name][0], nts)
+                            gfun.create_troute_config(self.cat_file, routing_config_file, self.time_period['run_time_period'][run_name][0], nts)
                             logger.info(f'troute config file for {run_name1} is created at: {routing_config_file}')
 
                 elif m1 != 'troute':
@@ -1193,7 +1193,7 @@ class RealizationBuilder:
                         if len(self.time_period['run_time_period'][run_name][0]) != 0 & len(self.time_period['run_time_period'][run_name][0]):
                             run_range = pd.to_datetime(self.time_period['run_time_period'][run_name])
                             nts = len(pd.date_range(start=run_range[0], end=run_range[1], freq='5min')) - 1
-                            gfun.create_troute_config(self.gpkg_file, routing_config_file, self.time_period['run_time_period'][run_name][0], nts)
+                            gfun.create_troute_config(self.cat_file, routing_config_file, self.time_period['run_time_period'][run_name][0], nts)
                             logger.info(f'troute config file for {run_name1} is created at: {routing_config_file}')
 
                 if m1 != 'troute':
@@ -1392,7 +1392,7 @@ class RealizationBuilder:
                         if len(self.time_period['run_time_period'][run_name][0]) != 0 & len(self.time_period['run_time_period'][run_name][0]):
                             run_range = pd.to_datetime(self.time_period['run_time_period'][run_name])
                             nts = len(pd.date_range(start=run_range[0], end=run_range[1], freq='5min')) - 1
-                            gfun.create_troute_config(self.gpkg_file, routing_config_file, self.time_period['run_time_period'][run_name][0], nts)
+                            gfun.create_troute_config(self.cat_file, routing_config_file, self.time_period['run_time_period'][run_name][0], nts)
                             logger.info(f'troute config file for {run_name1} is created at: {routing_config_file}')
 
                 if m1 != 'troute':
