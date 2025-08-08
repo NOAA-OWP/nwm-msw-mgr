@@ -157,7 +157,6 @@ class DataFileConfig(StrictBaseModel):
     """
     Input.config DataFile section requirement
     """
-    forcing_dir: str
     obs_dir: Optional[str] = None
     nwmretro_file: Optional[str] = None
     hydrofab_file: str

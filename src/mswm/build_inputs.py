@@ -47,6 +47,27 @@ class RealizationBuilder:
         self.end_period = end_period if end_period else None
 
         # Check that start_period and end_period are valid datetimes
+        if self.start_period is not None:
+            try:
+                start_dt = datetime.strptime(self.start_period, "%Y-%m-%d %H:%M:%S")
+            except (ValueError, TypeError) as e:
+                logger.critical(f"Start time must be in format YYYY:-MM-DD HH:MM:SS: {e}")
+                raise
+
+        if self.end_period is not None:
+            try:
+                end_dt = datetime.strptime(self.end_period, "%Y-%m-%d %H:%M:%S")
+            except (ValueError, TypeError) as e:
+                logger.critical(f"End time must be in format YYYY:-MM-DD HH:MM:SS: {e}")
+                raise
+
+            # Check that times are in right order
+            if start_dt >= end_dt:
+                try:
+                    raise ValueError("Start time must be earlier than end time")
+                except FileNotFoundError as e:
+                    logger.critical(e)
+                    raise
 
         logger.info(f"Initialized RealizationBuilder with {input_path}")
 
@@ -779,9 +800,9 @@ class RealizationBuilder:
         """
         # Create forcing directory
         missing_catchment_files = []
-        self.forcing_path = os.path.join(self.input_dir, 'forcing')
+        self.forcing_target = os.path.join(self.input_dir, 'forcing')
         try:
-            os.makedirs(self.forcing_path, exist_ok=True)
+            os.makedirs(self.forcing_target, exist_ok=True)
         except Exception as e:
             logger.critical(f"Invalid forcing directory: {e}. Check `main_dir` variable")
             raise
@@ -795,23 +816,23 @@ class RealizationBuilder:
 
         # Symlink forcing files
         for catID in self.catids:
-            ffile = os.path.join(self.conf3['forcing_dir'], catID + '.csv')
+            ffile = self.forcing_path / f"{catID}.csv"
             # Make sure we have the file
-            if not os.path.exists(ffile):
+            if not ffile.exists():
                 logger.info(f'Forcing file {ffile} does not exist')
                 missing_catchment_files.append(ffile)
             else:
-                target = os.path.join(self.forcing_path, os.path.basename(ffile))
-                if not os.path.exists(target):
+                target = Path(self.forcing_target) / ffile.name
+                if not target.exists():
                     os.symlink(ffile, target)
         if missing_catchment_files:
             try:
-                raise Exception(f"Missing catchment files in forcing data: {self.conf3['forcing_dir']}")
+                raise Exception(f"Missing catchment files in forcing data: {self.forcing_path}")
             except Exception as e:
                 logger.critical(e)
                 raise
 
-        logger.info(f"Extracted forcing data from: {self.conf3['forcing_dir']}")
+        logger.info(f"Extracted forcing data from: {self.forcing_path}")
 
     def _extract_streamflow_obs(self):
         """
@@ -863,7 +884,7 @@ class RealizationBuilder:
         """
         Update forcing and time related info in realization file
         """
-        self.real_config = update_forcing_in_realization(Path(self.forcing_path), self.real_config, self.gpkg_cats)
+        self.real_config = update_forcing_in_realization(Path(self.forcing_target), self.real_config, self.gpkg_cats)
         logger.info("Updated forecast realization file")
 
     def _update_fcst_noah_ueb(self):
@@ -1155,7 +1176,7 @@ class RealizationBuilder:
                         gfun.create_cfe_input(self.catids, ['cfes'] + [self.modules], self.attr_file, cfe_dir, self.run_type)
 
                     # Create sft input
-                    gfun.create_sft_smp_input(self.catids, self.modules, self.attr_file, self.attr_parquet, cfe_dir, self.conf3['forcing_dir'], sft_dir, smp_dir, self.run_type)
+                    gfun.create_sft_smp_input(self.catids, self.modules, self.attr_file, self.attr_parquet, cfe_dir, str(self.forcing_path), sft_dir, smp_dir, self.run_type)
 
                 elif m1 == 'smp':
                     continue
@@ -1366,7 +1387,7 @@ class RealizationBuilder:
                                 gfun.create_cfe_input(scheme_cat, scheme_form_cfes, self.attr_file, cfe_dir, self.run_type)
 
                             # Create SFT/SMP inputs
-                            gfun.create_sft_smp_input(scheme_cat, scheme_form, self.attr_file, self.attr_parquet, cfe_dir, self.conf3['forcing_dir'], sft_dir, smp_dir, self.run_type)
+                            gfun.create_sft_smp_input(scheme_cat, scheme_form, self.attr_file, self.attr_parquet, cfe_dir, str(self.forcing_path), sft_dir, smp_dir, self.run_type)
 
                 # Skip smp, inputs created in tandem with sft
                 elif m1 == 'smp':
@@ -1389,9 +1410,9 @@ class RealizationBuilder:
 
         logger.info("Created BMI config files for all modules in each regionalization formulation")
 
-    def _write_realization(self):
+    def _write_static_realization(self):
         """
-        Write realization file for calibration and default runs
+        Write static realization file for calibration and default runs
         """
         # Set file suffix
         if self.run_type == 'calibration':
@@ -1400,7 +1421,23 @@ class RealizationBuilder:
             file_suffix = self.run_type
 
         # Set BMI config directories
-        self.realization_file = self.work_dir + '/{}'.format(self.basin) + '_realization_config_bmi_' + file_suffix + '.json'
+        self.static_realization_file = self.work_dir + '/{}'.format(self.basin) + '_static_realization_config_bmi_' + file_suffix + '.json'
+
+        # Write realization file
+        gfun.create_static_realization_file(self.static_realization_file, self.modules, self.output_dict, self.run_type)
+
+    def _write_dynamic_realization(self):
+        """
+        Write dynamic realization file for calibration and default runs
+        """
+        # Set file suffix
+        if self.run_type == 'calibration':
+            file_suffix = 'calib'
+        else:
+            file_suffix = self.run_type
+
+        # Set BMI config directories
+        self.dynamic_realization_file = self.work_dir + '/{}'.format(self.basin) + '_dynamic_realization_config_bmi_' + file_suffix + '.json'
         routing_config_file = os.path.join(self.work_dir + '/Input', '{}'.format(self.basin) + self.run_configs[0])
         bmi_dir = {}
         for m1 in self.modules:
@@ -1409,15 +1446,25 @@ class RealizationBuilder:
         rt_dict = {"routing": {"t_route_config_file_with_path": routing_config_file}}
 
         # Write realization file
-        gfun.create_realization_file(self.work_dir, self.lib_file, bmi_dir, self.forcing_path, self.realization_file,
-                                     self.modules, self.time_period, rt_dict, self.output_dict, self.run_type)
+        gfun.create_dynamic_realization_file(self.work_dir, self.lib_file, bmi_dir, self.forcing_target, self.dynamic_realization_file,
+                                             self.modules, self.time_period, rt_dict, self.run_type)
 
-    def _write_region_realization(self):
+    def _write_region_static_realization(self):
         """
-        Write realization file for regionalization runs
+        Write static realization file for regionalization runs
         """
         # Create model realization file for regionalization
-        self.realization_file = self.work_dir + '/{}'.format(self.basin) + '_realization_config_bmi_region.json'
+        static_realization_file = self.work_dir + '/{}'.format(self.basin) + '_static_realization_config_bmi_region.json'
+
+        # Write realization file
+        gfun.create_region_static_realization_file(static_realization_file, self.output_dict, self.grp_to_cat_path, self.grp_to_form, self.grp_params)
+
+    def _write_region_dynamic_realization(self):
+        """
+        Write dynamic realization file for regionalization runs
+        """
+        # Create model realization file for regionalization
+        dynamic_realization_file = self.work_dir + '/{}'.format(self.basin) + '_dynamic_realization_config_bmi_region.json'
         routing_config_file = os.path.join(self.work_dir + '/Input', '{}'.format(self.basin) + self.run_configs[0])
 
         # Set BMI config directories
@@ -1428,10 +1475,10 @@ class RealizationBuilder:
         rt_dict = {"routing": {"t_route_config_file_with_path": routing_config_file}}
 
         # Write realization file
-        gfun.create_reg_realization_file(self.work_dir, self.lib_file, bmi_dir, self.forcing_path, self.realization_file,
-                                         self.time_period, rt_dict, self.output_dict, self.cat_to_grp, self.grp_to_cat_path, self.grp_to_form, self.grp_params)
+        gfun.create_region_dynamic_realization_file(self.work_dir, self.lib_file, bmi_dir, self.forcing_target, dynamic_realization_file,
+                                                    self.time_period, rt_dict, self.grp_to_form)
 
-    def _write_fcst_realization(self):
+    def _write_fcst_static_realization(self):
         """
         Write updated forecast realization file
         """
@@ -1465,7 +1512,9 @@ class RealizationBuilder:
         """
         # Create calibration configuration file
         self.calib_config_file = os.path.join(self.work_dir + '/Input', '{}'.format(self.basin) + '_config_calib.yaml')
-        self.model_dict = {'type': 'ngen', 'binary': self.conf3['ngen_exe_file'], 'realization': self.realization_file,
+        self.model_dict = {'type': 'ngen', 'binary': self.conf3['ngen_exe_file'],
+                           'static_realization': self.static_realization_file,
+                           'dynamic_realization': self.dynamic_realization_file,
                            'catchments': self.cat_file, 'nexus': self.nexus_file,
                            'crosswalk': self.walk_file, 'obsflow': self.obsflow_file, 'strategy': 'uniform', 'params': None,
                            'eval_params': {'objective': self.conf2['objective_function'],
@@ -1543,7 +1592,8 @@ class RealizationBuilder:
         self._extract_streamflow_obs()
         self._set_output_vars()
         self._create_bmi_configs()
-        self._write_realization()
+        self._write_static_realization()
+        self._write_dynamic_realization()
         self._write_partition()
         self._create_calib_model_dict()
         self._write_calib_configuration()
@@ -1582,7 +1632,8 @@ class RealizationBuilder:
         self._extract_forcing()
         self._set_output_vars()
         self._create_reg_bmi_configs()
-        self._write_region_realization()
+        self._write_region_static_realization()
+        self._write_region_dynamic_realization()
 
         logger.info("Regionalization run set up successfully")
 
@@ -1599,7 +1650,7 @@ class RealizationBuilder:
         self._update_fcst_realization()
         self._update_fcst_noah_ueb()
         self._update_fcst_troute()
-        self._write_fcst_realization()
+        self._write_fcst_static_realization()
 
         logger.info("Forecast run set up successfully")
 
@@ -1630,6 +1681,7 @@ class RealizationBuilder:
         self._extract_forcing()
         self._set_output_vars()
         self._create_bmi_configs()
-        self._write_realization()
+        self._write_static_realization()
+        self._write_dynamic_realization()
 
         logger.info("Default run set up successfully")

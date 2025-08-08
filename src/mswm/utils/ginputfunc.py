@@ -1846,33 +1846,19 @@ def get_model_type_name(
     return settings.modules_all.loc[settings.modules_all['module'] == module, 'name_config'].iloc[0]
 
 
-def create_reg_realization_file(
-        workdir: Union[str, Path],
-        lib_file: dict,
-        bmi_dir: dict,
-        forcing_dir: Union[str, Path],
+def create_region_static_realization_file(
         realization_file: Union[str, Path],
-        time_period: dict,
-        rt_dict: dict,
         output_dict: dict,
-        cat_to_grp: dict,
         grp_to_cat_path: dict,
         grp_to_form: dict,
         grp_params: dict
 ) -> None:
-    """ Create realization file for regionalization for the specified modules by catchment
+    """ Create static realization file for regionalization for the specified modules by catchment
 
     Parameters
     ----------
-    workdir : basin directory for storing all the files
-    lib_file : library files for different modules
-    bmi_dir : directory for different model or module to store BMI files
-    forcing_dir : directory to store foricng files
     realization_file : model realization configuration file
-    time_period : simulation and evaluation time period
-    rt_dict : routing model source file directory and configuration file
     output_dict: whether to output certain variables (currently SWE and soil moisture)
-    cat_to_grp: dictionary mapping catchments to regionalization groups
     grp_to_cat_path: dictionary mapping regionalization groups to catchment csv filepaths
     grp_to_form: dictionary mapping regionalization groups to formulations
     grp_params: dictionary mapping regionalization groups to modules and their corresponding parameters
@@ -1881,16 +1867,6 @@ def create_reg_realization_file(
     ----------
     None
     """
-
-    # cat_to_form: dict
-
-    # Create symlinks for libraries
-    lib_mod = {}
-    for key, value in lib_file.items():
-        lib_mod_link = os.path.join(workdir, 'Input/' + os.path.basename(value))
-        lib_mod.update({key: lib_mod_link})
-        if not os.path.exists(lib_mod_link):
-            os.symlink(value, lib_mod_link)
 
     # Set model formulations for each regionalization group
     grp_main = {}
@@ -1909,8 +1885,6 @@ def create_reg_realization_file(
                                      "params": {"name": "bmi_fortran",
                                                 "model_type_name": get_model_type_name('noah'),
                                                 "main_output_variable": "QINSUR",
-                                                "library_file": lib_mod['noah'],
-                                                "init_config": os.path.join(bmi_dir['noah'], '{{id}}_region.input'),
                                                 "allow_exceed_end_time": True, "fixed_time_step": False, "uses_forcing_file": False,
                                                 "variables_names_map": {
                                                     "PRCPNONC": "atmosphere_water__liquid_equivalent_precipitation_rate",
@@ -1930,8 +1904,6 @@ def create_reg_realization_file(
                                  "params": {"name": "bmi_c",
                                             "model_type_name": get_model_type_name(m1),
                                             "main_output_variable": "Q_OUT",
-                                            "library_file": lib_mod[m1],
-                                            "init_config": os.path.join(bmi_dir[m1], '{{id}}_bmi_config_cfe.txt'),
                                             "allow_exceed_end_time": True, "fixed_time_step": False, "uses_forcing_file": False,
                                             "registration_function": "register_bmi_cfe",
                                             "model_params": grp_params[m1][grp]}}
@@ -1950,8 +1922,6 @@ def create_reg_realization_file(
                                          "params": {"name": "bmi_c",
                                                     "model_type_name": get_model_type_name('topmodel'),
                                                     "main_output_variable": "Qout",
-                                                    "library_file": lib_mod['topmodel'],
-                                                    "init_config": os.path.join(bmi_dir['topmodel'], '{{id}}_topmodel.run'),
                                                     "allow_exceed_end_time": True, "fixed_time_step": False, "uses_forcing_file": False,
                                                     "registration_function": "register_bmi_topmodel",
                                                     "model_params": grp_params['topmodel'][grp]}}
@@ -1968,8 +1938,6 @@ def create_reg_realization_file(
             model_configs['sac'] = {"name": "bmi_fortran",
                                     "params": {
                                         "model_type_name": get_model_type_name('sac'),
-                                        "library_file": lib_mod['sac'],
-                                        "init_config": os.path.join(bmi_dir['sac'], 'sac-init-{{id}}.namelist.input'),
                                         "allow_exceed_end_time": True, "fixed_time_step": False, "uses_forcing_file": False,
                                         "main_output_variable": "tci",
                                         "model_params": grp_params['sac'][grp]}}
@@ -1988,8 +1956,6 @@ def create_reg_realization_file(
             model_configs['snow17'] = {"name": "bmi_fortran",
                                        "params": {
                                            "model_type_name": get_model_type_name('snow17'),
-                                           "library_file": lib_mod['snow17'],
-                                           "init_config": os.path.join(bmi_dir['snow17'], 'snow17-init-{{id}}.namelist.input'),
                                            "allow_exceed_end_time": True, "fixed_time_step": False, "uses_forcing_file": False,
                                            "main_output_variable": "raim",
                                            "variables_names_map": {
@@ -2003,8 +1969,6 @@ def create_reg_realization_file(
                                     "params": {
                                         "name": "bmi_c++",
                                         "model_type_name": get_model_type_name('ueb'),
-                                        "library_file": lib_mod['ueb'],
-                                        "init_config": os.path.join(bmi_dir['ueb'], 'ueb-init-{{id}}_region.dat'),
                                         "allow_exceed_end_time": True, "fixed_time_step": False, "uses_forcing_file": False,
                                         "main_output_variable": "SWIT",
                                         "variables_names_map": {
@@ -2023,8 +1987,6 @@ def create_reg_realization_file(
             model_configs['pet'] = {"name": "bmi_c",
                                     "params": {
                                         "model_type_name": get_model_type_name('pet'),
-                                        "library_file": lib_mod['pet'],
-                                        "init_config": os.path.join(bmi_dir['pet'], '{{id}}_bmi_config.ini'),
                                         "allow_exceed_end_time": True, "fixed_time_step": False, "uses_forcing_file": False,
                                         "main_output_variable": "water_potential_evaporation_flux",
                                         "registration_function": "register_bmi_pet"
@@ -2036,8 +1998,6 @@ def create_reg_realization_file(
                                       "params": {"name": "bmi_c++",
                                                  "model_type_name": get_model_type_name('sloth'),
                                                  "main_output_variable": "z",
-                                                 "library_file": lib_mod['sloth'],
-                                                 "init_config": '/dev/null',
                                                  "allow_exceed_end_time": True,
                                                  "fixed_time_step": False,
                                                  "uses_forcing_file": False}}
@@ -2077,8 +2037,6 @@ def create_reg_realization_file(
                                     "params": {"name": "bmi_c++",
                                                "model_type_name": get_model_type_name('sft'),
                                                "main_output_variable": "num_cells",
-                                               "library_file": lib_mod['sft'],
-                                               "init_config": os.path.join(bmi_dir['sft'], '{{id}}_bmi_config_sft.txt'),
                                                "allow_exceed_end_time": True,
                                                "uses_forcing_file": False,
                                                "variables_names_map": {"ground_temperature": "TGS"}}}
@@ -2089,8 +2047,6 @@ def create_reg_realization_file(
                                     "params": {"name": "bmi_c++",
                                                "model_type_name": get_model_type_name('smp'),
                                                "main_output_variable": "soil_water_table",
-                                               "library_file": lib_mod['smp'],
-                                               "init_config": os.path.join(bmi_dir['smp'], '{{id}}_bmi_config_smp.txt'),
                                                "allow_exceed_end_time": True,
                                                "uses_forcing_file": False,
                                                "variables_names_map": {
@@ -2110,8 +2066,6 @@ def create_reg_realization_file(
                                       "params": {"name": "bmi_c++",
                                                  "model_type_name": get_model_type_name('lasam'),
                                                  "main_output_variable": "precipitation_rate",
-                                                 "library_file": lib_mod['lasam'],
-                                                 "init_config": os.path.join(bmi_dir['lasam'], '{{id}}_bmi_config_lasam.txt'),
                                                  "allow_exceed_end_time": True,
                                                  "uses_forcing_file": False,
                                                  "model_params": grp_params['lasam'][grp]}}
@@ -2173,6 +2127,171 @@ def create_reg_realization_file(
         grp_main[grp]["formulations"] = [grp_configs]
 
     # Set global forcing
+    g = {}
+
+    # Set grouped formulations
+    g.update({"groups": grp_main})
+
+    # Catchment groups
+    cat_grps = {grp: {"grp_path": grp_path} for grp, grp_path in grp_to_cat_path.items()}
+    c = {"catchment_groups": cat_grps}
+    g.update(c)
+
+    # save configuration into json file
+    with open(realization_file, 'w') as outfile:
+        json.dump(g, outfile, indent=4, separators=(", ", ": "), sort_keys=False)
+    logger.info(f'Static realization file is created at {realization_file}')
+
+
+def create_region_dynamic_realization_file(
+        workdir: Union[str, Path],
+        lib_file: dict,
+        bmi_dir: dict,
+        forcing_dir: Union[str, Path],
+        realization_file: Union[str, Path],
+        time_period: dict,
+        rt_dict: dict,
+        grp_to_form: dict,
+) -> None:
+    """ Create dynamic realization file for regionalization for the specified modules by catchment
+
+    Parameters
+    ----------
+    workdir : basin directory for storing all the files
+    lib_file : library files for different modules
+    bmi_dir : directory for different model or module to store BMI files
+    forcing_dir : directory to store foricng files
+    realization_file : model realization configuration file
+    time_period : simulation and evaluation time period
+    rt_dict : routing model source file directory and configuration file
+    grp_to_form: dictionary mapping regionalization groups to formulations
+
+    Returns
+    ----------
+    None
+    """
+    # Create symlinks for libraries
+    lib_mod = {}
+    for key, value in lib_file.items():
+        lib_mod_link = os.path.join(workdir, 'Input/' + os.path.basename(value))
+        lib_mod.update({key: lib_mod_link})
+        if not os.path.exists(lib_mod_link):
+            os.symlink(value, lib_mod_link)
+
+    # Set model formulations for each regionalization group
+    grp_main = {}
+    grps = list(grp_to_form.keys())
+
+    for grp in grps:
+
+        model_configs = {}
+
+        # Retrieve modules used in given group
+        grp_mod = grp_to_form[grp]
+
+        # noah
+        if 'noah' in grp_mod:
+            model_configs['noah'] = {"name": "bmi_fortran",
+                                     "params": {"name": "bmi_fortran",
+                                                "model_type_name": get_model_type_name('noah'),
+                                                "library_file": lib_mod['noah'],
+                                                "init_config": os.path.join(bmi_dir['noah'], '{{id}}_region.input')}}
+
+        # cfe or cfex
+        if 'cfes' in grp_mod or 'cfex' in grp_mod:
+            m1 = 'cfes' if 'cfes' in grp_mod else 'cfex'
+            model_configs[m1] = {"name": "bmi_c",
+                                 "params": {"name": "bmi_c",
+                                            "model_type_name": get_model_type_name(m1),
+                                            "library_file": lib_mod[m1],
+                                            "init_config": os.path.join(bmi_dir[m1], '{{id}}_bmi_config_cfe.txt')}}
+
+        # topmodel
+        if 'topmodel' in grp_mod:
+            model_configs['topmodel'] = {"name": "bmi_c",
+                                         "params": {"name": "bmi_c",
+                                                    "model_type_name": get_model_type_name('topmodel'),
+                                                    "main_output_variable": "Qout",
+                                                    "library_file": lib_mod['topmodel'],
+                                                    "init_config": os.path.join(bmi_dir['topmodel'], '{{id}}_topmodel.run')}}
+
+        # sac-sma
+        if 'sac' in grp_mod:
+            model_configs['sac'] = {"name": "bmi_fortran",
+                                    "params": {
+                                        "model_type_name": get_model_type_name('sac'),
+                                        "library_file": lib_mod['sac'],
+                                        "init_config": os.path.join(bmi_dir['sac'], 'sac-init-{{id}}.namelist.input')}}
+
+        # snow17
+        if 'snow17' in grp_mod:
+            model_configs['snow17'] = {"name": "bmi_fortran",
+                                       "params": {
+                                           "model_type_name": get_model_type_name('snow17'),
+                                           "library_file": lib_mod['snow17'],
+                                           "init_config": os.path.join(bmi_dir['snow17'], 'snow17-init-{{id}}.namelist.input')}}
+
+        # ueb
+        if 'ueb' in grp_mod:
+            model_configs['ueb'] = {"name": "bmi_c++",
+                                    "params": {
+                                        "name": "bmi_c++",
+                                        "model_type_name": get_model_type_name('ueb'),
+                                        "library_file": lib_mod['ueb'],
+                                        "init_config": os.path.join(bmi_dir['ueb'], 'ueb-init-{{id}}_region.dat')}}
+
+        # pet
+        if 'pet' in grp_mod:
+            model_configs['pet'] = {"name": "bmi_c",
+                                    "params": {
+                                        "model_type_name": get_model_type_name('pet'),
+                                        "library_file": lib_mod['pet'],
+                                        "init_config": os.path.join(bmi_dir['pet'], '{{id}}_bmi_config.ini')}}
+
+        # sloth
+        if 'sloth' in grp_mod:
+            model_configs['sloth'] = {"name": "bmi_c++",
+                                      "params": {"name": "bmi_c++",
+                                                 "model_type_name": get_model_type_name('sloth'),
+                                                 "library_file": lib_mod['sloth'],
+                                                 "init_config": '/dev/null'}}
+
+        # sft
+        if 'sft' in grp_mod:
+            model_configs['sft'] = {"name": "bmi_c++",
+                                    "params": {"name": "bmi_c++",
+                                               "model_type_name": get_model_type_name('sft'),
+                                               "library_file": lib_mod['sft'],
+                                               "init_config": os.path.join(bmi_dir['sft'], '{{id}}_bmi_config_sft.txt')}}
+
+        # smp
+        if 'smp' in grp_mod:
+            model_configs['smp'] = {"name": "bmi_c++",
+                                    "params": {"name": "bmi_c++",
+                                               "model_type_name": get_model_type_name('smp'),
+                                               "library_file": lib_mod['smp'],
+                                               "init_config": os.path.join(bmi_dir['smp'], '{{id}}_bmi_config_smp.txt')}}
+
+        # lasam
+        if 'lasam' in grp_mod:
+            model_configs['lasam'] = {"name": "bmi_c++",
+                                      "params": {"name": "bmi_c++",
+                                                 "model_type_name": get_model_type_name('lasam'),
+                                                 "main_output_variable": "precipitation_rate",
+                                                 "library_file": lib_mod['lasam'],
+                                                 "init_config": os.path.join(bmi_dir['lasam'], '{{id}}_bmi_config_lasam.txt')}}
+
+        # Store catchment model configs
+        model_type_name = '_'.join([m1 for m1 in grp_mod if m1 not in ['sloth', 'troute']])
+        grp_configs = {"name": "bmi_multi",
+                       "params": {"name": "bmi_multi", "model_type_name": model_type_name}}
+
+        # modules section
+        grp_configs["params"]["modules"] = [model_configs[m1] for m1 in grp_mod if m1 != 'troute']
+        grp_main[grp] = {}
+        grp_main[grp]["formulations"] = [grp_configs]
+
+    # Set global forcing
     g = {"global": {"forcing": {"file_pattern": ".*{{id}}.*.csv", "path": forcing_dir, "provider": "CsvPerFeature"}}}
 
     # time object
@@ -2186,42 +2305,25 @@ def create_reg_realization_file(
     # Set grouped formulations
     g.update({"groups": grp_main})
 
-    # Catchment groups
-    cat_grps = {grp: {"grp_path": grp_path} for grp, grp_path in grp_to_cat_path.items()}
-    c = {"catchment_groups": cat_grps}
-    g.update(c)
-
     # save configuration into json file
     with open(realization_file, 'w') as outfile:
         json.dump(g, outfile, indent=4, separators=(", ", ": "), sort_keys=False)
-    logger.info(f'Realization file is created at {realization_file}')
+    logger.info(f'Dynamic realization file is created at {realization_file}')
 
 
-def create_realization_file(
-        workdir: Union[str, Path],
-        lib_file: dict,
-        bmi_dir: dict,
-        forcing_dir: Union[str, Path],
+def create_static_realization_file(
         realization_file: Union[str, Path],
         modules: List[str],
-        time_period: dict,
-        rt_dict: dict,
         output_dict: dict,
         run_type: str
 ) -> None:
     """
-    Create realization file for the specified model and module
+    Create static realization file for the specified model and module
 
     Parameters
     ----------
-    workdir : basin directory for storing all the files
-    lib_file : library files for different modules
-    bmi_dir : directory for different model or module to store BMI files
-    forcing_dir : directory to store foricng files
     realization_file : model realization configuration file
     model: model and module combination
-    time_period : simulation and evaluation time period
-    rt_dict : routing model source file directory and configuration file
     output_dict: whether to output certain variables (currently SWE and soil moisture)
     run_type: type of run (calib, regionalization, or default)
 
@@ -2229,14 +2331,6 @@ def create_realization_file(
     ----------
     None
     """
-
-    # Create symlinks for libraries
-    lib_mod = {}
-    for key, value in lib_file.items():
-        lib_mod_link = os.path.join(workdir, 'Input/' + os.path.basename(value))
-        lib_mod.update({key: lib_mod_link})
-        if not os.path.exists(lib_mod_link):
-            os.symlink(value, lib_mod_link)
 
     model_configs = {}
 
@@ -2250,8 +2344,6 @@ def create_realization_file(
                                  "params": {"name": "bmi_fortran",
                                             "model_type_name": get_model_type_name('noah'),
                                             "main_output_variable": "QINSUR",
-                                            "library_file": lib_mod['noah'],
-                                            "init_config": os.path.join(bmi_dir['noah'], '{{id}}_' + run_type + '.input'),
                                             "allow_exceed_end_time": True, "fixed_time_step": False, "uses_forcing_file": False,
                                             "variables_names_map": {
                                                 "PRCPNONC": "atmosphere_water__liquid_equivalent_precipitation_rate",
@@ -2270,8 +2362,6 @@ def create_realization_file(
                              "params": {"name": "bmi_c",
                                         "model_type_name": get_model_type_name(m1),
                                         "main_output_variable": "Q_OUT",
-                                        "library_file": lib_mod[m1],
-                                        "init_config": os.path.join(bmi_dir[m1], '{{id}}_bmi_config_cfe.txt'),
                                         "allow_exceed_end_time": True, "fixed_time_step": False, "uses_forcing_file": False,
                                         "registration_function": "register_bmi_cfe"}}
 
@@ -2289,8 +2379,6 @@ def create_realization_file(
                                      "params": {"name": "bmi_c",
                                                 "model_type_name": get_model_type_name('topmodel'),
                                                 "main_output_variable": "Qout",
-                                                "library_file": lib_mod['topmodel'],
-                                                "init_config": os.path.join(bmi_dir['topmodel'], '{{id}}_topmodel.run'),
                                                 "allow_exceed_end_time": True, "fixed_time_step": False, "uses_forcing_file": False,
                                                 "registration_function": "register_bmi_topmodel"}}
         # variable name mapping section
@@ -2306,8 +2394,6 @@ def create_realization_file(
         model_configs['sac'] = {"name": "bmi_fortran",
                                 "params": {
                                     "model_type_name": get_model_type_name('sac'),
-                                    "library_file": lib_mod['sac'],
-                                    "init_config": os.path.join(bmi_dir['sac'], 'sac-init-{{id}}.namelist.input'),
                                     "allow_exceed_end_time": True, "fixed_time_step": False, "uses_forcing_file": False,
                                     "main_output_variable": "tci",
                                 }}
@@ -2326,8 +2412,6 @@ def create_realization_file(
         model_configs['snow17'] = {"name": "bmi_fortran",
                                    "params": {
                                        "model_type_name": get_model_type_name('snow17'),
-                                       "library_file": lib_mod['snow17'],
-                                       "init_config": os.path.join(bmi_dir['snow17'], 'snow17-init-{{id}}.namelist.input'),
                                        "allow_exceed_end_time": True, "fixed_time_step": False, "uses_forcing_file": False,
                                        "main_output_variable": "raim",
                                        "variables_names_map": {
@@ -2341,8 +2425,6 @@ def create_realization_file(
                                 "params": {
                                     "name": "bmi_c++",
                                     "model_type_name": get_model_type_name('ueb'),
-                                    "library_file": lib_mod['ueb'],
-                                    "init_config": os.path.join(bmi_dir['ueb'], 'ueb-init-{{id}}_' + run_type + '.dat'),
                                     "allow_exceed_end_time": True, "fixed_time_step": False, "uses_forcing_file": False,
                                     "main_output_variable": "SWIT",
                                     "variables_names_map": {
@@ -2360,8 +2442,6 @@ def create_realization_file(
         model_configs['pet'] = {"name": "bmi_c",
                                 "params": {
                                     "model_type_name": get_model_type_name('pet'),
-                                    "library_file": lib_mod['pet'],
-                                    "init_config": os.path.join(bmi_dir['pet'], '{{id}}_bmi_config.ini'),
                                     "allow_exceed_end_time": True, "fixed_time_step": False, "uses_forcing_file": False,
                                     "main_output_variable": "water_potential_evaporation_flux",
                                     "registration_function": "register_bmi_pet"
@@ -2373,8 +2453,6 @@ def create_realization_file(
                                   "params": {"name": "bmi_c++",
                                              "model_type_name": get_model_type_name('sloth'),
                                              "main_output_variable": "z",
-                                             "library_file": lib_mod['sloth'],
-                                             "init_config": '/dev/null',
                                              "allow_exceed_end_time": True,
                                              "fixed_time_step": False,
                                              "uses_forcing_file": False}}
@@ -2414,8 +2492,6 @@ def create_realization_file(
                                 "params": {"name": "bmi_c++",
                                            "model_type_name": get_model_type_name('sft'),
                                            "main_output_variable": "num_cells",
-                                           "library_file": lib_mod['sft'],
-                                           "init_config": os.path.join(bmi_dir['sft'], '{{id}}_bmi_config_sft.txt'),
                                            "allow_exceed_end_time": True,
                                            "uses_forcing_file": False,
                                            "variables_names_map": {"ground_temperature": "TGS"}}}
@@ -2426,8 +2502,6 @@ def create_realization_file(
                                 "params": {"name": "bmi_c++",
                                            "model_type_name": get_model_type_name('smp'),
                                            "main_output_variable": "soil_water_table",
-                                           "library_file": lib_mod['smp'],
-                                           "init_config": os.path.join(bmi_dir['smp'], '{{id}}_bmi_config_smp.txt'),
                                            "allow_exceed_end_time": True,
                                            "uses_forcing_file": False,
                                            "variables_names_map": {
@@ -2447,8 +2521,6 @@ def create_realization_file(
                                   "params": {"name": "bmi_c++",
                                              "model_type_name": get_model_type_name('lasam'),
                                              "main_output_variable": "precipitation_rate",
-                                             "library_file": lib_mod['lasam'],
-                                             "init_config": os.path.join(bmi_dir['lasam'], '{{id}}_bmi_config_lasam.txt'),
                                              "allow_exceed_end_time": True,
                                              "uses_forcing_file": False}}
 
@@ -2503,6 +2575,158 @@ def create_realization_file(
 
     # modules section
     model_configs[rr_mod1]["params"]["variables_names_map"] = var_maps['input']
+    gbmain["params"]["modules"] = [model_configs[m1] for m1 in modules if m1 != 'troute']
+
+    # global configuration
+    g = {"global": {"formulations": [gbmain]}}
+
+    # save configuration into json file
+    with open(realization_file, 'w') as outfile:
+        json.dump(g, outfile, indent=4, separators=(", ", ": "), sort_keys=False)
+    logger.info(f'Static realization file is created at {realization_file}')
+
+
+def create_dynamic_realization_file(
+        workdir: Union[str, Path],
+        lib_file: dict,
+        bmi_dir: dict,
+        forcing_dir: Union[str, Path],
+        realization_file: Union[str, Path],
+        modules: List[str],
+        time_period: dict,
+        rt_dict: dict,
+        run_type: str
+) -> None:
+    """
+    Create dynamic realization file for the specified model and module
+
+    Parameters
+    ----------
+    workdir : basin directory for storing all the files
+    lib_file : library files for different modules
+    bmi_dir : directory for different model or module to store BMI files
+    forcing_dir : directory to store foricng files
+    realization_file : model realization configuration file
+    model: model and module combination
+    time_period : simulation and evaluation time period
+    rt_dict : routing model source file directory and configuration file
+    run_type: type of run (calib, regionalization, or default)
+
+    Returns
+    ----------
+    None
+    """
+
+    # Create symlinks for libraries
+    lib_mod = {}
+    for key, value in lib_file.items():
+        lib_mod_link = os.path.join(workdir, 'Input/' + os.path.basename(value))
+        lib_mod.update({key: lib_mod_link})
+        if not os.path.exists(lib_mod_link):
+            os.symlink(value, lib_mod_link)
+
+    model_configs = {}
+
+    # Abbreviate calibration run_type name for file names/time period
+    if run_type == 'calibration':
+        run_type = 'calib'
+
+    # noah
+    if 'noah' in modules:
+        model_configs['noah'] = {"name": "bmi_fortran",
+                                 "params": {"name": "bmi_fortran",
+                                            "model_type_name": get_model_type_name('noah'),
+                                            "library_file": lib_mod['noah'],
+                                            "init_config": os.path.join(bmi_dir['noah'], '{{id}}_' + run_type + '.input')}}
+
+    # cfe or cfex
+    if 'cfes' in modules or 'cfex' in modules:
+        m1 = 'cfes' if 'cfes' in modules else 'cfex'
+        model_configs[m1] = {"name": "bmi_c",
+                             "params": {"name": "bmi_c",
+                                        "model_type_name": get_model_type_name(m1),
+                                        "library_file": lib_mod[m1],
+                                        "init_config": os.path.join(bmi_dir[m1], '{{id}}_bmi_config_cfe.txt')}}
+
+    # topmodel
+    if 'topmodel' in modules:
+        model_configs['topmodel'] = {"name": "bmi_c",
+                                     "params": {"name": "bmi_c",
+                                                "model_type_name": get_model_type_name('topmodel'),
+                                                "library_file": lib_mod['topmodel'],
+                                                "init_config": os.path.join(bmi_dir['topmodel'], '{{id}}_topmodel.run')}}
+
+    # sac-sma
+    if 'sac' in modules:
+        model_configs['sac'] = {"name": "bmi_fortran",
+                                "params": {
+                                    "model_type_name": get_model_type_name('sac'),
+                                    "library_file": lib_mod['sac'],
+                                    "init_config": os.path.join(bmi_dir['sac'], 'sac-init-{{id}}.namelist.input')}}
+
+    # snow17
+    if 'snow17' in modules:
+        model_configs['snow17'] = {"name": "bmi_fortran",
+                                   "params": {
+                                       "model_type_name": get_model_type_name('snow17'),
+                                       "library_file": lib_mod['snow17'],
+                                       "init_config": os.path.join(bmi_dir['snow17'], 'snow17-init-{{id}}.namelist.input')}}
+
+    # ueb
+    if 'ueb' in modules:
+        model_configs['ueb'] = {"name": "bmi_c++",
+                                "params": {
+                                    "name": "bmi_c++",
+                                    "model_type_name": get_model_type_name('ueb'),
+                                    "library_file": lib_mod['ueb'],
+                                    "init_config": os.path.join(bmi_dir['ueb'], 'ueb-init-{{id}}_' + run_type + '.dat')}}
+
+    # pet
+    if 'pet' in modules:
+        model_configs['pet'] = {"name": "bmi_c",
+                                "params": {
+                                    "model_type_name": get_model_type_name('pet'),
+                                    "library_file": lib_mod['pet'],
+                                    "init_config": os.path.join(bmi_dir['pet'], '{{id}}_bmi_config.ini')}}
+
+    # sloth
+    if 'sloth' in modules:
+        model_configs['sloth'] = {"name": "bmi_c++",
+                                  "params": {"name": "bmi_c++",
+                                             "model_type_name": get_model_type_name('sloth'),
+                                             "library_file": lib_mod['sloth'],
+                                             "init_config": '/dev/null'}}
+
+    # sft
+    if 'sft' in modules:
+        model_configs['sft'] = {"name": "bmi_c++",
+                                "params": {"name": "bmi_c++",
+                                           "model_type_name": get_model_type_name('sft'),
+                                           "library_file": lib_mod['sft'],
+                                           "init_config": os.path.join(bmi_dir['sft'], '{{id}}_bmi_config_sft.txt')}}
+
+    # smp
+    if 'smp' in modules:
+        model_configs['smp'] = {"name": "bmi_c++",
+                                "params": {"name": "bmi_c++",
+                                           "model_type_name": get_model_type_name('smp'),
+                                           "library_file": lib_mod['smp'],
+                                           "init_config": os.path.join(bmi_dir['smp'], '{{id}}_bmi_config_smp.txt')}}
+
+    # lasam
+    if 'lasam' in modules:
+        model_configs['lasam'] = {"name": "bmi_c++",
+                                  "params": {"name": "bmi_c++",
+                                             "model_type_name": get_model_type_name('lasam'),
+                                             "library_file": lib_mod['lasam'],
+                                             "init_config": os.path.join(bmi_dir['lasam'], '{{id}}_bmi_config_lasam.txt')}}
+
+    # Combine configurations
+    model_type_name = '_'.join([m1 for m1 in modules if m1 not in ['sloth', 'troute']])
+    gbmain = {"name": "bmi_multi",
+              "params": {"name": "bmi_multi", "model_type_name": model_type_name, "init_config": ""}}
+
+    # modules section
     gbmain["params"]["modules"] = [model_configs[m1] for m1 in modules if m1 != 'troute']
 
     # global configuration
