@@ -8,7 +8,7 @@ import geopandas as gpd
 logger = logging.getLogger(__name__)
 
 
-def update_forcing_in_realization(
+def update_forcing_in_dynamic_realization(
         forc_file: Path,
         real_config: dict,
         gpkg_file: Path,
@@ -22,7 +22,7 @@ def update_forcing_in_realization(
     Arguments
     ---------
     forc_file: file path to forcing data (a single .nc file or a folder containing a csv file for each catchment)
-    real_config: dictionary containing the realization configuration
+    real_config: file path to dynamic realization configuration
     gpkg_file: file path the GeoPacakge file
 
     Returns

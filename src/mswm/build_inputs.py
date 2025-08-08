@@ -19,7 +19,7 @@ from pydantic import ValidationError
 from mswm.utils import ginputfunc as gfun
 from mswm.utils import settings
 from mswm.utils.log_level import log_level_set
-from mswm.utils.process_forcing import update_forcing_in_realization
+from mswm.utils.process_forcing import update_forcing_in_dynamic_realization
 from mswm.utils.update_bmi_config import update_noah_ueb, update_troute
 from mswm.utils.input_configuration import InputConfig
 
@@ -294,7 +294,8 @@ class RealizationBuilder:
         """
         # Set realization file path
         try:
-            self.real_input_file = Path(self.conf['model']['realization']).absolute()
+            self.static_realization_file = Path(self.conf['model']['static_realization']).absolute()
+            self.dynamic_realization_file = Path(self.conf['model']['dynamic_realization']).absolute()
 
             # Get hydrofabric gpkg paths
             self.gpkg_cats = self.conf['model']['catchments']
@@ -312,26 +313,41 @@ class RealizationBuilder:
         """
         Load realization json file
         """
-        # Confirm realization file exists
-        if not self.real_input_file.exists():
+        # Confirm realization files exists
+        if not self.static_realization_file.exists() or not self.dynamic_realization_file.exists():
             try:
-                raise FileNotFoundError(f'Realization input file does not exist: {self.real_input_file}')
+                raise FileNotFoundError(f'Realization input file in {self.input_path} does not exist')
             except FileNotFoundError as e:
                 logger.critical(e)
                 raise
 
-        # Read realization file
+        # Read realization files
         try:
-            with open(self.real_input_file) as fp:
-                self.real_config = json.load(fp)
+            with open(self.static_realization_file) as fp:
+                self.static_realization_fcst = json.load(fp)
         except FileNotFoundError as e:
-            logger.critical(f"Realization input file does not exist: {self.real_input_file}\n{e}")
+            logger.critical(f"Realization input file does not exist: {self.static_realization_file}\n{e}")
             raise
         except json.JSONDecodeError as e:
-            logger.critical(f"Error parsing json from realization file: {self.real_input_file}\n{e}")
+            logger.critical(f"Error parsing json from realization file: {self.static_realization_file}\n{e}")
             raise
         except Exception as e:
-            logger.critical(f"Unexpected error reading realization file: {self.real_input_file}\n{e}")
+            logger.critical(f"Unexpected error reading realization file: {self.static_realization_ffile}\n{e}")
+
+        # Read realization files
+        try:
+            with open(self.dynamic_realization_file) as fp:
+                self.dynamic_realization_fcst = json.load(fp)
+        except FileNotFoundError as e:
+            logger.critical(f"Realization input file does not exist: {self.dynamic_realization_file}\n{e}")
+            raise
+        except json.JSONDecodeError as e:
+            logger.critical(f"Error parsing json from realization file: {self.dynamic_realization_file}\n{e}")
+            raise
+        except Exception as e:
+            logger.critical(f"Unexpected error reading realization file: {self.dynamic_realization_file}\n{e}")
+
+        logger.info("Realization files loaded for forecast")
 
     def _create_fcst_output_dir(self):
         """
@@ -884,7 +900,7 @@ class RealizationBuilder:
         """
         Update forcing and time related info in realization file
         """
-        self.real_config = update_forcing_in_realization(Path(self.forcing_target), self.real_config, self.gpkg_cats)
+        self.dynamic_realization_fcst = update_forcing_in_dynamic_realization(self.forcing_path, self.dynamic_realization_fcst, self.gpkg_cats)
         logger.info("Updated forecast realization file")
 
     def _update_fcst_noah_ueb(self):
@@ -892,14 +908,14 @@ class RealizationBuilder:
         For UEB and Noah-OWP-Modular, create new BMI config files with new time info, and
         update path to BMI configs in realization file accordingly
         """
-        self.real_config = update_noah_ueb(self.real_config, self.out_dir)
+        self.dynamic_realization_fcst = update_noah_ueb(self.dynamic_realization_fcst, self.out_dir)
         logger.info("Updated noah and ueb config files for forecast if used")
 
     def _update_fcst_troute(self):
         """
         Update BMI config files for t-route for forecast period
         """
-        self.real_config = update_troute(self.real_config, self.out_dir)
+        self.dynamic_realization_fcst = update_troute(self.dynamic_realization_fcst, self.out_dir)
         logger.info("Updated noah and ueb config files for forecast")
 
     def _init_config_hooks(self):
@@ -1478,23 +1494,37 @@ class RealizationBuilder:
         gfun.create_region_dynamic_realization_file(self.work_dir, self.lib_file, bmi_dir, self.forcing_target, dynamic_realization_file,
                                                     self.time_period, rt_dict, self.grp_to_form)
 
-    def _write_fcst_static_realization(self):
+    def _write_fcst_realizations(self):
         """
-        Write updated forecast realization file
+        Write updated forecast realization files
         """
-        # save the new realization file
-        self.realization_file = Path(self.out_dir, os.path.basename(self.real_input_file))
+        # save the existing static realization file
+        self.static_realization_out = Path(self.out_dir) / Path(self.static_realization_file).name
         try:
-            with open(self.realization_file, 'w') as outfile:
-                json.dump(self.real_config, outfile, indent=4, separators=(", ", ": "), sort_keys=False)
+            with open(self.static_realization_out, 'w') as outfile:
+                json.dump(self.static_realization_fcst, outfile, indent=4, separators=(", ", ": "), sort_keys=False)
         except TypeError as e:
-            logger.critical(f"Failed to dump realization data to JSON: {self.realization_file}\n{e}")
+            logger.critical(f"Failed to dump realization data to JSON: {self.static_realization_out}\n{e}")
             raise
         except OSError as e:
-            logger.critical(f"Unexpected error while writing realization data to JSON: {self.realization_file}\n{e}")
+            logger.critical(f"Unexpected error while writing realization data to JSON: {self.static_realization_out}\n{e}")
             raise
 
-        logger.info(f"Realization file is created at: {self.realization_file}")
+        logger.info(f"Static realization file is created at: {self.static_realization_out}")
+
+        # save the new dynamic realization file
+        self.dynamic_realization_out = Path(self.out_dir) / Path(self.dynamic_realization_file).name
+        try:
+            with open(self.dynamic_realization_out, 'w') as outfile:
+                json.dump(self.dynamic_realization_fcst, outfile, indent=4, separators=(", ", ": "), sort_keys=False)
+        except TypeError as e:
+            logger.critical(f"Failed to dump realization data to JSON: {self.dynamic_realization_out}\n{e}")
+            raise
+        except OSError as e:
+            logger.critical(f"Unexpected error while writing realization data to JSON: {self.dynamic_realization_out}\n{e}")
+            raise
+
+        logger.info(f"Dynamic realization file is created at: {self.dynamic_realization_out}")
 
     def _write_partition(self):
         """
@@ -1650,7 +1680,7 @@ class RealizationBuilder:
         self._update_fcst_realization()
         self._update_fcst_noah_ueb()
         self._update_fcst_troute()
-        self._write_fcst_static_realization()
+        self._write_fcst_realizations()
 
         logger.info("Forecast run set up successfully")
 
