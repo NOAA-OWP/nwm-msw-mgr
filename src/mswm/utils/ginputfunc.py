@@ -1459,20 +1459,16 @@ def change_sft_input(
 
 
 def change_topmodel_input(
-        catID: str,
-        runfile: Union[str, Path],
-        paramsfile: Union[str, Path],
-        subcatfile: Union[str, Path],
+        catids: List[str],
+        bmi_dir: Union[str, Path],
         inputDir: Union[str, Path],
 ) -> None:
     """ change options in TOPMODEL input file
 
     Parameters
     ----------
-    catID : catchment ID
-    runfile : specify paths for forcing, subcat, parameters, topmodel output and hyd output
-    paramsfile : parameter file
-    subcatfile : subcat file
+    catids : catchment IDs in the basin
+    bmi_dir : directory containing bmi configuration files
     inputDir : directory for storing input files
 
     Returns
@@ -1484,31 +1480,37 @@ def change_topmodel_input(
     if not os.path.exists(inputDir):
         os.makedirs(inputDir, exist_ok=True)
 
-    # Copy
-    new_runfile = os.path.join(inputDir, '{}'.format(catID) + '_topmodel.run')
-    shutil.copy(runfile, new_runfile)
-    new_params = os.path.join(inputDir, '{}'.format(catID) + '_topmodel_params.dat')
-    shutil.copy(paramsfile, new_params)
-    new_subcat = os.path.join(inputDir, '{}'.format(catID) + '_topmodel_subcat.dat')
-    shutil.copy(subcatfile, new_subcat)
+    for catID in catids:
 
-    # read runfile
-    with open(new_runfile, 'r') as infile:
-        list_lines = infile.readlines()
-    lst_lines = copy.deepcopy(list_lines)
+        run_file = os.path.join(bmi_dir, '{}_topmodel'.format(catID) + '.run')
+        params_file = os.path.join(bmi_dir, '{}_topmodel_params'.format(catID) + '.dat')
+        subcat_file = os.path.join(bmi_dir, '{}_topmodel_subcat'.format(catID) + '.dat')
 
-    # Change directory in runfile
-    topmod_out = os.path.join(os.path.dirname(os.path.dirname(inputDir)), '{}'.format(catID) + '_topmod.out')
-    hyd_out = os.path.join(os.path.dirname(os.path.dirname(inputDir)), '{}'.format(catID) + '_hyd.out')
-    filePath = [os.path.join(os.path.dirname(inputDir), '{}'.format(catID) + '_forcing.csv'),
-                new_subcat, new_params, topmod_out, hyd_out]
+        # Copy
+        new_runfile = os.path.join(inputDir, '{}'.format(catID) + '_topmodel.run')
+        shutil.copy(run_file, new_runfile)
+        new_params = os.path.join(inputDir, '{}'.format(catID) + '_topmodel_params.dat')
+        shutil.copy(params_file, new_params)
+        new_subcat = os.path.join(inputDir, '{}'.format(catID) + '_topmodel_subcat.dat')
+        shutil.copy(subcat_file, new_subcat)
 
-    for i in range(0, 5):
-        lst_lines[i + 2] = filePath[i] + '\n'
+        # read runfile
+        with open(new_runfile, 'r') as infile:
+            list_lines = infile.readlines()
+        lst_lines = copy.deepcopy(list_lines)
 
-    # Save file
-    with open(new_runfile, 'w') as outfile:
-        outfile.writelines(lst_lines)
+        # Change directory in runfile
+        topmod_out = os.path.join(os.path.dirname(os.path.dirname(inputDir)), '{}'.format(catID) + '_topmod.out')
+        hyd_out = os.path.join(os.path.dirname(os.path.dirname(inputDir)), '{}'.format(catID) + '_hyd.out')
+        filePath = [os.path.join(os.path.dirname(inputDir), '{}'.format(catID) + '_forcing.csv'),
+                    new_subcat, new_params, topmod_out, hyd_out]
+
+        for i in range(0, 5):
+            lst_lines[i + 2] = filePath[i] + '\n'
+
+        # Save file
+        with open(new_runfile, 'w') as outfile:
+            outfile.writelines(lst_lines)
 
 
 def create_topmodel_input(
