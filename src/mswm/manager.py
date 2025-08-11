@@ -50,7 +50,7 @@ def main():
     build_default_sub = subparser.add_parser("build_default", help="Create default realization")
     build_default_sub.add_argument("input_path", help="Input configuration file")
     build_default_sub.add_argument("forcing_path", help="Forcing directory")
-    build_default_sub.add_argument("formulation", help="Formulation run name")
+    build_default_sub.add_argument("formulation", help="Run name for formulation")
     build_default_sub.add_argument("start_period", help="Run start time")
     build_default_sub.add_argument("end_period", help="Run end time")
 
@@ -58,14 +58,14 @@ def main():
     build_calib_sub = subparser.add_parser("build_calib", help="Create calibration realization")
     build_calib_sub.add_argument("input_path", help="Input configuration file")
     build_calib_sub.add_argument("forcing_path", help="Forcing directory")
-    build_calib_sub.add_argument("formulation", help="Formulation run name")
+    build_calib_sub.add_argument("formulation", help="Run name for formulation")
 
     # subcommand: build_region
     build_region_sub = subparser.add_parser("build_region", help="Create regionalization realization")
     build_region_sub.add_argument("input_path", help="Input configuration file")
     build_region_sub.add_argument("assign_path", help="Formulation assignment file")
     build_region_sub.add_argument("forcing_path", help="Forcing directory")
-    build_region_sub.add_argument("formulation", help="Formulation run name")
+    build_region_sub.add_argument("formulation", help="Run name for formulation")
     build_region_sub.add_argument("start_period", help="Run start time")
     build_region_sub.add_argument("end_period", help="Run end time")
 
@@ -74,7 +74,7 @@ def main():
     build_fcst_sub.add_argument("input_path", help="Path to the config yaml file for a validation run")
     build_fcst_sub.add_argument("forcing_path", help="Path to the NetCDF forcing file OR "
                                                      "a folder containing .csv forcing files for all catchments")
-    build_fcst_sub.add_argument("output_folder", help="Path to the folder to be created for storing inputs/outputs from running ngen")
+    build_fcst_sub.add_argument("formulation", help="Run name for formulation")
     build_fcst_sub.add_argument("start_period", help="Run start time")
     build_fcst_sub.add_argument("end_period", help="Run end time")
 

@@ -36,12 +36,12 @@ if not logging.getLogger().hasHandlers():
 
 
 class RealizationBuilder:
-    def __init__(self, input_path: str, assign_path: str | None = None, forcing_path: str | None = None, output_folder: str | None = None,
+    def __init__(self, input_path: str | None = None, input_dir: str | None = None, assign_path: str | None = None, forcing_path: str | None = None,
                  formulation: str | None = None, start_period: str | None = None, end_period: str | None = None):
-        self.input_path = Path(input_path)
+        self.input_path = Path(input_path) if input_path else None
+        self.input_dir = Path(input_dir) if input_dir else None
         self.assign_path = Path(assign_path) if assign_path else None
         self.forcing_path = Path(forcing_path) if forcing_path else None
-        self.output_folder = output_folder if output_folder else None
         self.formulation = formulation if formulation else None
         self.start_period = start_period if start_period else None
         self.end_period = end_period if end_period else None
@@ -129,6 +129,13 @@ class RealizationBuilder:
             logger.critical(f"Input.config Pydantic validation failed: {self.input_path}{e}")
             raise
         logger.info("Input.config validated successfully")
+
+    def _copy_run_directory(self):
+        """
+        Copy existing directory from previous run to new run directory when updating dynamic parameters
+        """
+
+
 
     def _load_yaml(self):
         """
@@ -363,7 +370,7 @@ class RealizationBuilder:
             logger.critical(f"Invalid yaml file path: {self.conf['general']['yaml_file']} - {e}")
             raise
 
-        self.out_dir = Path(out_dir0, 'Forecast_Run', self.output_folder)
+        self.out_dir = Path(out_dir0, 'Forecast_Run', self.formulation)
 
         try:
             self.out_dir.mkdir(parents=True, exist_ok=True)
@@ -1689,3 +1696,19 @@ class RealizationBuilder:
         self._write_dynamic_realization()
 
         logger.info("Default run set up successfully")
+
+    def update_region_realization(self):
+        """
+        Update dynamic variables from a past regionalization run
+        """
+        self._load_config()
+        self._validate_config()
+        self._parse_config()
+
+        if self.run_type != 'regionalization':
+            try:
+                raise ValueError(f"Unexpected run_type {self.run_type} for build_region_realization. Must be `regionalization`.")
+            except ValueError as e:
+                logging.critical(e)
+                raise
+    
