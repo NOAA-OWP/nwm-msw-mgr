@@ -2,7 +2,6 @@ import logging
 import os
 import time
 import sys
-from datetime import datetime, timezone
 from pathlib import Path
 
 log_level = logging.INFO
@@ -59,39 +58,42 @@ def log_level_set():
 
     Notes
     -----
-    In the absense of user-specified logging level, level defaults to DEBUG
+    In the absence of user-specified logging level, level defaults to INFO.
     See also https://docs.python.org/3/library/logging.html
-
     '''
 
     BASE_DIR = Path(__file__).resolve().parent.parent
 
-    if Path("/ngencerf/data").exists():
-        log_file_dir = Path('/ngencerf/data/run-logs/mswm/')
-    else:
-        log_file_dir = Path(BASE_DIR) / 'run-logs/mswm/'
+    # Define log directory, defaulting to BASE_DIR if the custom path does not exist
+    log_file_dir = Path('/ngencerf/data/run-logs/mswm/') if Path("/ngencerf/data").exists() else BASE_DIR / 'run-logs/mswm/'
 
+    # Create log file name with timestamp
     log_file_name = f"mswm_{create_timestamp()}.log"
-    os.makedirs(log_file_dir, exist_ok=True)
-    logFilePath = os.path.join(log_file_dir, log_file_name)
+    log_file_path = log_file_dir / log_file_name
 
+    # Ensure the log directory exists
+    log_file_dir.mkdir(parents=True, exist_ok=True)
+
+    # Format module name with a maximum length of 8 characters
     formatted_module = MODULE_NAME.upper().ljust(LOG_MODULE_NAME_LEN)[:LOG_MODULE_NAME_LEN]
 
     try:
-        handler = logging.FileHandler(logFilePath, mode='a')
-        formatter = CustomFormatter(
-            fmt=f"%(asctime)s.%(msecs)03d {formatted_module} %(levelname_padded)s %(message)s",
-            datefmt="%Y-%m-%dT%H:%M:%S"
-        )
-        handler.setFormatter(formatter)
-
-        logging.Formatter.converter = time.gmtime
-
         logger = logging.getLogger()
-        logger.setLevel(log_level)
-        logger.handlers.clear()
-        logger.addHandler(handler)
 
-        print(f"Logging into: {logFilePath}")
-    except OSError:
-        print(f"Can't Open local directory Log File: {logFilePath}", file=sys.stderr)
+        # Clear existing handlers to avoid duplicates (Only once)
+        if not logger.hasHandlers():
+            handler = logging.FileHandler(log_file_path, mode='a')
+            formatter = CustomFormatter(
+                fmt=f"%(asctime)s.%(msecs)03d {formatted_module} %(levelname_padded)s %(message)s",
+                datefmt="%Y-%m-%dT%H:%M:%S"
+            )
+            handler.setFormatter(formatter)
+            logger.addHandler(handler)
+            logger.setLevel(log_level)
+
+        # Only print the message if logging is enabled for INFO level
+        if logger.isEnabledFor(logging.INFO):
+            print(f"Logging into: {log_file_path}")
+
+    except OSError as e:
+        print(f"Can't open local directory log file: {log_file_path} - {e}", file=sys.stderr)
