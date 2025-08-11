@@ -748,9 +748,9 @@ class RealizationBuilder:
 
         logger.info("Module libarary paths set")
 
-    def _create_input_dir(self):
+    def _create_static_input_dir(self):
         """
-        Create input directory to store realization file and BMI config files
+        Create input directory to store static realization file and BMI config files
         """
         # Set run directory based on run_type
         self.basin = self.conf1['basin']
@@ -1521,6 +1521,9 @@ class RealizationBuilder:
         """
         Create calibration model dictionary used to create config yaml file
         """
+        # Set site name
+        site_name = (f"USGS {self.conf1['basin']}" + (f": {self.conf2['station_name']}" if self.conf2.get('station_name') else ""))
+
         # Create calibration configuration file
         self.calib_config_file = os.path.join(self.work_dir + '/Input', '{}'.format(self.basin) + '_config_calib.yaml')
         self.model_dict = {'type': 'ngen', 'binary': self.conf3['ngen_exe_file'],
@@ -1542,7 +1545,7 @@ class RealizationBuilder:
                                            'save_plot_iter_freq': self.conf2['save_plot_iter_freq'],
                                            'basinID': self.conf1['basin'],
                                            'threshold': self.conf2['streamflow_threshold'],
-                                           'site_name': 'USGS ' + self.conf1['basin'] + ": " + self.conf2['station_name'],
+                                           'site_name': site_name,
                                            'user': self.conf2['user_email']},
                            }
 
@@ -1638,7 +1641,7 @@ class RealizationBuilder:
         self._map_cat_to_form()
         self._map_mod_to_cat()
         self._set_lib_paths()
-        self._create_input_dir()
+        self._create_static_input_dir()
         self._extract_hydrofabric()
         self._extract_forcing()
         self._set_output_vars()
