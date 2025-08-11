@@ -4,7 +4,7 @@ This module contains Pydantic classes to validate input.config files for the MSW
 @author: Jeff Wade
 """
 
-from pydantic import BaseModel, root_validator, validator
+from pydantic import BaseModel, model_validator, field_validator
 from pathlib import Path
 from typing import Optional, Literal
 
@@ -13,31 +13,16 @@ class StrictBaseModel(BaseModel):
     """
     Custom pydantic BaseModel that checks for absent or empty strings for required variables
     """
-    @root_validator(pre=True)
+    @model_validator(mode="before")
     # Raise errors when required variables are absent or empty strings
     def check_empty_fields(cls, values):
         for field, value in values.items():
-            # Check if required variable is none
-            if value is None:
-                # Retrieve field data
-                field_data = cls.__fields__.get(field)
-                # Reject variables with none values
-                if field_data and not field_data.allow_none:
-                    raise ValueError(f"Field '{field}' cannot be empty")
-
             # Check if string variable is empty
             if isinstance(value, str) and not value.strip():
-                # Retrieve field data
-                field_data = cls.__fields__.get(field)
-                # Reject empty strings only for required fields
-                if field_data and not field_data.allow_none:
-                    raise ValueError(f"Field '{field}' cannot be an empty string")
-
+                raise ValueError(f"Field '{field}' cannot be an empty string")
             # Check if path variable is empty
-            if isinstance(value, Path):
-                # Reject empty strs only for required fields
-                if str(value).strip() == "":
-                    raise ValueError(f"Field '{field}' cannot be an empty str")
+            if isinstance(value, Path) and not str(value).strip():
+                raise ValueError(f"Field '{field}' cannot be an empty Path")
 
         return values
 
@@ -59,26 +44,24 @@ class GeneralConfig(StrictBaseModel):
     sm_frac_depth: Optional[float] = None
 
     # Check optional fields that depend on run_type
-    @root_validator
-    def check_required_fields(cls, values):
-        run_type = values.get("run_type")
-
+    @model_validator(mode="after")
+    def check_required_fields(self):
         # Models required unless run_type is regionalization
-        if run_type != "regionalization" and not values.get("models"):
+        if self.run_type != "regionalization" and not self.models:
             raise ValueError("`models` must be specified for a default and calibration runs.")
 
         # Start_period and end_period required unless run_type is calibration
-        if run_type != "calibration" and (not values.get("start_period") or not values.get("end_period")):
+        if self.run_type != "calibration" and (not self.start_period or not self.end_period):
             raise ValueError("`start_period` and `end_period` must be specified for default and regionalization runs.")
 
-        return values
+        return self
 
 
 class RegionConfig(StrictBaseModel):
     """
     Input.config regionalization section requirement
     """
-    form_assign_file: Optional[str]
+    form_assign_file: str
 
 
 class CalibConfig(StrictBaseModel):
@@ -118,46 +101,45 @@ class CalibConfig(StrictBaseModel):
     calib_parameter_file: Optional[str] = None
 
     # Normalize case of optimization_algorithm
-    @validator("optimization_algorithm", pre=True)
+    @field_validator("optimization_algorithm", mode="before")
     def case_alg(cls, value):
         if isinstance(value, str):
             return value.lower()
         return value
 
     # Check optional fields that depend on optimization_algoritm
-    @root_validator
-    def check_required_fields(cls, values):
-        opt_alg = values.get("optimization_algorithm")
+    @model_validator(mode="after")
+    def check_required_fields(self):
 
-        # swarm_size required unless opt_alg is DDS
-        if opt_alg != "dds" and not values.get("swarm_size"):
+        # swarm_size required unless optimization_algorithm is DDS
+        if self.optimization_algorithm != "dds" and not self.swarm_size:
             raise ValueError("`swarm_size` must be specified for a PSO or GWO calibration run.")
 
-        # c1 required if opt_alg is PSO
-        if opt_alg == "pso" and not values.get("c1"):
+        # c1 required if optimization_algorithm is PSO
+        if self.optimization_algorithm == "pso" and not self.c1:
             raise ValueError("`c1` must be specified for a PSO calibration run.")
 
-        # c2 required if opt_alg is PSO
-        if opt_alg == "pso" and not values.get("c2"):
+        # c2 required if optimization_algorithm is PSO
+        if self.optimization_algorithm == "pso" and not self.c2:
             raise ValueError("`c2` must be specified for a PSO calibration run.")
 
-        # w required if opt_alg is PSO
-        if opt_alg == "pso" and not values.get("w"):
+        # w required if optimization_algorithm is PSO
+        if self.optimization_algorithm == "pso" and not self.w:
             raise ValueError("`w` must be specified for a PSO calibration run.")
 
         # restart must be 0 or 1
-        if values.get("restart") not in (0, 1):
+        if self.restart not in (0, 1):
             raise ValueError("`restart` must be 0 or 1.")
 
         # save_output_iter must be 0 or 1
-        if values.get("save_output_iter") not in (0, 1):
+        if self.save_output_iter not in (0, 1):
             raise ValueError("`save_output_iter` must be 0 or 1.")
 
         # save_plot_iter must be 0 or 1
-        if values.get("save_plot_iter") not in (0, 1):
+        if self.save_plot_iter not in (0, 1):
             raise ValueError("`save_plot_iter` must be 0 or 1.")
 
-        return values
+        return self
 
 
 class DataFileConfig(StrictBaseModel):
@@ -222,16 +204,16 @@ class InputConfig(StrictBaseModel):
 
     # Check optional sections are present
     # Root_validator skips if another value fails
-    @root_validator(skip_on_failure=True)
-    def check_required_sections(cls, values):
-        run_type = values["General"].run_type
+    @model_validator(mode="after")
+    def check_required_sections(self):
+        run_type = self.General.run_type
 
         # Regionalization section required for regionalization run
-        if run_type == "regionalization" and values.get("Regionalization") is None:
+        if run_type == "regionalization" and self.Regionalization is None:
             raise ValueError("Regionalization section is required for regionalization runs.")
 
         # Calibration section required for calibration run
-        if run_type == "calibration" and values.get("Calibration") is None:
+        if run_type == "calibration" and self.Calibration is None:
             raise ValueError("Calibration section is required for calibration runs.")
 
-        return values
+        return self
