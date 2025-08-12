@@ -174,8 +174,10 @@ class RealizationBuilder:
         """
         # Relate formulation groups to catchment IDS
         self.grp_to_cat = {}
+        self.grp_to_cat_path = {}
         for grp in self.reg_df['group']:
             cat_path = (Path(self.assign_path.parent) / (grp + "_catchments.csv")).absolute()
+            self.grp_to_cat_path[grp] = str(cat_path)
             if not cat_path.exists():
                 try:
                     raise FileNotFoundError(f'Regionalization catchment group file does not exist: {cat_path}')
@@ -1449,7 +1451,7 @@ class RealizationBuilder:
 
         # Write realization file
         gfun.create_reg_realization_file(self.work_dir, self.lib_file, bmi_dir, self.forcing_path, self.realization_file,
-                                         self.time_period, rt_dict, self.output_dict, self.cat_to_grp, self.grp_to_form, self.grp_params)
+                                         self.time_period, rt_dict, self.output_dict, self.cat_to_grp, self.cat_to_grp_path, self.grp_to_form, self.grp_params)
 
     def _write_fcst_realization(self):
         """
