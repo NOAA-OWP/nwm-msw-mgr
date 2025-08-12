@@ -1538,6 +1538,9 @@ def create_topmodel_input(
     df_divide = gpd.read_file(gpkg_file, layer="divides")
     df_divide.set_index('divide_id', inplace=True)
 
+    # Fill Nan lengthkm (coastal divides) with 0
+    df_divide['lengthkm'] = df_divide['lengthkm'].fillna(0)
+
     # loop through all catchments
     for catID in catids:
 

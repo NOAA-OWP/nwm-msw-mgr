@@ -492,26 +492,15 @@ class RealizationBuilder:
         self.grp_to_form = {}
 
         for idx, row in self.reg_df.iterrows():
-            modules0 = [x.replace(" ", "") for x in re.split('-', row['formulation'])]
+            modules0 = [x.replace(" ", "") for x in re.split(' ', row['formulation'])]
             modules = []
             invalid_modules = []
 
             # Ensure modules match possible options provided in settings
             for m1 in modules0:
-                # Catch abbreviations (this could also be performed by modifying settings.modules_all)
-                if m1.lower() in ('noah', 'nom'):
-                    m1 = 'noah-owp-modular'
-                elif m1.lower() == 'cfes':
-                    m1 = 'cfe-s'
-                elif m1.lower() == 'cfex':
-                    m1 = 'cfe-x'
-                elif m1.lower() in ('sacsma', 'sac'):
-                    m1 = 'sac-sma'
-                elif m1.lower() in ('snow17'):
-                    m1 = 'snow-17'
-
                 filtered = settings.modules_all.loc[settings.modules_all['name_ui'] == m1.lower(), 'module']
 
+                # Add invalid modules to list
                 if filtered.empty:
                     invalid_modules.append(m1)
 
@@ -546,7 +535,7 @@ class RealizationBuilder:
                 modules = modules + ['troute']
 
             # make sure SMP, SFT, SAC-SMA, and LASAM are not paired with PET, as PET does not provide the required inputs
-            if any(m in modules for m in ('smp', 'sft', 'sac-sma', 'lasam')) and 'pet' in modules:
+            if any(m in modules for m in ('smp', 'sft', 'sac', 'lasam')) and 'pet' in modules:
                 try:
                     raise ValueError("PET does not supply the required inputs for SMP, SFT, SAC-SMA, and LASAM. Add NOAH-OWP-Modular to formulation.")
                 except ValueError as e:
@@ -1461,9 +1450,6 @@ class RealizationBuilder:
         """
         Create calibration model dictionary used to create config yaml file
         """
-        # Set site name
-        site_name = (f"USGS {self.conf1['basin']}" + (f": {self.conf2['station_name']}" if self.conf2.get('station_name') else ""))
-
         # Create calibration configuration file
         self.calib_config_file = os.path.join(self.work_dir + '/Input', '{}'.format(self.basin) + '_config_calib.yaml')
         self.model_dict = {'type': 'ngen', 'binary': self.conf3['ngen_exe_file'], 'realization': self.realization_file,
@@ -1483,7 +1469,7 @@ class RealizationBuilder:
                                            'save_plot_iter_freq': self.conf2['save_plot_iter_freq'],
                                            'basinID': self.conf1['basin'],
                                            'threshold': self.conf2['streamflow_threshold'],
-                                           'site_name': site_name,
+                                           'site_name': 'USGS ' + self.conf1['basin'] + ": " + self.conf2['station_name'],
                                            'user': self.conf2['user_email']},
                            }
 
