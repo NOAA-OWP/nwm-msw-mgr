@@ -1450,6 +1450,9 @@ class RealizationBuilder:
         """
         Create calibration model dictionary used to create config yaml file
         """
+        # Set site name
+        site_name = (f"USGS {self.conf1['basin']}" + (f": {self.conf2['station_name']}" if self.conf2.get('station_name') else ""))
+
         # Create calibration configuration file
         self.calib_config_file = os.path.join(self.work_dir + '/Input', '{}'.format(self.basin) + '_config_calib.yaml')
         self.model_dict = {'type': 'ngen', 'binary': self.conf3['ngen_exe_file'], 'realization': self.realization_file,
@@ -1469,7 +1472,7 @@ class RealizationBuilder:
                                            'save_plot_iter_freq': self.conf2['save_plot_iter_freq'],
                                            'basinID': self.conf1['basin'],
                                            'threshold': self.conf2['streamflow_threshold'],
-                                           'site_name': 'USGS ' + self.conf1['basin'] + ": " + self.conf2['station_name'],
+                                           'site_name': site_name,
                                            'user': self.conf2['user_email']},
                            }
 
