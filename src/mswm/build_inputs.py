@@ -1140,7 +1140,7 @@ class RealizationBuilder:
                         gfun.create_cfe_input(self.catids, ['cfes'] + [self.modules], self.attr_file, cfe_dir, self.run_type)
 
                     # Create sft input
-                    gfun.create_sft_smp_input(self.catids, self.modules, self.attr_file, self.attr_parquet, cfe_dir, self.conf3['forcing_dir'], sft_dir, smp_dir, self.run_type)
+                    gfun.create_sft_smp_input(self.catids, self.modules, self.attr_parquet, cfe_dir, self.conf3['forcing_dir'], sft_dir, smp_dir, self.run_type)
 
                 elif m1 == 'smp':
                     continue
@@ -1353,7 +1353,7 @@ class RealizationBuilder:
                                 gfun.create_cfe_input(scheme_cat, scheme_form_cfes, self.attr_file, cfe_dir, self.run_type)
 
                             # Create SFT/SMP inputs
-                            gfun.create_sft_smp_input(scheme_cat, scheme_form, self.attr_file, self.attr_parquet, cfe_dir, self.conf3['forcing_dir'], sft_dir, smp_dir, self.run_type)
+                            gfun.create_sft_smp_input(scheme_cat, scheme_form, self.attr_parquet, cfe_dir, self.conf3['forcing_dir'], sft_dir, smp_dir, self.run_type)
 
                 # Skip smp, inputs created in tandem with sft
                 elif m1 == 'smp':
