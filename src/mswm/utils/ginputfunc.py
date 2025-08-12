@@ -13,6 +13,7 @@ import os
 import subprocess
 import logging
 import shutil
+import math
 from pathlib import Path
 from typing import List, Union, Dict
 from collections import OrderedDict
@@ -515,7 +516,6 @@ def create_noah_input_template(
 def create_sft_smp_input(
         catids: List[str],
         modules: Union[List[str], List[List[str]]],
-        dfa: Union[str, Path],
         attr_parquet: Union[str, Path],
         cfe_dir: Union[str, Path],
         forcing_dir: Union[str, Path],
@@ -529,7 +529,7 @@ def create_sft_smp_input(
     ----------
     catids : catchment IDs in the basin
     modules: list of modules in the formulation
-    dfa : dataframe containing model parameter attributes
+    attr_parquet: parquet file containing model attributes
     cfe_dir : directory containing cfe bmi configuration files
     forcing_dir : directory containing forcing files
     sft_dir : directory for writing sft bmi configuration files
@@ -1538,6 +1538,31 @@ def create_topmodel_input(
     df_divide = gpd.read_file(gpkg_file, layer="divides")
     df_divide.set_index('divide_id', inplace=True)
 
+    # Fill Nan lengthkm (coastal divides) with 0
+    df_divide['lengthkm'] = df_divide['lengthkm'].fillna(0)
+
+    # Calculate median twi quartiles to fill missing values
+    # Extract quartile twi values from divide-attributes
+    twi_quart = []
+    for val in dfa['dist_4.twi'].dropna():
+        try:
+            quart = json.loads(val) if isinstance(val, str) else val
+        except json.JSONDecodeError:
+            continue
+
+        row_v = []
+        for q in quart:
+            v_val = q.get("v", math.nan)
+            row_v.append(v_val)
+        twi_quart.append(row_v)
+
+    # Convert all twi values to df
+    twi_quart_df = pd.DataFrame(twi_quart)
+    med_v = twi_quart_df.median(axis=0, skipna=True)
+
+    # Construct default twi quartiles
+    default_twi = [{"v": round(v, 3), "frequency": 0.25} for v in med_v]
+
     # loop through all catchments
     for catID in catids:
 
@@ -1547,8 +1572,12 @@ def create_topmodel_input(
         yes_print_output = 1
         area = 1
         twi = json.loads(dfa.loc[catID]['dist_4.twi'])
+        # If twi_dist_4 does not have proper values, set to default value
+        if not any('v' in d for d in twi):
+            twi = default_twi.copy()
         twi_df = pd.DataFrame(twi)
         num_topodex_values = len(twi)
+
         num_channels = 1
         cum_dist_area_with_dist = 1.0
         dist_from_outlet = round(df_divide.loc[catID]['lengthkm'] * 1000)  # convert km to m
@@ -1568,7 +1597,12 @@ def create_topmodel_input(
             outfile.write(subcat_line1)
             outfile.write(subcat_line2)
             outfile.write(subcat_line3)
-        twi_df.to_csv(cfg_filename_subcat_path, mode='a', sep=' ', columns=['frequency', 'v'], index=False, header=False)
+        try:
+            twi_df.to_csv(cfg_filename_subcat_path, mode='a', sep=' ', columns=['frequency', 'v'], index=False, header=False)
+        except Exception:
+            print(str(catID))
+            print(twi_df)
+            raise
         with open(cfg_filename_subcat_path, 'a') as outfile:
             outfile.write(subcat_line5)
             outfile.write(subcat_line6)
