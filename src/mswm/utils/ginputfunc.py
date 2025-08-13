@@ -941,6 +941,10 @@ def create_sac_input(
             f.writelines('\n'.join(input_list))
 
 
+def is_probably_regex(pattern):
+    return any(c in pattern for c in ['^', '$', '.', '(', '[', '|', '\\'])
+
+
 def update_lstm_parameters(
     input_config_path: str,
     output_dir: str,
@@ -1222,6 +1226,67 @@ def create_lstm_input(
         except OSError as e:
             logger.critical(f"Error writing LSTM yaml to {input_file}: {e}")
             raise
+
+
+def create_lstm_input(
+        catids: List[str],
+        dfa: Union[str, Path],
+        gpkg_file: Union[str, Path],
+        param_dir_source: Union[str, Path],
+        lstm_input_dir: Union[str, Path],
+) -> None:
+
+    """
+    Create BMI configuration file for LSTM from existing EDFS files
+    Parameters
+    ----------
+    catids: catchment IDs in the basin
+    dfa: dataframe containing model parameter attributes
+    gpkg_file: GeoPackage hydrofabric file
+    param_dir_source: direcetory for static lstm files
+    lstm_input_dir: target directory for bmi configuration file output (lstm_input)
+    lstm_bmi_dir: directory for the existing lstm bmi configuration file
+
+    Returns
+    ----------
+    None
+
+    """
+    # Create input directory
+    os.makedirs(lstm_input_dir, exist_ok=True)
+
+    # Read geopackage divides
+    df_divide = gpd.read_file(gpkg_file, layer="divides")
+    df_divide.set_index('divide_id', inplace=True)
+
+    # Create static LSTM config yaml files
+    create_lstm_config(param_dir_source, lstm_input_dir)
+
+    # Create catchment specific LSTM bmi config files from scratch
+    for catID in catids:
+
+        area = str(df_divide.loc[catID]['areasqkm'])
+        slope = str(dfa.loc[catID]['mean.slope'])
+        elev = str(dfa.loc[catID]['mean.elevation'])
+        lat = str(dfa.loc[catID]['centroid_y'])
+        lon = str(dfa.loc[catID]['centroid_x'])
+
+        namelist = {'area_sqkm': area,
+                    'basin_id': catID,
+                    'basin_name': catID,
+                    'elev_mean': elev,
+                    'initial_state': 'zero',
+                    'lat': lat,
+                    'lon': lon,
+                    'slope_mean': slope,
+                    'timestep': '1 hour',
+                    'train_cfg_file': os.path.join(lstm_input_dir, 'config.yml'),
+                    'verbose': '1'}
+
+        # Write config to file
+        input_file = os.path.join(lstm_input_dir, catID + '.yml')
+        with open(input_file, "w") as f:
+            yaml.dump(namelist, f, default_flow_style=False, Dumper=QuotedDumper)
 
 
 def change_sac_snow17_input(
@@ -2468,6 +2533,32 @@ def create_reg_realization_file(
 
             # module output variable for input to t-route
             main_output_variable = "total_discharge"
+        
+        if 'lstm' in cat_mod:
+            model_configs['lstm'] = {"name": "bmi_python",
+                                     "params": {"python_type": "lstm.bmi_lstm.bmi_LSTM",
+                                                "model_type_name": get_model_type_name('lstm'),
+                                                "main_output_variable": "land_surface_water__runoff_depth",
+                                                "init_config": os.path.join(bmi_dir['lstm'], catID + '.yml'),
+                                                "allow_exceed_end_time": True,
+                                                "uses_forcing_file": False}}
+
+            # variable name mapping section
+            variables_names_map = dict()
+            variables_names_map["streamflow_cms"] = "land_surface_water__runoff_volume_flux",
+            variables_names_map["pytorch_model_path"] = os.path.join(bmi_dir['lstm'], "sugar_creek_trained.pt"),
+            variables_names_map["normalization_path"] = os.path.join(bmi_dir['lstm'], "input_scaling.csv"),
+            variables_names_map["initial_state_path"] = os.path.join(bmi_dir['lstm'], "initial_states.csv"),
+            variables_names_map["useGPU"] = False
+
+            var_maps = dict()
+            var_maps['input'] = variables_names_map
+            var_maps['output'] = dict()
+            var_maps['output']['swe_out'] = ''
+            var_maps['output']['sm_out'] = ''
+
+            # module output variable for input to t-route
+            main_output_variable = "land_surface_water__runoff_depth"
 
         if 'lstm' in grp_mod:
             model_configs['lstm'] = {"name": "bmi_python",
