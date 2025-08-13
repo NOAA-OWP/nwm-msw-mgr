@@ -24,7 +24,6 @@ from mswm.utils.update_bmi_config import update_noah_ueb, update_troute
 from mswm.utils.input_configuration import InputConfig
 
 
-log_level_set()
 logger = logging.getLogger(__name__)
 if not logging.getLogger().hasHandlers():
     # When running outside of Django, configure basic logging to stderr
@@ -36,7 +35,15 @@ if not logging.getLogger().hasHandlers():
 
 
 class RealizationBuilder:
+    # Flag to ensure logging is initialized only once
+    _logging_initialized = False
+
     def __init__(self, input_path: str, assign_path: str | None = None, forcing_path: str | None = None, output_folder: str | None = None):
+        # Initialize logging only the first time an instance of RealizationBuilder is created
+        if not RealizationBuilder._logging_initialized:
+            log_level_set()
+            RealizationBuilder._logging_initialized = True
+
         self.input_path = Path(input_path)
         self.assign_path = Path(assign_path) if assign_path else None
         self.forcing_path = Path(forcing_path) if forcing_path else None
