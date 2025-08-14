@@ -662,12 +662,8 @@ class RealizationBuilder:
         # Set library files
         self.lib_file = {}
         if self.run_type == 'regionalization':
-            modules1 = list(set(m1 for form in self.grp_to_form.values() for m1 in form if m1 not in ['troute', 'lstm']))
+            modules1 = list(set(m1 for form in self.grp_to_form.values() for m1 in form if m1 != 'troute'))
             self.all_mod = modules1.copy()
-
-            # Add LSTM to all_mod if it's used in a formulation
-            if any('lstm' in form for form in self.grp_to_form.values()):
-                self.all_mod.append('lstm')
         else:
             modules1 = [m1 for m1 in self.modules if m1 not in ['troute', 'lstm']]
 
@@ -1101,7 +1097,7 @@ class RealizationBuilder:
                     elif m1 == 'lasam':
                         gfun.change_lasam_input(self.catids, mod_input_dir, bmi_dir, self.conf3['lasam_parameter_dir'])
                     elif m1 == 'lstm':
-                        gfun.change_lstm_input(self.catids, self.conf3['lstm_parameter_dir'], mod_input_dir, bmi_dir)
+                        gfun.create_lstm_input(self.catids, self.conf3['lstm_parameter_dir'], mod_input_dir, bmi_dir)
                     elif m1 == 'smp' and self.output_dict['output_sm']:
                         # For SMP, the depth to output soil moisture may need to be adjusted
                         self.output_dict['sm_profile_depth'] = gfun.change_smp_input(self.catids, mod_input_dir, bmi_dir, self.output_dict['sm_frac_depth'],
@@ -1128,8 +1124,6 @@ class RealizationBuilder:
                     gfun.create_sac_input(self.catids, self.gpkg_file, self.conf3[m1 + '_parameter_dir'], mod_input_dir)
                 elif m1 == 'noah':
                     gfun.create_noah_input(self.catids, self.time_period, self.attr_file, self.conf3[m1 + '_parameter_dir'], mod_input_dir, self.run_type)
-                elif m1 == 'lstm':
-                    gfun.create_lstm_input(self.catids, self.attr_file, self.gpkg_file, self.conf3['lstm_parameter_dir'], mod_input_dir)
                 elif m1 == 'sft':
                     sft_dir = os.path.join(self.input_dir, 'sft_input')
                     smp_dir = os.path.join(self.input_dir, 'smp_input')
@@ -1266,8 +1260,6 @@ class RealizationBuilder:
                         gfun.change_sac_snow17_input(m1, cat_mod, mod_input_dir, bmi_dir)
                     elif m1 == 'lasam':
                         gfun.change_lasam_input(cat_mod, mod_input_dir, bmi_dir, self.conf3['lasam_parameter_dir'])
-                    elif m1 == 'lstm':
-                        gfun.change_lstm_input(cat_mod, self.conf3['lstm_parameter_dir'], mod_input_dir, bmi_dir)
                     elif m1 == "smp" and self.output_dict['output_sm']:
                         # For SMP, the depth to output soil moisture may need to be adjusted
                         self.output_dict['sm_profile_depth'] = gfun.change_smp_input(cat_mod, mod_input_dir, bmi_dir,
@@ -1335,8 +1327,6 @@ class RealizationBuilder:
                     gfun.create_sac_input(cat_mod, self.gpkg_file, self.conf3[m1 + '_parameter_dir'], mod_input_dir)
                 elif m1 == 'noah':
                     gfun.create_noah_input(cat_mod, self.time_period, self.attr_file, self.conf3[m1 + '_parameter_dir'], mod_input_dir, self.run_type)
-                elif m1 == 'lstm':
-                    gfun.create_lstm_input(cat_mod, self.attr_file, self.gpkg_file, self.conf3['lstm_parameter_dir'], mod_input_dir)
                 elif m1 == 'sft':
                     sft_dir = os.path.join(self.input_dir, 'sft_input')
                     smp_dir = os.path.join(self.input_dir, 'smp_input')

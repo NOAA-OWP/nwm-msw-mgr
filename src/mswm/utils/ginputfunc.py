@@ -958,7 +958,7 @@ def is_probably_regex(pattern):
     return any(c in pattern for c in ['^', '$', '.', '(', '[', '|', '\\'])
 
 
-def update_lstm_parameters(
+def create_lstm_config(
     input_config_path: str,
     output_dir: str,
     params_to_remove=None,
@@ -1031,28 +1031,40 @@ def create_symlinks(src_file_list, src_dir, dst_dir):
         raise Exception(f'Missing input files - {missing_input_files}')
 
 
-def create_lstm_config(
+def create_lstm_input(
+        catids: List[str],
         param_dir_source: Union[str, Path],
-        lstm_input_dir: Union[str, Path]
+        lstm_input_dir: Union[str, Path],
+        lstm_bmi_dir: Union[str, Path],
+
 ) -> None:
-    """
-    Create LSTM config yaml files from existing static files
+
+    """ Create BMI configuration file for LSTM
+
+    gfun.create_lstm_input(catids, time_period, attr_file, conf3[m1+'_parameter_dir'], mod_input_dir, conf3[m2+"_bmi_dir"])
     Parameters
     ----------
-    param_dir_source: direcetory for static lstm files
-    lstm_input_dir: directory for the existing lstm bmi configuration file
+    catids : catchment IDs in the basin
+    lstm_input_dir : directory for the lstm bmi configuration file
 
     Returns
     ----------
     None
 
     """
-    # create the config files
+    os.makedirs(lstm_input_dir, exist_ok=True)
+
+    # Read hydrofabric attribute file
+    # dfa = pd.read_parquet(attr_file)
+    # dfa.set_index("divide_id", inplace=True)
+
+    # create the config file
     lstm_data_dir = os.path.join(param_dir_source, "ngen_files/data/lstm")
     lstm_train_dir = os.path.join(param_dir_source, "trained_neuralhydrology_models/nh_AORC_hourly_slope_elev_precip_temp_seq999_seed101_2801_191806")
     run_dir = lstm_input_dir
     lstm_train_data_dir = os.path.join(lstm_train_dir, 'train_data')
     train_data_dir = os.path.join(run_dir, 'train_data')
+    # config_file = os.path.join(lstm_input_dir, 'config.yml')
     if not os.path.isdir(lstm_train_data_dir):
         raise ValueError(f"Source path '{lstm_train_data_dir}' must be an existing directory.")
 
@@ -1066,7 +1078,7 @@ def create_lstm_config(
     params_to_update = {
         "run_dir": run_dir
     }
-    update_lstm_parameters(
+    create_lstm_config(
         input_config_path=os.path.join(lstm_train_dir, 'config.yml'),
         output_dir=lstm_input_dir,
         params_to_remove=params_to_remove,
@@ -1077,37 +1089,6 @@ def create_lstm_config(
     create_symlinks(data_files, lstm_data_dir, lstm_input_dir)
     data_files = ['model_epoch009.pt', 'optimizer_state_epoch009.pt']
     create_symlinks(data_files, lstm_train_dir, lstm_input_dir)
-
-
-def change_lstm_input(
-        catids: List[str],
-        param_dir_source: Union[str, Path],
-        lstm_input_dir: Union[str, Path],
-        lstm_bmi_dir: Union[str, Path],
-
-) -> None:
-
-    """
-    Create BMI configuration file for LSTM from existing EDFS files
-    Parameters
-    ----------
-    catids: catchment IDs in the basin
-    param_dir_source: direcetory for static lstm files
-    lstm_input_dir: directory for the existing lstm bmi configuration file
-    lstm_bmi_dir: target directory for bmi configuration file output
-
-    Returns
-    ----------
-    None
-
-    """
-    # Create input directory
-    os.makedirs(lstm_input_dir, exist_ok=True)
-
-    # Create static LSTM config yaml files
-    create_lstm_config(param_dir_source, lstm_input_dir)
-
-    # Create catchment specific BMI config files from EDFS files
     for catID in catids:
         edfs_bmi_file = os.path.join(lstm_bmi_dir, catID + '.yml')
         if not os.path.isfile(edfs_bmi_file):
@@ -1129,67 +1110,6 @@ def change_lstm_input(
         input_file = os.path.join(lstm_input_dir, catID + '.yml')
         with open(input_file, "w") as f:
             yaml.dump(config, f, default_flow_style=False, Dumper=QuotedDumper)
-
-
-def create_lstm_input(
-        catids: List[str],
-        dfa: Union[str, Path],
-        gpkg_file: Union[str, Path],
-        param_dir_source: Union[str, Path],
-        lstm_input_dir: Union[str, Path],
-) -> None:
-
-    """
-    Create BMI configuration file for LSTM from existing EDFS files
-    Parameters
-    ----------
-    catids: catchment IDs in the basin
-    dfa: dataframe containing model parameter attributes
-    gpkg_file: GeoPackage hydrofabric file
-    param_dir_source: direcetory for static lstm files
-    lstm_input_dir: target directory for bmi configuration file output (lstm_input)
-    lstm_bmi_dir: directory for the existing lstm bmi configuration file
-
-    Returns
-    ----------
-    None
-
-    """
-    # Create input directory
-    os.makedirs(lstm_input_dir, exist_ok=True)
-
-    # Read geopackage divides
-    df_divide = gpd.read_file(gpkg_file, layer="divides")
-    df_divide.set_index('divide_id', inplace=True)
-
-    # Create static LSTM config yaml files
-    create_lstm_config(param_dir_source, lstm_input_dir)
-
-    # Create catchment specific LSTM bmi config files from scratch
-    for catID in catids:
-
-        area = str(df_divide.loc[catID]['areasqkm'])
-        slope = str(dfa.loc[catID]['mean.slope'])
-        elev = str(dfa.loc[catID]['mean.elevation'])
-        lat = str(dfa.loc[catID]['centroid_y'])
-        lon = str(dfa.loc[catID]['centroid_x'])
-
-        namelist = {'area_sqkm': area,
-                    'basin_id': catID,
-                    'basin_name': catID,
-                    'elev_mean': elev,
-                    'initial_state': 'zero',
-                    'lat': lat,
-                    'lon': lon,
-                    'slope_mean': slope,
-                    'timestep': '1 hour',
-                    'train_cfg_file': os.path.join(lstm_input_dir, 'config.yml'),
-                    'verbose': '1'}
-
-        # Write config to file
-        input_file = os.path.join(lstm_input_dir, catID + '.yml')
-        with open(input_file, "w") as f:
-            yaml.dump(namelist, f, default_flow_style=False, Dumper=QuotedDumper)
 
 
 def change_sac_snow17_input(
@@ -2168,6 +2088,8 @@ def create_reg_realization_file(
     None
     """
 
+    # cat_to_form: dict
+
     # Create symlinks for libraries
     lib_mod = {}
     for key, value in lib_file.items():
@@ -2407,32 +2329,6 @@ def create_reg_realization_file(
 
             # module output variable for input to t-route
             main_output_variable = "total_discharge"
-        
-        if 'lstm' in cat_mod:
-            model_configs['lstm'] = {"name": "bmi_python",
-                                     "params": {"python_type": "lstm.bmi_lstm.bmi_LSTM",
-                                                "model_type_name": get_model_type_name('lstm'),
-                                                "main_output_variable": "land_surface_water__runoff_depth",
-                                                "init_config": os.path.join(bmi_dir['lstm'], catID + '.yml'),
-                                                "allow_exceed_end_time": True,
-                                                "uses_forcing_file": False}}
-
-            # variable name mapping section
-            variables_names_map = dict()
-            variables_names_map["streamflow_cms"] = "land_surface_water__runoff_volume_flux",
-            variables_names_map["pytorch_model_path"] = os.path.join(bmi_dir['lstm'], "sugar_creek_trained.pt"),
-            variables_names_map["normalization_path"] = os.path.join(bmi_dir['lstm'], "input_scaling.csv"),
-            variables_names_map["initial_state_path"] = os.path.join(bmi_dir['lstm'], "initial_states.csv"),
-            variables_names_map["useGPU"] = False
-
-            var_maps = dict()
-            var_maps['input'] = variables_names_map
-            var_maps['output'] = dict()
-            var_maps['output']['swe_out'] = ''
-            var_maps['output']['sm_out'] = ''
-
-            # module output variable for input to t-route
-            main_output_variable = "land_surface_water__runoff_depth"
 
         # Store catchment model configs
         model_type_name = '_'.join([m1 for m1 in cat_mod if m1 not in ['sloth', 'troute']])
@@ -2808,18 +2704,19 @@ def create_realization_file(
 
     if 'lstm' in modules:
         model_configs['lstm'] = {"name": "bmi_python",
-                                 "params": {"python_type": "lstm.bmi_lstm.bmi_LSTM",
-                                            "model_type_name": get_model_type_name('lstm'),
-                                            "main_output_variable": "land_surface_water__runoff_depth",
-                                            "init_config": os.path.join(bmi_dir['lstm'], '{{id}}.yml'),
-                                            "allow_exceed_end_time": True,
-                                            "uses_forcing_file": False}}
+                                  "params": {
+                                             "python_type": "lstm.bmi_lstm.bmi_LSTM",
+                                             "model_type_name": get_model_type_name('lstm'),
+                                             "main_output_variable": "land_surface_water__runoff_depth",
+                                             "init_config": os.path.join(bmi_dir['lstm'], '{{id}}.yml'),
+                                             "allow_exceed_end_time": True,
+                                             "uses_forcing_file": False}}
 
         # variable name mapping section
         variables_names_map = dict()
         variables_names_map["streamflow_cms"] = "land_surface_water__runoff_volume_flux",
         variables_names_map["pytorch_model_path"] = os.path.join(bmi_dir['lstm'], "sugar_creek_trained.pt"),
-        variables_names_map["normalization_path"] = os.path.join(bmi_dir['lstm'], "input_scaling.csv"),
+        variables_names_map["normalization_path"] = os.path.join(bmi_dir['lstm'],"input_scaling.csv"),
         variables_names_map["initial_state_path"] = os.path.join(bmi_dir['lstm'], "initial_states.csv"),
         variables_names_map["useGPU"] = False
 
