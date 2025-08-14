@@ -1182,7 +1182,6 @@ def create_lstm_input(
                     'lat': lat,
                     'lon': lon,
                     'slope_mean': slope,
-                    'time_step': '1 hour',  # There's a disagreement between naming conventions between EDFS and createInputs, unclear which is used
                     'timestep': '1 hour',
                     'train_cfg_file': os.path.join(lstm_input_dir, 'config.yml'),
                     'verbose': '1'}
