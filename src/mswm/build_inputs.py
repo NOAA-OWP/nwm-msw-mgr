@@ -396,14 +396,9 @@ class RealizationBuilder:
         """
         Parse input.config settings for calibration run
         """
-
         # Retrieve general settings for calibration
-        algorithm = (self.conf2.get('optimization_algoritm', "") or "none").lower()
+        algorithm = self.conf2['optimization_algorithm'].lower()
         swarm_size = self.conf2['swarm_size']
-        start_iteration = self.conf2.get('start_iteration') or 0
-        number_iteration = self.conf2.get('number_iteration') or 0
-        restart = self.conf2.get('restart') or 0
-
         strategy = {'type': 'estimation', 'algorithm': algorithm}
         if algorithm == 'pso':
             strategy.update({'parameters': {'pool': swarm_size, 'particles': swarm_size,
@@ -413,8 +408,8 @@ class RealizationBuilder:
 
         # Set general config
         self.general_cfg = {'strategy': strategy, 'name': 'calib', 'log': True, 'workdir': None, 'yaml_file': None,
-                            'start_iteration': start_iteration, 'iterations': number_iteration,
-                            'restart': restart}
+                            'start_iteration': self.conf2['start_iteration'], 'iterations': self.conf2['number_iteration'],
+                            'restart': self.conf2['restart']}
 
         logger.info('Calibration settings parsed')
 
@@ -662,14 +657,10 @@ class RealizationBuilder:
         # Set library files
         self.lib_file = {}
         if self.run_type == 'regionalization':
-            modules1 = list(set(m1 for form in self.grp_to_form.values() for m1 in form if m1 not in ['troute', 'lstm']))
+            modules1 = list(set(m1 for form in self.grp_to_form.values() for m1 in form if m1 != 'troute'))
             self.all_mod = modules1.copy()
-
-            # Add LSTM to all_mod if it's used in a formulation
-            if any('lstm' in form for form in self.grp_to_form.values()):
-                self.all_mod.append('lstm')
         else:
-            modules1 = [m1 for m1 in self.modules if m1 not in ['troute', 'lstm']]
+            modules1 = [m1 for m1 in self.modules if m1 != 'troute']
 
         # Reformat library file paths to match input.config format
         for m1 in modules1:
@@ -699,10 +690,8 @@ class RealizationBuilder:
         """
         # Set run directory based on run_type
         self.basin = self.conf1['basin']
-        obj_fnc = self.conf2.get('objective_function') or "none"
-        opt_alg = self.conf2.get('optimization_algorithm') or "none"
         if self.run_type == 'calibration':
-            run_dir = os.path.join(self.conf1['main_dir'], '_'.join([obj_fnc, opt_alg]))
+            run_dir = os.path.join(self.conf1['main_dir'], '_'.join([self.conf2['objective_function'], self.conf2['optimization_algorithm']]))
         elif self.run_type == 'regionalization':
             run_dir = os.path.join(self.conf1['main_dir'], 'regionalization')
         elif self.run_type == 'default':
@@ -1100,8 +1089,6 @@ class RealizationBuilder:
                         gfun.change_sac_snow17_input(m1, self.catids, mod_input_dir, bmi_dir)
                     elif m1 == 'lasam':
                         gfun.change_lasam_input(self.catids, mod_input_dir, bmi_dir, self.conf3['lasam_parameter_dir'])
-                    elif m1 == 'lstm':
-                        gfun.change_lstm_input(self.catids, self.conf3['lstm_parameter_dir'], mod_input_dir, bmi_dir)
                     elif m1 == 'smp' and self.output_dict['output_sm']:
                         # For SMP, the depth to output soil moisture may need to be adjusted
                         self.output_dict['sm_profile_depth'] = gfun.change_smp_input(self.catids, mod_input_dir, bmi_dir, self.output_dict['sm_frac_depth'],
@@ -1128,8 +1115,6 @@ class RealizationBuilder:
                     gfun.create_sac_input(self.catids, self.gpkg_file, self.conf3[m1 + '_parameter_dir'], mod_input_dir)
                 elif m1 == 'noah':
                     gfun.create_noah_input(self.catids, self.time_period, self.attr_file, self.conf3[m1 + '_parameter_dir'], mod_input_dir, self.run_type)
-                elif m1 == 'lstm':
-                    gfun.create_lstm_input(self.catids, self.attr_file, self.gpkg_file, self.conf3['lstm_parameter_dir'], mod_input_dir)
                 elif m1 == 'sft':
                     sft_dir = os.path.join(self.input_dir, 'sft_input')
                     smp_dir = os.path.join(self.input_dir, 'smp_input')
@@ -1266,8 +1251,6 @@ class RealizationBuilder:
                         gfun.change_sac_snow17_input(m1, cat_mod, mod_input_dir, bmi_dir)
                     elif m1 == 'lasam':
                         gfun.change_lasam_input(cat_mod, mod_input_dir, bmi_dir, self.conf3['lasam_parameter_dir'])
-                    elif m1 == 'lstm':
-                        gfun.change_lstm_input(cat_mod, self.conf3['lstm_parameter_dir'], mod_input_dir, bmi_dir)
                     elif m1 == "smp" and self.output_dict['output_sm']:
                         # For SMP, the depth to output soil moisture may need to be adjusted
                         self.output_dict['sm_profile_depth'] = gfun.change_smp_input(cat_mod, mod_input_dir, bmi_dir,
@@ -1335,8 +1318,6 @@ class RealizationBuilder:
                     gfun.create_sac_input(cat_mod, self.gpkg_file, self.conf3[m1 + '_parameter_dir'], mod_input_dir)
                 elif m1 == 'noah':
                     gfun.create_noah_input(cat_mod, self.time_period, self.attr_file, self.conf3[m1 + '_parameter_dir'], mod_input_dir, self.run_type)
-                elif m1 == 'lstm':
-                    gfun.create_lstm_input(cat_mod, self.attr_file, self.gpkg_file, self.conf3['lstm_parameter_dir'], mod_input_dir)
                 elif m1 == 'sft':
                     sft_dir = os.path.join(self.input_dir, 'sft_input')
                     smp_dir = os.path.join(self.input_dir, 'smp_input')
@@ -1471,19 +1452,13 @@ class RealizationBuilder:
         """
         # Set site name
         site_name = (f"USGS {self.conf1['basin']}" + (f": {self.conf2['station_name']}" if self.conf2.get('station_name') else ""))
-        objective_function = self.conf2.get('objective_function') or "none"
-        save_output_iter = self.conf2.get('save_output_iter') or 0
-        save_plot_iter = self.conf2.get('save_plot_iter') or 0
-        save_plot_iter_freq = self.conf2.get('save_lot_iter_freq') or 0
-        streamflow_threshold = self.conf2.get('streamflow_threshold') or 0.0
-        user_email = self.conf2.get('user_email') or ''
 
         # Create calibration configuration file
         self.calib_config_file = os.path.join(self.work_dir + '/Input', '{}'.format(self.basin) + '_config_calib.yaml')
         self.model_dict = {'type': 'ngen', 'binary': self.conf3['ngen_exe_file'], 'realization': self.realization_file,
                            'catchments': self.cat_file, 'nexus': self.nexus_file,
                            'crosswalk': self.walk_file, 'obsflow': self.obsflow_file, 'strategy': 'uniform', 'params': None,
-                           'eval_params': {'objective': objective_function,
+                           'eval_params': {'objective': self.conf2['objective_function'],
                                            'evaluation_start': self.time_period['evaluation_time_period']['calib'][0],
                                            'evaluation_stop': self.time_period['evaluation_time_period']['calib'][1],
                                            'valid_start_time': self.time_period['run_time_period']['valid'][0],
@@ -1492,13 +1467,13 @@ class RealizationBuilder:
                                            'valid_eval_end_time': self.time_period['evaluation_time_period']['valid'][1],
                                            'full_eval_start_time': self.time_period['evaluation_time_period']['full'][0],
                                            'full_eval_end_time': self.time_period['evaluation_time_period']['full'][1],
-                                           'save_output_iteration': save_output_iter,
-                                           'save_plot_iteration': save_plot_iter,
-                                           'save_plot_iter_freq': save_plot_iter_freq,
+                                           'save_output_iteration': self.conf2['save_output_iter'],
+                                           'save_plot_iteration': self.conf2['save_plot_iter'],
+                                           'save_plot_iter_freq': self.conf2['save_plot_iter_freq'],
                                            'basinID': self.conf1['basin'],
-                                           'threshold': streamflow_threshold,
+                                           'threshold': self.conf2['streamflow_threshold'],
                                            'site_name': site_name,
-                                           'user': user_email},
+                                           'user': self.conf2['user_email']},
                            }
 
         # update the model dict to enable parallel processing
