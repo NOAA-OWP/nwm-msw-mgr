@@ -22,6 +22,7 @@ import geopandas as gpd
 import pandas as pd
 import yaml
 
+from tempfile import mkstemp
 from mswm.utils import settings
 
 
@@ -43,8 +44,20 @@ def quoted_str_presenter(dumper, data):
 QuotedDumper.add_representer(str, quoted_str_presenter)
 
 
-def is_probably_regex(pattern):
-    return any(c in pattern for c in ['^', '$', '.', '(', '[', '|', '\\'])
+def replace_path(source_file_path, par_path, data_type_codes):
+    fh, target_file_path = mkstemp()
+    with open(target_file_path, 'w') as target_file:
+        with open(source_file_path, 'r') as source_file:
+            data = source_file.readlines()
+            for i in range(2, len(data), 3):
+                if data[i][:1] in data_type_codes:
+                    if data[i + 1][:1] != '/':
+                        data[i + 1] = par_path + '/' + data[i + 1]
+
+            target_file.writelines(data)
+
+    os.remove(source_file_path)
+    shutil.move(target_file_path, source_file_path)
 
 
 __all__ = [
@@ -941,6 +954,10 @@ def create_sac_input(
             f.writelines('\n'.join(input_list))
 
 
+def is_probably_regex(pattern):
+    return any(c in pattern for c in ['^', '$', '.', '(', '[', '|', '\\'])
+
+
 def update_lstm_parameters(
     input_config_path: str,
     output_dir: str,
@@ -964,15 +981,8 @@ def update_lstm_parameters(
     params_to_update = params_to_update or {}
 
     # Read the original config
-    try:
-        with open(input_config_path, 'r') as f:
-            config = yaml.safe_load(f)
-    except yaml.YAMLError as e:
-        logger.critical(f"Error parsing LSTM yaml config at {input_config_path}: {e}")
-        raise
-    except FileNotFoundError:
-        logger.critical(f"LSTM yaml config file not found: {input_config_path}")
-        raise
+    with open(input_config_path, 'r') as f:
+        config = yaml.safe_load(f)
 
     # Remove specified parameters
     keys_to_remove = set()
@@ -996,17 +1006,10 @@ def update_lstm_parameters(
     output_config_path = os.path.join(output_dir, "config.yml")
 
     # Write the modified config
-    try:
-        with open(output_config_path, 'w') as f:
-            yaml.dump(config, f, default_flow_style=False)
-    except yaml.YAMLError as e:
-        logger.critical(f"Error writing LSTM yaml to {output_config_path}: {e}")
-        raise
-    except OSError as e:
-        logger.critical(f"Error writing LSTM yaml to {output_config_path}: {e}")
-        raise
+    with open(output_config_path, 'w') as f:
+        yaml.dump(config, f, default_flow_style=False)
 
-    logger.info(f"LSTM config written to: {output_config_path}")
+    logger.info(f"New config written to: {output_config_path}")
 
 
 def create_symlinks(src_file_list, src_dir, dst_dir):
@@ -1025,11 +1028,7 @@ def create_symlinks(src_file_list, src_dir, dst_dir):
                 os.symlink(ffile, target)
 
     if missing_input_files:
-        try:
-            raise Exception(f'Missing LSTM input files - {missing_input_files}')
-        except Exception as e:
-            logger.critical(e)
-            raise
+        raise Exception(f'Missing input files - {missing_input_files}')
 
 
 def create_lstm_config(
@@ -1055,11 +1054,7 @@ def create_lstm_config(
     lstm_train_data_dir = os.path.join(lstm_train_dir, 'train_data')
     train_data_dir = os.path.join(run_dir, 'train_data')
     if not os.path.isdir(lstm_train_data_dir):
-        try:
-            raise ValueError(f"LSTM source path '{lstm_train_data_dir}' must be an existing directory.")
-        except Exception as e:
-            logger.critical(e)
-            raise
+        raise ValueError(f"Source path '{lstm_train_data_dir}' must be an existing directory.")
 
     if os.path.islink(train_data_dir) or os.path.exists(train_data_dir):
         os.unlink(train_data_dir)
@@ -1116,21 +1111,10 @@ def change_lstm_input(
     for catID in catids:
         edfs_bmi_file = os.path.join(lstm_bmi_dir, catID + '.yml')
         if not os.path.isfile(edfs_bmi_file):
-            try:
-                raise FileNotFoundError(f"Required LSTM bmi file not found: {edfs_bmi_file}")
-            except Exception as e:
-                logger.critical(e)
-                raise
+            raise FileNotFoundError(f"Required bmi file not found: {edfs_bmi_file}")
 
-        try:
-            with open(edfs_bmi_file, 'r') as f:
-                config = yaml.safe_load(f)
-        except yaml.YAMLError as e:
-            logger.critical(f"Error parsing LSTM yaml config at {edfs_bmi_file}: {e}")
-            raise
-        except FileNotFoundError:
-            logger.critical(f"LSTM yaml config file not found: {edfs_bmi_file}")
-            raise
+        with open(edfs_bmi_file, 'r') as f:
+            config = yaml.safe_load(f)
 
         params_to_update = {
             "train_cfg_file": os.path.join(lstm_input_dir, 'config.yml'),
@@ -1143,15 +1127,8 @@ def change_lstm_input(
 
         config.update(params_to_update)
         input_file = os.path.join(lstm_input_dir, catID + '.yml')
-        try:
-            with open(input_file, "w") as f:
-                yaml.dump(config, f, default_flow_style=False, Dumper=QuotedDumper)
-        except yaml.YAMLError as e:
-            logger.critical(f"Error writing LSTM yaml to {input_file}: {e}")
-            raise
-        except OSError as e:
-            logger.critical(f"Error writing LSTM yaml to {input_file}: {e}")
-            raise
+        with open(input_file, "w") as f:
+            yaml.dump(config, f, default_flow_style=False, Dumper=QuotedDumper)
 
 
 def create_lstm_input(
@@ -1212,15 +1189,8 @@ def create_lstm_input(
 
         # Write config to file
         input_file = os.path.join(lstm_input_dir, catID + '.yml')
-        try:
-            with open(input_file, "w") as f:
-                yaml.dump(namelist, f, default_flow_style=False, Dumper=QuotedDumper)
-        except yaml.YAMLError as e:
-            logger.critical(f"Error writing LSTM yaml to {input_file}: {e}")
-            raise
-        except OSError as e:
-            logger.critical(f"Error writing LSTM yaml to {input_file}: {e}")
-            raise
+        with open(input_file, "w") as f:
+            yaml.dump(namelist, f, default_flow_style=False, Dumper=QuotedDumper)
 
 
 def change_sac_snow17_input(
@@ -2438,7 +2408,7 @@ def create_reg_realization_file(
 
             # module output variable for input to t-route
             main_output_variable = "total_discharge"
-
+        
         if 'lstm' in cat_mod:
             model_configs['lstm'] = {"name": "bmi_python",
                                      "params": {"python_type": "lstm.bmi_lstm.bmi_LSTM",
@@ -3000,8 +2970,8 @@ def create_calib_config_file(
             params_range = []
             for m in v:
                 params_range.append({'name': m, 'min': float(df_params.query('model==@k').loc[m]['min']),
-                                     'max': float(df_params.query('model==@k').loc[m]['max']),
-                                     'init': float(df_params.query('model==@k').loc[m]['init'])})
+                                    'max': float(df_params.query('model==@k').loc[m]['max']),
+                                    'init': float(df_params.query('model==@k').loc[m]['init'])})
             params_range_dict.update({k: params_range})
 
         # Create configuration
