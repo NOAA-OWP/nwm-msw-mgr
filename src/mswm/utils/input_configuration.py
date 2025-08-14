@@ -68,17 +68,17 @@ class CalibConfig(StrictBaseModel):
     """
     Input.config calibration section requirement
     """
-    optimization_algorithm: Optional[Literal["dds", "pso", "gwo"]] = None
+    optimization_algorithm: Literal["dds", "pso", "gwo"]
     swarm_size: Optional[int] = None
     c1: Optional[int] = None
     c2: Optional[int] = None
     w: Optional[float] = None
-    objective_function: Optional[Literal["kge", "nse", "nnse", "nselog", "corr", "csi", "pod",
-                                         "rmse", "mae", "rsr", "far", "pkbias", "pkte", "evbias",
-                                         "pbias", "lseg_fdc", "hseg_fdc"]] = None
-    start_iteration: Optional[int] = None
-    number_iteration: Optional[int] = None
-    restart: Optional[int] = None
+    objective_function: Literal["kge", "nse", "nnse", "nselog", "corr", "csi", "pod",
+                                "rmse", "mae", "rsr", "far", "pkbias", "pkte", "evbias",
+                                "pbias", "lseg_fdc", "hseg_fdc"]
+    start_iteration: int
+    number_iteration: int
+    restart: int
     calib_start_period: str
     calib_end_period: str
     calib_eval_start_period: str
@@ -89,10 +89,10 @@ class CalibConfig(StrictBaseModel):
     valid_eval_end_period: str
     full_eval_start_period: str
     full_eval_end_period: str
-    save_output_iter: Optional[int] = None
-    save_plot_iter: Optional[int] = None
-    save_plot_iter_freq: Optional[int] = None
-    streamflow_threshold: Optional[float] = None
+    save_output_iter: int
+    save_plot_iter: int
+    save_plot_iter_freq: int
+    streamflow_threshold: float
     station_name: Optional[str] = None
     ngen_cerf: bool
     calibration_run_id: Optional[int] = None
@@ -112,32 +112,31 @@ class CalibConfig(StrictBaseModel):
     def check_required_fields(self):
 
         # swarm_size required unless optimization_algorithm is DDS
-        if self.optimization_algorithm is not None and self.optimization_algorithm != "dds" and not self.swarm_size:
+        if self.optimization_algorithm != "dds" and not self.swarm_size:
             raise ValueError("`swarm_size` must be specified for a PSO or GWO calibration run.")
 
         # c1 required if optimization_algorithm is PSO
-        if self.optimization_algorithm is not None and self.optimization_algorithm == "pso" and not self.c1:
+        if self.optimization_algorithm == "pso" and not self.c1:
             raise ValueError("`c1` must be specified for a PSO calibration run.")
 
         # c2 required if optimization_algorithm is PSO
-        if self.optimization_algorithm is not None and self.optimization_algorithm == "pso" and not self.c2:
+        if self.optimization_algorithm == "pso" and not self.c2:
             raise ValueError("`c2` must be specified for a PSO calibration run.")
 
         # w required if optimization_algorithm is PSO
-        if self.optimization_algorithm is not None and self.optimization_algorithm == "pso" and not self.w:
+        if self.optimization_algorithm == "pso" and not self.w:
             raise ValueError("`w` must be specified for a PSO calibration run.")
 
         # restart must be 0 or 1
-        if self.restart is not None and self.restart not in (0, 1):
-            print(self.restart)
+        if self.restart not in (0, 1):
             raise ValueError("`restart` must be 0 or 1.")
 
         # save_output_iter must be 0 or 1
-        if self.save_output_iter is not None and self.save_output_iter not in (0, 1):
+        if self.save_output_iter not in (0, 1):
             raise ValueError("`save_output_iter` must be 0 or 1.")
 
         # save_plot_iter must be 0 or 1
-        if self.save_plot_iter is not None and self.save_plot_iter not in (0, 1):
+        if self.save_plot_iter not in (0, 1):
             raise ValueError("`save_plot_iter` must be 0 or 1.")
 
         return self
@@ -163,12 +162,10 @@ class DataFileConfig(StrictBaseModel):
     topmodel_bmi_dir: Optional[str] = None
     sac_sma_bmi_dir: Optional[str] = None
     lasam_bmi_dir: Optional[str] = None
-    lstm_bmi_dir: Optional[str] = None
     t_route_bmi_dir: Optional[str] = None
     noah_parameter_dir: Optional[str] = None
     ueb_parameter_dir: Optional[str] = None
     lasam_parameter_dir: Optional[str] = None
-    lstm_parameter_dir: Optional[str] = None
     sac_parameter_dir: Optional[str] = None
     snow_17_parameter_dir: Optional[str] = None
     attributes_file: str

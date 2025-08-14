@@ -21,6 +21,5 @@ modules_all = pd.DataFrame([('sloth', 'sloth', 'SLOTH', ['SLOTH'], False),
                             ('sac', 'sac-sma', 'sac', ['Rainfall_runoff'], True),
                             ('lasam', 'lasam', 'LASAM', ['Rainfall_runoff'], True),
                             ('topmodel', 'topmodel', 'TOPMODEL', ['Rainfall_runoff'], True),
-                            ('lstm', 'lstm', 'bmi_LSTM', ['Glacier_snow', 'Evapotranspiration', 'Rainfall_runoff'], False),
                             ('troute', 't-route', 'troute', ['Routing'], False)],
                            columns=['module', 'name_ui', 'name_config', 'process', 'calibratable'])
