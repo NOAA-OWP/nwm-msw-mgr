@@ -1,4 +1,4 @@
-from setuptools import setup, find_packages
+from setuptools import find_packages, setup
 
 setup(
     name="mswm",
@@ -6,11 +6,10 @@ setup(
     package_dir={"": "src"},
     packages=find_packages(where="src"),
     install_requires=[
-        'geopandas~=1.1.1',
-        'pandas~=2.3.1',
-        'netCDF4~=1.7.2',
-        'pydantic~=2.11.7',
-        'PyYAML~=6.0.2',
-        'setuptools~=5.6.0'
+        "geopandas~=1.1.1",
+        "pandas~=2.3.1",
+        "netCDF4==1.6.3",
+        "pydantic==2.11.4",
+        "PyYAML~=6.0.2"
     ],
 )
