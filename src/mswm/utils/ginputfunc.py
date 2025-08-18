@@ -2466,7 +2466,7 @@ def create_reg_realization_file(
             main_output_variable = "land_surface_water__runoff_depth"
 
         # Store catchment model configs
-        model_type_name = '_'.join([m1 for m1 in cat_mod if m1 not in ['sloth', 'troute']])
+        model_type_name = "bmi_multi"
         cat_configs = {"name": "bmi_multi",
                        "params": {"name": "bmi_multi", "model_type_name": model_type_name, "init_config": "",
                                   "allow_exceed_end_time": False, "fixed_time_step": False,
