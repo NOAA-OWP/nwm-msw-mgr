@@ -398,7 +398,7 @@ class RealizationBuilder:
         """
 
         # Retrieve general settings for calibration
-        algorithm = (self.conf2.get('optimization_algoritm', "") or "none").lower()
+        algorithm = (self.conf2.get('optimization_algorithm', "") or "none").lower()
         swarm_size = self.conf2['swarm_size']
         start_iteration = self.conf2.get('start_iteration') or 0
         number_iteration = self.conf2.get('number_iteration') or 0
