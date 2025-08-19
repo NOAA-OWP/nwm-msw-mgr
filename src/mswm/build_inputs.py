@@ -1281,7 +1281,7 @@ class RealizationBuilder:
 
         # Write realization file
         gfun.create_reg_realization_file(self.work_dir, self.lib_file, bmi_dir, self.forcing_path, self.realization_file,
-                                         self.time_period, rt_dict, self.output_dict, self.grp_to_cat_path, self.grp_to_form, self.grp_params)
+                                         self.time_period, rt_dict, self.output_dict, self.cat_to_grp, self.grp_to_form, self.grp_params)
 
     def _write_fcst_realization(self):
         """

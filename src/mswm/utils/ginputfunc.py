@@ -2635,8 +2635,8 @@ def create_reg_realization_file(
         grp_main[grp] = {}
         grp_main[grp]["formulations"] = [grp_configs]
 
-    # Set global forcing
-    g = {"global": {"forcing": {"file_pattern": ".*{{id}}.*.csv", "path": forcing_dir, "provider": "CsvPerFeature"}}}
+    # Set global
+    g = {}
 
     # time object
     t = {"time": {"start_time": time_period['run_time_period']['region'][0],
@@ -2648,6 +2648,10 @@ def create_reg_realization_file(
 
     # Set grouped formulations
     g.update({"formulation_groups": grp_main})
+
+    # Set forcing group
+    force_main = {"forcing_grp1": {"forcing": {"file_pattern": ".*{{id}}.*.csv", "path": forcing_dir, "provider": "CsvPerFeature"}}}
+    g.update({"forcing_groups": force_main})
 
     # Catchment groups
     cat_grps = {cat: {"formulations": grp, "forcing": "forcing_grp1"} for cat, grp in cat_to_grp.items()}
