@@ -2269,7 +2269,7 @@ def create_reg_realization_file(
         time_period: dict,
         rt_dict: dict,
         output_dict: dict,
-        grp_to_cat_path: dict,
+        cat_to_grp: dict,
         grp_to_form: dict,
         grp_params: dict
 ) -> None:
@@ -2285,7 +2285,7 @@ def create_reg_realization_file(
     time_period : simulation and evaluation time period
     rt_dict : routing model source file directory and configuration file
     output_dict: whether to output certain variables (currently SWE and soil moisture)
-    grp_to_cat_path: dictionary mapping regionalization groups to catchment csv filepaths
+    cat_to_grp: dictionary mapping catchments to regionalization groups
     grp_to_form: dictionary mapping regionalization groups to formulations
     grp_params: dictionary mapping regionalization groups to modules and their corresponding parameters
 
@@ -2647,7 +2647,7 @@ def create_reg_realization_file(
     g.update(rt_dict)
 
     # Set grouped formulations
-    g.update({"groups": grp_main})
+    g.update({"formulation_groups": grp_main})
 
     # Catchment groups
     cat_grps = {cat: {"formulations": grp, "forcing": "forcing_grp1"} for cat, grp in cat_to_grp.items()}
