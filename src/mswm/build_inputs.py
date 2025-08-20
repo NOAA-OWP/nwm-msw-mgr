@@ -1474,7 +1474,7 @@ class RealizationBuilder:
         objective_function = self.conf2.get('objective_function') or "none"
         save_output_iter = self.conf2.get('save_output_iter') or 0
         save_plot_iter = self.conf2.get('save_plot_iter') or 0
-        save_plot_iter_freq = self.conf2.get('save_lot_iter_freq') or 0
+        save_plot_iter_freq = self.conf2.get('save_plot_iter_freq') or 0
         streamflow_threshold = self.conf2.get('streamflow_threshold') or 0.0
         user_email = self.conf2.get('user_email') or ''
 
