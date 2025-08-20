@@ -2518,41 +2518,6 @@ def create_reg_realization_file(
         catmain[catID]["forcing"] = {"path": forcing_dir + "/" + catID + ".csv",
                                      "provider": "CsvPerFeature"}
 
-    # We do not need a formulation section in global to run the regionalization realization.
-    # If we want a global formulation, add this code back in
-
-    # # Combine configurations globally
-    # model_type_name = '_'.join([m1 for m1 in modules if m1 not in ['sloth', 'troute']])  # We could change this to instead by "regionalization_X"
-    # gbmain = {"name": "bmi_multi",
-    #           "params": {"name": "bmi_multi", "model_type_name": model_type_name, "init_config": "",
-    #                      "allow_exceed_end_time": False, "fixed_time_step": False,
-    #                      "uses_forcing_file": False,
-    #                      "main_output_variable": main_output_variable,
-    #                      "modules": [{}]}}
-
-    # # Output section for global
-    # output_config = {'output_variables': [], 'output_header_fields': []}
-    # for key, value in output_dict.items():
-    #     if key == 'output_swe' and var_maps['output']['swe_out'] != '':
-    #         if value:
-    #             output_config['output_variables'] = output_config['output_variables'] + [var_maps['output']['swe_out']]
-    #             output_config['output_header_fields'] = output_config['output_header_fields'] + [var_maps['output']['swe_out_header']]
-
-    #     elif key == 'output_sm' and var_maps['output']['sm_out'] != '':
-    #         if value:
-    #             output_config['output_variables'] = output_config['output_variables'] + var_maps['output']['sm_out']
-    #             output_config['output_header_fields'] = output_config['output_header_fields'] + var_maps['output']['sm_out_header']
-    # if output_config['output_variables'] != []:
-    #     gbmain['params']['output_variables'] = output_config['output_variables']
-    # if output_config['output_header_fields'] != []:
-    #     gbmain['params']['output_header_fields'] = output_config['output_header_fields']
-
-    # # If forcings are provided in each catchment section, we don't need a global forcing
-    # global configuration
-    # g = {"global": {"formulations": [gbmain],
-    #                 "forcing": {"file_pattern": ".*{{id}}.*.csv", "path": forcing_dir, "provider": "CsvPerFeature"}}}
-    # g = {"global": {"forcing": {"file_pattern": ".*{{id}}.*.csv", "path": forcing_dir, "provider": "CsvPerFeature"}}}
-
     # Initialize global dictionary
     g = {}
 
@@ -2864,7 +2829,7 @@ def create_realization_file(
         main_output_variable = "land_surface_water__runoff_depth"
 
     # Combine configurations
-    model_type_name = '_'.join([m1 for m1 in modules if m1 not in ['sloth', 'troute']])
+    model_type_name = "bmi_multi"
     gbmain = {"name": "bmi_multi",
               "params": {"name": "bmi_multi", "model_type_name": model_type_name, "init_config": "",
                          "allow_exceed_end_time": False, "fixed_time_step": False,
