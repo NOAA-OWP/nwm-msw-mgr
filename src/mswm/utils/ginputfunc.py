@@ -1191,11 +1191,11 @@ def create_lstm_input(
     # Create catchment specific LSTM bmi config files from scratch
     for catID in catids:
 
-        area = str(df_divide.loc[catID]['areasqkm'])
-        slope = str(dfa.loc[catID]['mean.slope'])
-        elev = str(dfa.loc[catID]['mean.elevation'])
-        lat = str(dfa.loc[catID]['centroid_y'])
-        lon = str(dfa.loc[catID]['centroid_x'])
+        area = float(df_divide.loc[catID]['areasqkm'])
+        slope = float(dfa.loc[catID]['mean.slope'])
+        elev = float(dfa.loc[catID]['mean.elevation'])
+        lat = float(dfa.loc[catID]['centroid_y'])
+        lon = float(dfa.loc[catID]['centroid_x'])
 
         namelist = {'area_sqkm': area,
                     'basin_id': catID,
@@ -1214,7 +1214,7 @@ def create_lstm_input(
         input_file = os.path.join(lstm_input_dir, catID + '.yml')
         try:
             with open(input_file, "w") as f:
-                yaml.dump(namelist, f, default_flow_style=False, Dumper=QuotedDumper)
+                yaml.dump(namelist, f, default_flow_style=False)
         except yaml.YAMLError as e:
             logger.critical(f"Error writing LSTM yaml to {input_file}: {e}")
             raise
