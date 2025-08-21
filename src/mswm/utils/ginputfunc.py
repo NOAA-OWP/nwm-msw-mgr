@@ -22,27 +22,29 @@ import geopandas as gpd
 import pandas as pd
 import yaml
 
-from tempfile import mkstemp
 from mswm.utils import settings
 
 
 logger = logging.getLogger(__name__)
 
 
-def replace_path(source_file_path, par_path, data_type_codes):
-    fh, target_file_path = mkstemp()
-    with open(target_file_path, 'w') as target_file:
-        with open(source_file_path, 'r') as source_file:
-            data = source_file.readlines()
-            for i in range(2, len(data), 3):
-                if data[i][:1] in data_type_codes:
-                    if data[i + 1][:1] != '/':
-                        data[i + 1] = par_path + '/' + data[i + 1]
+class QuotedDumper(yaml.SafeDumper):
+    pass
 
-            target_file.writelines(data)
 
-    os.remove(source_file_path)
-    shutil.move(target_file_path, source_file_path)
+class UnquotedDumper(yaml.SafeDumper):
+    pass
+
+
+def quoted_str_presenter(dumper, data):
+    return dumper.represent_scalar('tag:yaml.org,2002:str', data, style="'")
+
+
+QuotedDumper.add_representer(str, quoted_str_presenter)
+
+
+def is_probably_regex(pattern):
+    return any(c in pattern for c in ['^', '$', '.', '(', '[', '|', '\\'])
 
 
 __all__ = [
@@ -58,6 +60,7 @@ __all__ = [
     'create_pet_input',
     'create_lasam_input',
     'change_lasam_input',
+    'create_lstm_input',
     'change_smp_input',
     'change_sft_input',
     'change_topmodel_input',
@@ -936,6 +939,288 @@ def create_sac_input(
                       ]
         with open(input_file, "w") as f:
             f.writelines('\n'.join(input_list))
+
+
+def update_lstm_parameters(
+    input_config_path: str,
+    output_dir: str,
+    params_to_remove=None,
+    params_to_update=None
+) -> None:
+
+    """
+    Reads a YAML config file, removes specified parameters, updates others,
+    and writes the result to a new config.yaml in a given output directory.
+
+    :param input_config_path: Path to the original config.yaml
+    :param output_dir: Directory where the modified config will be saved
+    :param params_to_remove: List of top-level parameters to remove
+    :param params_to_update: Dict of parameters to update or add
+    """
+    import re
+    from fnmatch import fnmatch
+
+    params_to_remove = params_to_remove or []
+    params_to_update = params_to_update or {}
+
+    # Read the original config
+    try:
+        with open(input_config_path, 'r') as f:
+            config = yaml.safe_load(f)
+    except yaml.YAMLError as e:
+        logger.critical(f"Error parsing LSTM yaml config at {input_config_path}: {e}")
+        raise
+    except FileNotFoundError:
+        logger.critical(f"LSTM yaml config file not found: {input_config_path}")
+        raise
+
+    # Remove specified parameters
+    keys_to_remove = set()
+    for key in config:
+        for pattern in params_to_remove:
+            try:
+                if fnmatch(key, pattern):
+                    keys_to_remove.add(key)
+                elif is_probably_regex(pattern) and re.fullmatch(pattern, key):
+                    keys_to_remove.add(key)
+            except re.error as regex_error:
+                logger.info(f"Skipping invalid regex pattern: '{pattern}' - {regex_error}")
+    for key in keys_to_remove:
+        config.pop(key, None)
+
+    # Update or add new parameters
+    config.update(params_to_update)
+
+    # Ensure output directory exists
+    os.makedirs(output_dir, exist_ok=True)
+    output_config_path = os.path.join(output_dir, "config.yml")
+
+    # Write the modified config
+    try:
+        with open(output_config_path, 'w') as f:
+            yaml.dump(config, f, default_flow_style=False)
+    except yaml.YAMLError as e:
+        logger.critical(f"Error writing LSTM yaml to {output_config_path}: {e}")
+        raise
+    except OSError as e:
+        logger.critical(f"Error writing LSTM yaml to {output_config_path}: {e}")
+        raise
+
+    logger.info(f"LSTM config written to: {output_config_path}")
+
+
+def create_symlinks(src_file_list, src_dir, dst_dir):
+
+    missing_input_files = list()
+
+    for data_file in src_file_list:
+        ffile = os.path.join(src_dir, data_file)
+        # Make sure we have the file
+        if not os.path.exists(ffile):
+            logger.info(f'Input file {ffile} does not exist')
+            missing_input_files.append(ffile)
+        else:
+            target = os.path.join(dst_dir, os.path.basename(ffile))
+            if not os.path.exists(target):
+                os.symlink(ffile, target)
+
+    if missing_input_files:
+        try:
+            raise Exception(f'Missing LSTM input files - {missing_input_files}')
+        except Exception as e:
+            logger.critical(e)
+            raise
+
+
+def create_lstm_config(
+        param_dir_source: Union[str, Path],
+        lstm_input_dir: Union[str, Path]
+) -> None:
+    """
+    Create LSTM config yaml files from existing static files
+    Parameters
+    ----------
+    param_dir_source: direcetory for static lstm files
+    lstm_input_dir: directory for the existing lstm bmi configuration file
+
+    Returns
+    ----------
+    None
+
+    """
+    # create the config files
+    lstm_data_dir = os.path.join(param_dir_source, "ngen_files/data/lstm")
+    lstm_train_dir = os.path.join(param_dir_source, "trained_neuralhydrology_models/nh_AORC_hourly_slope_elev_precip_temp_seq999_seed101_2801_191806")
+    run_dir = lstm_input_dir
+    lstm_train_data_dir = os.path.join(lstm_train_dir, 'train_data')
+    train_data_dir = os.path.join(run_dir, 'train_data')
+    if not os.path.isdir(lstm_train_data_dir):
+        try:
+            raise ValueError(f"LSTM source path '{lstm_train_data_dir}' must be an existing directory.")
+        except Exception as e:
+            logger.critical(e)
+            raise
+
+    if os.path.islink(train_data_dir) or os.path.exists(train_data_dir):
+        os.unlink(train_data_dir)
+
+    os.symlink(lstm_train_data_dir, train_data_dir, target_is_directory=True)
+
+    # Create config.yml
+    params_to_remove = ['test_*', 'train_*', 'validation_*', '*_dir']
+    params_to_update = {
+        "run_dir": run_dir
+    }
+    update_lstm_parameters(
+        input_config_path=os.path.join(lstm_train_dir, 'config.yml'),
+        output_dir=lstm_input_dir,
+        params_to_remove=params_to_remove,
+        params_to_update=params_to_update
+    )
+
+    data_files = ['initial_states.csv', 'input_scaling.csv', 'lstm_mean_std.csv', 'sugar_creek_trained.pt']
+    create_symlinks(data_files, lstm_data_dir, lstm_input_dir)
+    data_files = ['model_epoch009.pt', 'optimizer_state_epoch009.pt']
+    create_symlinks(data_files, lstm_train_dir, lstm_input_dir)
+
+
+def change_lstm_input(
+        catids: List[str],
+        param_dir_source: Union[str, Path],
+        lstm_input_dir: Union[str, Path],
+        lstm_bmi_dir: Union[str, Path],
+
+) -> None:
+
+    """
+    Create BMI configuration file for LSTM from existing EDFS files
+    Parameters
+    ----------
+    catids: catchment IDs in the basin
+    param_dir_source: direcetory for static lstm files
+    lstm_input_dir: directory for the existing lstm bmi configuration file
+    lstm_bmi_dir: target directory for bmi configuration file output
+
+    Returns
+    ----------
+    None
+
+    """
+    # Create input directory
+    os.makedirs(lstm_input_dir, exist_ok=True)
+
+    # Create static LSTM config yaml files
+    create_lstm_config(param_dir_source, lstm_input_dir)
+
+    # Create catchment specific BMI config files from EDFS files
+    for catID in catids:
+        edfs_bmi_file = os.path.join(lstm_bmi_dir, catID + '.yml')
+        if not os.path.isfile(edfs_bmi_file):
+            try:
+                raise FileNotFoundError(f"Required LSTM bmi file not found: {edfs_bmi_file}")
+            except Exception as e:
+                logger.critical(e)
+                raise
+
+        try:
+            with open(edfs_bmi_file, 'r') as f:
+                config = yaml.safe_load(f)
+        except yaml.YAMLError as e:
+            logger.critical(f"Error parsing LSTM yaml config at {edfs_bmi_file}: {e}")
+            raise
+        except FileNotFoundError:
+            logger.critical(f"LSTM yaml config file not found: {edfs_bmi_file}")
+            raise
+
+        params_to_update = {
+            "train_cfg_file": os.path.join(lstm_input_dir, 'config.yml'),
+            'time_step': '1 hour',
+            'initial_state': 'zero',
+            'basin_name': catID,
+            'basin_id': catID,
+            'verbose': 1,
+        }
+
+        config.update(params_to_update)
+        input_file = os.path.join(lstm_input_dir, catID + '.yml')
+        try:
+            with open(input_file, "w") as f:
+                yaml.dump(config, f, default_flow_style=False, Dumper=QuotedDumper)
+        except yaml.YAMLError as e:
+            logger.critical(f"Error writing LSTM yaml to {input_file}: {e}")
+            raise
+        except OSError as e:
+            logger.critical(f"Error writing LSTM yaml to {input_file}: {e}")
+            raise
+
+
+def create_lstm_input(
+        catids: List[str],
+        dfa: Union[str, Path],
+        gpkg_file: Union[str, Path],
+        param_dir_source: Union[str, Path],
+        lstm_input_dir: Union[str, Path],
+) -> None:
+
+    """
+    Create BMI configuration file for LSTM from existing EDFS files
+    Parameters
+    ----------
+    catids: catchment IDs in the basin
+    dfa: dataframe containing model parameter attributes
+    gpkg_file: GeoPackage hydrofabric file
+    param_dir_source: direcetory for static lstm files
+    lstm_input_dir: target directory for bmi configuration file output (lstm_input)
+    lstm_bmi_dir: directory for the existing lstm bmi configuration file
+
+    Returns
+    ----------
+    None
+
+    """
+    # Create input directory
+    os.makedirs(lstm_input_dir, exist_ok=True)
+
+    # Read geopackage divides
+    df_divide = gpd.read_file(gpkg_file, layer="divides")
+    df_divide.set_index('divide_id', inplace=True)
+
+    # Create static LSTM config yaml files
+    create_lstm_config(param_dir_source, lstm_input_dir)
+
+    # Create catchment specific LSTM bmi config files from scratch
+    for catID in catids:
+
+        area = float(df_divide.loc[catID]['areasqkm'])
+        slope = float(dfa.loc[catID]['mean.slope'])
+        elev = float(dfa.loc[catID]['mean.elevation'])
+        lat = float(dfa.loc[catID]['centroid_y'])
+        lon = float(dfa.loc[catID]['centroid_x'])
+
+        namelist = {'area_sqkm': area,
+                    'basin_id': catID,
+                    'basin_name': catID,
+                    'elev_mean': elev,
+                    'initial_state': 'zero',
+                    'lat': lat,
+                    'lon': lon,
+                    'slope_mean': slope,
+                    'time_step': '1 hour',  # There's a disagreement between naming conventions between EDFS and createInputs, unclear which is used
+                    'timestep': '1 hour',
+                    'train_cfg_file': os.path.join(lstm_input_dir, 'config.yml'),
+                    'verbose': '1'}
+
+        # Write config to file
+        input_file = os.path.join(lstm_input_dir, catID + '.yml')
+        try:
+            with open(input_file, "w") as f:
+                yaml.dump(namelist, f, default_flow_style=False)
+        except yaml.YAMLError as e:
+            logger.critical(f"Error writing LSTM yaml to {input_file}: {e}")
+            raise
+        except OSError as e:
+            logger.critical(f"Error writing LSTM yaml to {input_file}: {e}")
+            raise
 
 
 def change_sac_snow17_input(
@@ -1914,8 +2199,6 @@ def create_reg_realization_file(
     None
     """
 
-    # cat_to_form: dict
-
     # Create symlinks for libraries
     lib_mod = {}
     for key, value in lib_file.items():
@@ -2156,8 +2439,34 @@ def create_reg_realization_file(
             # module output variable for input to t-route
             main_output_variable = "total_discharge"
 
+        if 'lstm' in cat_mod:
+            model_configs['lstm'] = {"name": "bmi_python",
+                                     "params": {"python_type": "lstm.bmi_lstm.bmi_LSTM",
+                                                "model_type_name": get_model_type_name('lstm'),
+                                                "main_output_variable": "land_surface_water__runoff_depth",
+                                                "init_config": os.path.join(bmi_dir['lstm'], catID + '.yml'),
+                                                "allow_exceed_end_time": True,
+                                                "uses_forcing_file": False}}
+
+            # variable name mapping section
+            variables_names_map = dict()
+            variables_names_map["streamflow_cms"] = "land_surface_water__runoff_volume_flux",
+            variables_names_map["pytorch_model_path"] = os.path.join(bmi_dir['lstm'], "sugar_creek_trained.pt"),
+            variables_names_map["normalization_path"] = os.path.join(bmi_dir['lstm'], "input_scaling.csv"),
+            variables_names_map["initial_state_path"] = os.path.join(bmi_dir['lstm'], "initial_states.csv"),
+            variables_names_map["useGPU"] = False
+
+            var_maps = dict()
+            var_maps['input'] = variables_names_map
+            var_maps['output'] = dict()
+            var_maps['output']['swe_out'] = ''
+            var_maps['output']['sm_out'] = ''
+
+            # module output variable for input to t-route
+            main_output_variable = "land_surface_water__runoff_depth"
+
         # Store catchment model configs
-        model_type_name = '_'.join([m1 for m1 in cat_mod if m1 not in ['sloth', 'troute']])
+        model_type_name = "bmi_multi"
         cat_configs = {"name": "bmi_multi",
                        "params": {"name": "bmi_multi", "model_type_name": model_type_name, "init_config": "",
                                   "allow_exceed_end_time": False, "fixed_time_step": False,
@@ -2208,41 +2517,6 @@ def create_reg_realization_file(
         # Update forcing file path for catchment
         catmain[catID]["forcing"] = {"path": forcing_dir + "/" + catID + ".csv",
                                      "provider": "CsvPerFeature"}
-
-    # We do not need a formulation section in global to run the regionalization realization.
-    # If we want a global formulation, add this code back in
-
-    # # Combine configurations globally
-    # model_type_name = '_'.join([m1 for m1 in modules if m1 not in ['sloth', 'troute']])  # We could change this to instead by "regionalization_X"
-    # gbmain = {"name": "bmi_multi",
-    #           "params": {"name": "bmi_multi", "model_type_name": model_type_name, "init_config": "",
-    #                      "allow_exceed_end_time": False, "fixed_time_step": False,
-    #                      "uses_forcing_file": False,
-    #                      "main_output_variable": main_output_variable,
-    #                      "modules": [{}]}}
-
-    # # Output section for global
-    # output_config = {'output_variables': [], 'output_header_fields': []}
-    # for key, value in output_dict.items():
-    #     if key == 'output_swe' and var_maps['output']['swe_out'] != '':
-    #         if value:
-    #             output_config['output_variables'] = output_config['output_variables'] + [var_maps['output']['swe_out']]
-    #             output_config['output_header_fields'] = output_config['output_header_fields'] + [var_maps['output']['swe_out_header']]
-
-    #     elif key == 'output_sm' and var_maps['output']['sm_out'] != '':
-    #         if value:
-    #             output_config['output_variables'] = output_config['output_variables'] + var_maps['output']['sm_out']
-    #             output_config['output_header_fields'] = output_config['output_header_fields'] + var_maps['output']['sm_out_header']
-    # if output_config['output_variables'] != []:
-    #     gbmain['params']['output_variables'] = output_config['output_variables']
-    # if output_config['output_header_fields'] != []:
-    #     gbmain['params']['output_header_fields'] = output_config['output_header_fields']
-
-    # # If forcings are provided in each catchment section, we don't need a global forcing
-    # global configuration
-    # g = {"global": {"formulations": [gbmain],
-    #                 "forcing": {"file_pattern": ".*{{id}}.*.csv", "path": forcing_dir, "provider": "CsvPerFeature"}}}
-    # g = {"global": {"forcing": {"file_pattern": ".*{{id}}.*.csv", "path": forcing_dir, "provider": "CsvPerFeature"}}}
 
     # Initialize global dictionary
     g = {}
@@ -2528,8 +2802,34 @@ def create_realization_file(
         # module output variable for input to t-route
         main_output_variable = "total_discharge"
 
+    if 'lstm' in modules:
+        model_configs['lstm'] = {"name": "bmi_python",
+                                 "params": {"python_type": "lstm.bmi_lstm.bmi_LSTM",
+                                            "model_type_name": get_model_type_name('lstm'),
+                                            "main_output_variable": "land_surface_water__runoff_depth",
+                                            "init_config": os.path.join(bmi_dir['lstm'], '{{id}}.yml'),
+                                            "allow_exceed_end_time": True,
+                                            "uses_forcing_file": False}}
+
+        # variable name mapping section
+        variables_names_map = dict()
+        variables_names_map["streamflow_cms"] = "land_surface_water__runoff_volume_flux",
+        variables_names_map["pytorch_model_path"] = os.path.join(bmi_dir['lstm'], "sugar_creek_trained.pt"),
+        variables_names_map["normalization_path"] = os.path.join(bmi_dir['lstm'], "input_scaling.csv"),
+        variables_names_map["initial_state_path"] = os.path.join(bmi_dir['lstm'], "initial_states.csv"),
+        variables_names_map["useGPU"] = False
+
+        var_maps = dict()
+        var_maps['input'] = variables_names_map
+        var_maps['output'] = dict()
+        var_maps['output']['swe_out'] = ''
+        var_maps['output']['sm_out'] = ''
+
+        # module output variable for input to t-route
+        main_output_variable = "land_surface_water__runoff_depth"
+
     # Combine configurations
-    model_type_name = '_'.join([m1 for m1 in modules if m1 not in ['sloth', 'troute']])
+    model_type_name = "bmi_multi"
     gbmain = {"name": "bmi_multi",
               "params": {"name": "bmi_multi", "model_type_name": model_type_name, "init_config": "",
                          "allow_exceed_end_time": False, "fixed_time_step": False,
@@ -2645,28 +2945,33 @@ def create_calib_config_file(
                 logger.critical(e)
                 raise
 
-    if len(df_params) == 0:
-        try:
-            raise Exception(f'No calibratable parameters found for the list of modules: {modules}')
-        except Exception as e:
-            logger.critical(e)
-            raise
-
-    df_params.set_index('param', inplace=True)
-    calib_params = df_params.groupby('model').groups
-
     params_range_dict = {}
-    for k, v in calib_params.items():
-        params_range = []
-        for m in v:
-            params_range.append({'name': m, 'min': float(df_params.query('model==@k').loc[m]['min']),
-                                 'max': float(df_params.query('model==@k').loc[m]['max']),
-                                 'init': float(df_params.query('model==@k').loc[m]['init'])})
-        params_range_dict.update({k: params_range})
-
     # Create configuration
     basin_yaml = {'general': general_dict}
-    basin_yaml.update(params_range_dict)
+
+    if 'lstm' not in modules:
+        if len(df_params) == 0:
+            try:
+                raise Exception(f'No calibratable parameters found for the list of modules: {modules}')
+            except Exception as e:
+                logger.critical(e)
+                raise
+
+        df_params.set_index('param', inplace=True)
+        calib_params = df_params.groupby('model').groups
+
+        params_range_dict = {}
+        for k, v in calib_params.items():
+            params_range = []
+            for m in v:
+                params_range.append({'name': m, 'min': float(df_params.query('model==@k').loc[m]['min']),
+                                     'max': float(df_params.query('model==@k').loc[m]['max']),
+                                     'init': float(df_params.query('model==@k').loc[m]['init'])})
+            params_range_dict.update({k: params_range})
+
+        # Create configuration
+        basin_yaml = {'general': general_dict}
+        basin_yaml.update(params_range_dict)
 
     # Create symlink for ngen executable
     ngen_file_link = os.path.join(workdir, 'Input/' + os.path.basename(model_dict['binary'])[0:4])
@@ -2676,7 +2981,10 @@ def create_calib_config_file(
 
     model_dict['binary'] = ngen_file_link
     basin_yaml['model'] = model_dict
-    basin_yaml['model']['params'] = params_range_dict
+    if 'lstm' not in modules:
+        basin_yaml['model']['params'] = params_range_dict
+    else:
+        basin_yaml['model']['type'] = 'nocalib'
 
     # Save configuration into yaml file
     with open(config_yaml_file, 'w') as file:
