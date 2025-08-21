@@ -785,41 +785,46 @@ class RealizationBuilder:
         """
         Extract forcing files and symlink to input directory
         """
-        # Create forcing directory
-        missing_catchment_files = []
-        self.forcing_path = os.path.join(self.input_dir, 'forcing')
-        try:
-            os.makedirs(self.forcing_path, exist_ok=True)
-        except Exception as e:
-            logger.critical(f"Invalid forcing directory: {e}. Check `main_dir` variable")
-            raise
+        # Retrieve forcing_dir
+        self.forcing_dir = (self.conf3.get('forcing_dir', "") or "none")
 
-        # Read catchment ids from geopackage
-        try:
-            self.catids = gpd.read_file(self.gpkg_file, layer='divides')['divide_id'].tolist()
-        except Exception as e:
-            logger.critical(f"Error while reading geopackage file: {e}")
-            raise
+        if self.forcing_dir != "none":
 
-        # Symlink forcing files
-        for catID in self.catids:
-            ffile = os.path.join(self.conf3['forcing_dir'], catID + '.csv')
-            # Make sure we have the file
-            if not os.path.exists(ffile):
-                logger.info(f'Forcing file {ffile} does not exist')
-                missing_catchment_files.append(ffile)
-            else:
-                target = os.path.join(self.forcing_path, os.path.basename(ffile))
-                if not os.path.exists(target):
-                    os.symlink(ffile, target)
-        if missing_catchment_files:
+            # Create forcing directory
+            missing_catchment_files = []
+            self.forcing_path = os.path.join(self.input_dir, 'forcing')
             try:
-                raise Exception(f"Missing catchment files in forcing data: {self.conf3['forcing_dir']}")
+                os.makedirs(self.forcing_path, exist_ok=True)
             except Exception as e:
-                logger.critical(e)
+                logger.critical(f"Invalid forcing directory: {e}. Check `main_dir` variable")
                 raise
 
-        logger.info(f"Extracted forcing data from: {self.conf3['forcing_dir']}")
+            # Read catchment ids from geopackage
+            try:
+                self.catids = gpd.read_file(self.gpkg_file, layer='divides')['divide_id'].tolist()
+            except Exception as e:
+                logger.critical(f"Error while reading geopackage file: {e}")
+                raise
+
+            # Symlink forcing files
+            for catID in self.catids:
+                ffile = os.path.join(self.forcing_dir, catID + '.csv')
+                # Make sure we have the file
+                if not os.path.exists(ffile):
+                    logger.info(f'Forcing file {ffile} does not exist')
+                    missing_catchment_files.append(ffile)
+                else:
+                    target = os.path.join(self.forcing_path, os.path.basename(ffile))
+                    if not os.path.exists(target):
+                        os.symlink(ffile, target)
+            if missing_catchment_files:
+                try:
+                    raise Exception(f"Missing catchment files in forcing data: {self.forcing_dir}")
+                except Exception as e:
+                    logger.critical(e)
+                    raise
+
+            logger.info(f"Extracted forcing data from: {self.forcing_dir}")
 
     def _extract_streamflow_obs(self):
         """
@@ -1011,7 +1016,7 @@ class RealizationBuilder:
                         gfun.create_cfe_input(self.catids, ['cfes'] + [self.modules], self.attr_file, cfe_dir, self.run_type)
 
                     # Create sft input
-                    gfun.create_sft_smp_input(self.catids, self.modules, self.attr_parquet, cfe_dir, self.conf3['forcing_dir'], sft_dir, smp_dir, self.run_type)
+                    gfun.create_sft_smp_input(self.catids, self.modules, self.attr_parquet, cfe_dir, self.forcing_dir, sft_dir, smp_dir, self.run_type)
 
                 elif m1 == 'smp':
                     continue

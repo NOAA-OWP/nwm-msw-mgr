@@ -147,7 +147,11 @@ class DataFileConfig(StrictBaseModel):
     """
     Input.config DataFile section requirement
     """
-    forcing_dir: str
+    forcing_dir: Optional[str] = None
+    forcing_dir: Optional[str] = None
+    forecast_cycle: Optional[str] = None
+    geogrid_file: Optional[str] = None
+    forcing_template_dir: Optional[str] = None
     obs_dir: Optional[str] = None
     nwmretro_file: Optional[str] = None
     hydrofab_file: str
@@ -190,9 +194,9 @@ class ParallelConfig(StrictBaseModel):
     """
     Input.config Parallel section requirement
     """
-    parallel_ngen_exe: str
-    partition_generator_exe: str
-    nprocs: int
+    parallel_ngen_exe: Optional[str] = None
+    partition_generator_exe: Optional[str] = None
+    nprocs: Optional[int] = None
 
 
 class InputConfig(StrictBaseModel):
@@ -201,22 +205,23 @@ class InputConfig(StrictBaseModel):
     """
     General: GeneralConfig
     Regionalization: Optional[RegionConfig] = None
-    Calibration: Optional[CalibConfig] = None
+    Calibration: Optional[dict] = None
     DataFile: DataFileConfig
     Parallel: Optional[ParallelConfig] = None
 
     # Check optional sections are present
-    # Root_validator skips if another value fails
+    # only validate sections that are required for run type
     @model_validator(mode="after")
-    def check_required_sections(self):
-        run_type = self.General.run_type
+    def check_calibration(self):
+        if self.General.run_type == "calibration":
+            if self.Calibration is None:
+                raise ValueError("Calibration section is required for calibration run.")
+            self.Calibration = CalibConfig(**self.Calibration)
+        return self
 
-        # Regionalization section required for regionalization run
-        if run_type == "regionalization" and self.Regionalization is None:
-            raise ValueError("Regionalization section is required for regionalization runs.")
-
-        # Calibration section required for calibration run
-        if run_type == "calibration" and self.Calibration is None:
-            raise ValueError("Calibration section is required for calibration runs.")
-
+    def check_regionalization(self):
+        if self.General.run_type == "regionalization":
+            if self.Regionalization is None:
+                raise ValueError("Regionalization section is required for calibration run.")
+            self.Regionalization = RegionConfig(**self.Regionalization)
         return self
