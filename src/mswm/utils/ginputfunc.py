@@ -2632,8 +2632,8 @@ def create_reg_realization_file(
 
         # Group formulation
         grp_configs["params"]["modules"] = [model_configs[m1] for m1 in grp_mod if m1 != 'troute']
-        grp_main[grp] = {}
-        grp_main[grp]["formulations"] = [grp_configs]
+        grp_main[grp] = [grp_configs]
+        # grp_main[grp]["formulations"] = [grp_configs]
 
     # Set global
     g = {}
@@ -2650,7 +2650,7 @@ def create_reg_realization_file(
     g.update({"formulation_groups": grp_main})
 
     # Set forcing group
-    force_main = {"forcing_grp1": {"forcing": {"file_pattern": ".*{{id}}.*.csv", "path": forcing_dir, "provider": "CsvPerFeature"}}}
+    force_main = {"forcing_grp1": {"file_pattern": ".*{{id}}.*.csv", "path": forcing_dir, "provider": "CsvPerFeature"}}
     g.update({"forcing_groups": force_main})
 
     # Catchment groups
