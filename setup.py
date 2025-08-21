@@ -10,6 +10,6 @@ setup(
         "pandas~=2.3.1",
         "netCDF4==1.6.3",
         "pydantic==2.11.4",
-        "PyYAML~=6.0.2"
-    ],
+        "PyYAML~=6.0.2",
+        "numpy < 2.0, >= 1.23"]
 )
