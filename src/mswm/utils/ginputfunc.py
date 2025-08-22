@@ -66,6 +66,7 @@ __all__ = [
     'change_topmodel_input',
     'create_topmodel_input',
     'create_troute_config',
+    'update_forcing_config',
     'create_reg_realization_file',
     'create_realization_file',
     'create_calib_config_file',
@@ -2305,6 +2306,42 @@ def create_troute_config(
         yaml.dump(config, file, sort_keys=False, default_flow_style=False, indent=4)
 
 
+def update_forcing_config(
+        forcing_template: dict,
+        geogrid_file: str,
+        start_period: str,
+        forcing_config_dir: Path,
+        forcing_config_file: Path
+) -> None:
+    """ update bmi forcing engine config yaml file
+
+    Parameters
+    ----------
+    forcing_template : dictionary of forcing bmi config template file
+    geogrid_file: path to geogrid file
+    start_period: start time for model run
+    forcing_config_dir: directory path for forcing config file
+    forcing_config_dir: output path for forcing config file
+
+    Returns
+    ----------
+    None
+    """
+    # Create directory for storing config file
+    os.makedirs(forcing_config_dir, exist_ok=True)
+
+    # Format start_period for config file
+    start_period = datetime.datetime.strptime(start_period, '%Y-%m-%d %H:%M:%S').strftime('%Y%m%d%H%M')
+
+    # Update forcing_template with dynamic variables
+    forcing_template['RefcstBDateProc'] = start_period
+    forcing_template['GeogridIn'] = geogrid_file
+
+    # Write forcing config yaml file
+    with open(forcing_config_file, "w") as file:
+        yaml.dump(forcing_template, file, sort_keys=False, default_flow_style=False)
+
+
 def var_mapping(
         modules: List[str],
         pet_in: str,
@@ -2386,7 +2423,9 @@ def create_reg_realization_file(
         workdir: Union[str, Path],
         lib_file: dict,
         bmi_dir: dict,
+        forcing_provider: str,
         forcing_dir: Union[str, Path],
+        forcing_config_file: Union[str, Path],
         realization_file: Union[str, Path],
         time_period: dict,
         rt_dict: dict,
@@ -2402,7 +2441,9 @@ def create_reg_realization_file(
     workdir : basin directory for storing all the files
     lib_file : library files for different modules
     bmi_dir : directory for different model or module to store BMI files
-    forcing_dir : directory to store foricng files
+    forcing_provider: forcing provider option (csv or bmi)
+    forcing_dir : directory to store forcing files
+    forcing_config_file: path to forcing engine configuration file
     realization_file : model realization configuration file
     time_period : simulation and evaluation time period
     rt_dict : routing model source file directory and configuration file
@@ -2738,7 +2779,15 @@ def create_reg_realization_file(
         grp_configs["params"]["modules"] = [model_configs[m1] for m1 in grp_mod if m1 != 'troute']
         grp_main[grp] = [grp_configs]
 
-    # Set global
+        # Update forcing file path for catchment
+        forcing_map = {
+            "csv": {"forcing": {"file_pattern": ".*{{id}}.*.csv", "path": forcing_dir, "provider": "CsvPerFeature"}},
+            "bmi": {"forcing": {"path": forcing_dir, "provider": "ForcingsEngineLumpedDataProvide", "params": {"init_config": str(forcing_config_file)}}}
+        }
+
+        catmain["global"]["forcing"] = forcing_map[forcing_provider]
+
+    # Initialize global dictionary
     g = {}
 
     # time object
@@ -2771,7 +2820,9 @@ def create_realization_file(
         workdir: Union[str, Path],
         lib_file: dict,
         bmi_dir: dict,
+        forcing_provider: str,
         forcing_dir: Union[str, Path],
+        forcing_config_file: Union[str, Path],
         realization_file: Union[str, Path],
         modules: List[str],
         time_period: dict,
@@ -2787,7 +2838,9 @@ def create_realization_file(
     workdir : basin directory for storing all the files
     lib_file : library files for different modules
     bmi_dir : directory for different model or module to store BMI files
-    forcing_dir : directory to store foricng files
+    forcing_provider: forcing provider option (csv or bmi)
+    forcing_dir : directory to store forcing files
+    forcing_config_file: path to forcing engine configuration file
     realization_file : model realization configuration file
     model: model and module combination
     time_period : simulation and evaluation time period
@@ -3103,7 +3156,15 @@ def create_realization_file(
 
     # global configuration
     g = {"global": {"formulations": [gbmain],
-                    "forcing": {"file_pattern": ".*{{id}}.*.csv", "path": forcing_dir, "provider": "CsvPerFeature"}}}
+                    "forcing": {}}}
+
+    # Set forcing configuration
+    forcing_map = {
+        "csv": {"forcing": {"file_pattern": ".*{{id}}.*.csv", "path": forcing_dir, "provider": "CsvPerFeature"}},
+        "bmi": {"forcing": {"path": forcing_dir, "provider": "ForcingsEngineLumpedDataProvide", "params": {"init_config": str(forcing_config_file)}}}
+    }
+
+    g["global"]["forcing"] = forcing_map[forcing_provider]
 
     # time object
     t = {"time": {"start_time": time_period['run_time_period'][run_type][0],

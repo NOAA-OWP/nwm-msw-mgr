@@ -106,7 +106,6 @@ class RealizationBuilder:
         """
         Read yaml-based configuration file from previous ngen-cal run
         """
-        import yaml
         # Confirm config yaml file exists
         self.config_yaml = Path(self.input_path).absolute()
         if not self.config_yaml.exists():
@@ -1311,7 +1310,7 @@ class RealizationBuilder:
         rt_dict = {"routing": {"t_route_config_file_with_path": routing_config_file}}
 
         # Write realization file
-        gfun.create_realization_file(self.work_dir, self.lib_file, bmi_dir, self.forcing_path, self.realization_file,
+        gfun.create_realization_file(self.work_dir, self.lib_file, bmi_dir, self.forcing_provider, self.forcing_path, self.forcing_config_file, self.realization_file,
                                      self.modules, self.time_period, rt_dict, self.output_dict, self.run_type)
 
     def _write_region_realization(self):
@@ -1330,7 +1329,7 @@ class RealizationBuilder:
         rt_dict = {"routing": {"t_route_config_file_with_path": routing_config_file}}
 
         # Write realization file
-        gfun.create_reg_realization_file(self.work_dir, self.lib_file, bmi_dir, self.forcing_path, self.realization_file,
+        gfun.create_reg_realization_file(self.work_dir, self.lib_file, bmi_dir, self.forcing_provider, self.forcing_path, self.forcing_config_file, self.realization_file,
                                          self.time_period, rt_dict, self.output_dict, self.cat_to_grp, self.grp_to_form, self.grp_params)
 
     def _write_fcst_realization(self):

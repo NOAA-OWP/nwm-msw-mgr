@@ -231,6 +231,28 @@ class DataFileConfig(StrictBaseModel):
     topmodel_lib: Optional[str] = None
     ueb_lib: Optional[str] = None
 
+    # Check optional fields that depend on forcing_provider
+    @model_validator(mode="after")
+    def check_required_fields(self):
+
+        # forcing_dir required if forcing_provider is csv
+        if self.forcing_provider == 'csv' and self.forcing_dir is None:
+            raise ValueError("`forcing_dir` must be specified for a run using csv forcing provider.")
+
+        # forecast_cycle required if forcing_provider is csv
+        if self.forcing_provider == 'bmi' and self.forecast_cycle is None:
+            raise ValueError("`forecast_cycle` must be specified for a run using bmi forcing provider.")
+
+        # geogrid_file required if forcing_provider is csv
+        if self.forcing_provider == 'bmi' and self.geogrid_file is None:
+            raise ValueError("`geogrid_file` must be specified for a run using bmi forcing provider.")
+
+        # forcing dir required if forcing_provider is csv
+        if self.forcing_provider == 'bmi' and self.forcing_template_dir is None:
+            raise ValueError("`forcing_template_dir` must be specified for a run using bmi forcing provider.")
+
+        return self
+
 
 class ParallelConfig(StrictBaseModel):
     """
