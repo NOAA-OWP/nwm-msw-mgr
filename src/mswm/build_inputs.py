@@ -872,8 +872,12 @@ class RealizationBuilder:
             forcing_config_dir = Path(self.input_dir) / 'forcing_config'
             self.forcing_config_file = forcing_config_dir / f"{forecast_cycle}_config.yml"
 
+            # Set time run_type
+            time_run_type = 'calib' if self.run_type == 'calibration' else self.run_type
+
             # Update dynamic parameters in forcing engine configuration file
-            gfun.update_forcing_config(self.forcing_template, geogrid_file, self.conf1['start_period'], forcing_config_dir, self.forcing_config_file)
+            gfun.update_forcing_config(self.forcing_template, geogrid_file, self.time_period['run_time_period'][time_run_type][0],
+                                       forcing_config_dir, self.forcing_config_file)
 
             logger.info(f"Configured BMI forcing engine: {self.forcing_config_file}")
 
@@ -1457,6 +1461,7 @@ class RealizationBuilder:
         self._create_input_dir()
         self._extract_hydrofabric()
         self._extract_forcing()
+        self._configure_forcing_engine()
         self._extract_streamflow_obs()
         self._set_output_vars()
         self._create_bmi_configs()
