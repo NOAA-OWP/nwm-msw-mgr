@@ -583,8 +583,10 @@ def create_sft_smp_input(
         df = pd.read_table(cfe_bmi_file, delimiter='=', names=["Params", "Values"], index_col=0)
 
         # Obtain annual mean surface temperature as proxy for initial soil temperature
-        fdf = pd.read_table(os.path.join(forcing_dir, catID + '.csv'), delimiter=',')
-        mtemp = round(fdf['T2D'].mean(), 2)
+        # fdf = pd.read_table(os.path.join(forcing_dir, catID + '.csv'), delimiter=',')
+        # mtemp = round(fdf['T2D'].mean(), 2)
+        # This value is just a reasonable estimate per new direction (Edwin) - HydrofabricAPI
+        mtemp = (45 - 32) * 5 / 9 + 273.15  # this is avg soil temp of 45 degrees F converted to Kelvin
 
         # Create sft list
         sft_lst = ['verbosity=none', 'soil_moisture_bmi=1', 'end_time=1.[d]', 'dt=1.0[h]',
