@@ -1160,6 +1160,7 @@ def create_lstm_input(
         gpkg_file: Union[str, Path],
         param_dir_source: Union[str, Path],
         lstm_input_dir: Union[str, Path],
+        xy_col: List[str]
 ) -> None:
 
     """
@@ -1171,7 +1172,7 @@ def create_lstm_input(
     gpkg_file: GeoPackage hydrofabric file
     param_dir_source: direcetory for static lstm files
     lstm_input_dir: target directory for bmi configuration file output (lstm_input)
-    lstm_bmi_dir: directory for the existing lstm bmi configuration file
+    xy_col: list of centroid column names in divivde-attributes file
 
     Returns
     ----------
@@ -1194,8 +1195,8 @@ def create_lstm_input(
         area = float(df_divide.loc[catID]['areasqkm'])
         slope = float(dfa.loc[catID]['mean.slope'])
         elev = float(dfa.loc[catID]['mean.elevation'])
-        lat = float(dfa.loc[catID]['centroid_y'])
-        lon = float(dfa.loc[catID]['centroid_x'])
+        lat = float(dfa.loc[catID][xy_col[1]])
+        lon = float(dfa.loc[catID][xy_col[0]])
 
         namelist = {'area_sqkm': area,
                     'basin_id': catID,
