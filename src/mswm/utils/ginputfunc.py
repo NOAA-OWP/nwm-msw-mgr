@@ -1160,6 +1160,7 @@ def create_lstm_input(
         gpkg_file: Union[str, Path],
         param_dir_source: Union[str, Path],
         lstm_input_dir: Union[str, Path],
+        xy_col: List[str]
 ) -> None:
 
     """
@@ -1171,7 +1172,7 @@ def create_lstm_input(
     gpkg_file: GeoPackage hydrofabric file
     param_dir_source: direcetory for static lstm files
     lstm_input_dir: target directory for bmi configuration file output (lstm_input)
-    lstm_bmi_dir: directory for the existing lstm bmi configuration file
+    xy_col: list of centroid column names in divivde-attributes file
 
     Returns
     ----------
@@ -1194,8 +1195,8 @@ def create_lstm_input(
         area = float(df_divide.loc[catID]['areasqkm'])
         slope = float(dfa.loc[catID]['mean.slope'])
         elev = float(dfa.loc[catID]['mean.elevation'])
-        lat = float(dfa.loc[catID]['centroid_y'])
-        lon = float(dfa.loc[catID]['centroid_x'])
+        lat = float(dfa.loc[catID][xy_col[1]])
+        lon = float(dfa.loc[catID][xy_col[0]])
 
         namelist = {'area_sqkm': area,
                     'basin_id': catID,
@@ -1545,8 +1546,10 @@ def change_lasam_input(
 
 def change_smp_input(
         catids: List[str],
+        modules: Union[List[str], List[List[str]]],
         input_dir: Union[str, Path],
         bmi_dir: Union[str, Path],
+        run_type: str,
         sm_frac_depth: float = 0.4,
         sm_profile_depth: float = 0.1,
 ) -> float:
@@ -1555,8 +1558,10 @@ def change_smp_input(
     Parameters
     ----------
     catids : catchment IDs
+    modules: list of modules in the formulation
     input_dir : directory for storing new config files
     bmi_dir: directory for existing config files
+    run_type: type of run (calib, regionalization, or default)
     sm_frac_depth: depth (m) at which to output soil moisture fraction
     sm_profile_depth: depth (m) at which to output soil moisture (from the first soil layer)
 
@@ -1569,8 +1574,17 @@ def change_smp_input(
     # create input directory for storing new config files
     os.makedirs(input_dir, exist_ok=True)
 
+    # Retrieve modules
+    mods = modules
+
     # loop through all catchments
-    for catID in catids:
+    for i in range(len(catids)):
+
+        catID = catids[i]
+
+        # Retrieve modules for regionalization
+        if run_type == 'regionalization':
+            mods = modules[i]
 
         # existing config file
         config_file0 = os.path.join(bmi_dir, '{}_bmi_config_smp'.format(catID) + '.txt')
@@ -1663,6 +1677,20 @@ def change_smp_input(
 
         list_depth = ",".join(list(map(str, depths)))
         lines1[idx[0]] = f'soil_z={list_depth}[m]\n'
+
+        # Add soil_storage_model if missing from BMI config file
+        if ('cfes' in mods or 'cfex' in mods) and not any('soil_storage_model' in line for line in lines1):
+            lines1.extend([
+                'soil_storage_model=conceptual\n',
+                'soil_storage_depth=2.0\n'
+            ])
+        elif ('lasam' in mods) and not any('soil_storage_model' in line for line in lines1):
+            lines1.extend([
+                'soil_storage_model=layered\n',
+                'soil_moisture_profile_option=constant\n',
+                'soil_depth_layers=2.0\n',
+                'water_table_depth=10[m]\n'
+            ])
 
         # Save to new config file
         if os.path.exists(config_file) and catID == catids[0]:

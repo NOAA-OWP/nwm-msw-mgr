@@ -757,9 +757,23 @@ class RealizationBuilder:
             logger.critical(f"Error while reading geopackage file: {e}")
             raise
 
+        # Adapt to x,y column name in geopackage
+        x_cols = ["centroid_x", "X"]
+        y_cols = ["centroid_y", "Y"]
+        x_col = next((c for c in x_cols if c in attr_input.columns), None)
+        y_col = next((c for c in y_cols if c in attr_input.columns), None)
+        self.xy_col = [x_col, y_col]
+
+        if not x_col or y_col:
+            try:
+                Exception("Could not find coordinate columns in geopackage `divide-attributes`")
+            except Exception as e:
+                logger.critical(f"Error while reading geopackage file: {e}")
+                raise
+
         # Reproject to WGS84 for X,Y coordinates
         self.attr_file = gpd.GeoDataFrame(attr_input,
-                                          geometry=gpd.points_from_xy(attr_input['centroid_x'], attr_input['centroid_y']),
+                                          geometry=gpd.points_from_xy(attr_input[x_col], attr_input[y_col]),
                                           crs="EPSG:5070")
         self.attr_file = self.attr_file.to_crs("EPSG:4326")
 
@@ -1104,7 +1118,7 @@ class RealizationBuilder:
                         gfun.change_lstm_input(self.catids, self.conf3['lstm_parameter_dir'], mod_input_dir, bmi_dir)
                     elif m1 == 'smp' and self.output_dict['output_sm']:
                         # For SMP, the depth to output soil moisture may need to be adjusted
-                        self.output_dict['sm_profile_depth'] = gfun.change_smp_input(self.catids, mod_input_dir, bmi_dir, self.output_dict['sm_frac_depth'],
+                        self.output_dict['sm_profile_depth'] = gfun.change_smp_input(self.catids, self.modules, mod_input_dir, bmi_dir, self.run_type, self.output_dict['sm_frac_depth'],
                                                                                      self.output_dict['sm_profile_depth'])
                     elif m1 == 'sft':
                         # Modify SFT inputs to ensure ice_fraction_scheme matches rainfall_runoff model
@@ -1129,7 +1143,7 @@ class RealizationBuilder:
                 elif m1 == 'noah':
                     gfun.create_noah_input(self.catids, self.time_period, self.attr_file, self.conf3[m1 + '_parameter_dir'], mod_input_dir, self.run_type)
                 elif m1 == 'lstm':
-                    gfun.create_lstm_input(self.catids, self.attr_file, self.gpkg_file, self.conf3['lstm_parameter_dir'], mod_input_dir)
+                    gfun.create_lstm_input(self.catids, self.attr_file, self.gpkg_file, self.conf3['lstm_parameter_dir'], mod_input_dir, self.xy_col)
                 elif m1 == 'sft':
                     sft_dir = os.path.join(self.input_dir, 'sft_input')
                     smp_dir = os.path.join(self.input_dir, 'smp_input')
@@ -1270,7 +1284,7 @@ class RealizationBuilder:
                         gfun.change_lstm_input(cat_mod, self.conf3['lstm_parameter_dir'], mod_input_dir, bmi_dir)
                     elif m1 == "smp" and self.output_dict['output_sm']:
                         # For SMP, the depth to output soil moisture may need to be adjusted
-                        self.output_dict['sm_profile_depth'] = gfun.change_smp_input(cat_mod, mod_input_dir, bmi_dir,
+                        self.output_dict['sm_profile_depth'] = gfun.change_smp_input(cat_mod, form_cat, mod_input_dir, bmi_dir, self.run_type,
                                                                                      self.output_dict['sm_frac_depth'], self.output_dict['sm_profile_depth'])
                     # Modify existing SFT inputs to match rainfall runoff model
                     elif m1 == "sft":
@@ -1336,7 +1350,7 @@ class RealizationBuilder:
                 elif m1 == 'noah':
                     gfun.create_noah_input(cat_mod, self.time_period, self.attr_file, self.conf3[m1 + '_parameter_dir'], mod_input_dir, self.run_type)
                 elif m1 == 'lstm':
-                    gfun.create_lstm_input(cat_mod, self.attr_file, self.gpkg_file, self.conf3['lstm_parameter_dir'], mod_input_dir)
+                    gfun.create_lstm_input(cat_mod, self.attr_file, self.gpkg_file, self.conf3['lstm_parameter_dir'], mod_input_dir, self.xy_col)
                 elif m1 == 'sft':
                     sft_dir = os.path.join(self.input_dir, 'sft_input')
                     smp_dir = os.path.join(self.input_dir, 'smp_input')
