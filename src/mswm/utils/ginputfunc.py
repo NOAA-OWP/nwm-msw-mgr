@@ -2781,8 +2781,8 @@ def create_reg_realization_file(
 
         # Update forcing file path for catchment
         forcing_map = {
-            "csv": {"forcing": {"file_pattern": ".*{{id}}.*.csv", "path": forcing_dir, "provider": "CsvPerFeature"}},
-            "bmi": {"forcing": {"path": forcing_dir, "provider": "ForcingsEngineLumpedDataProvider", "params": {"init_config": str(forcing_config_file)}}}
+            "csv": {"file_pattern": ".*{{id}}.*.csv", "path": forcing_dir, "provider": "CsvPerFeature"},
+            "bmi": {"path": forcing_dir, "provider": "ForcingsEngineLumpedDataProvider", "params": {"init_config": str(forcing_config_file)}}
         }
 
         catmain["global"]["forcing"] = forcing_map[forcing_provider]
@@ -3160,8 +3160,8 @@ def create_realization_file(
 
     # Set forcing configuration
     forcing_map = {
-        "csv": {"forcing": {"file_pattern": ".*{{id}}.*.csv", "path": forcing_dir, "provider": "CsvPerFeature"}},
-        "bmi": {"forcing": {"path": forcing_dir, "provider": "ForcingsEngineLumpedDataProvider", "params": {"init_config": str(forcing_config_file)}}}
+        "csv": {"file_pattern": ".*{{id}}.*.csv", "path": forcing_dir, "provider": "CsvPerFeature"},
+        "bmi": {"path": forcing_dir, "provider": "ForcingsEngineLumpedDataProvider", "params": {"init_config": str(forcing_config_file)}}
     }
 
     g["global"]["forcing"] = forcing_map[forcing_provider]
