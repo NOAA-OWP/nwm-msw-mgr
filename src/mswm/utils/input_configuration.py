@@ -281,12 +281,14 @@ class InputConfig(StrictBaseModel):
         if self.General.run_type == "calibration":
             if self.Calibration is None:
                 raise ValueError("Calibration section is required for calibration run.")
-            self.Calibration = CalibConfig(**self.Calibration)
+            if isinstance(self.Calibration, dict):
+                self.Calibration = CalibConfig(**self.Calibration)
         return self
 
     def check_regionalization(self):
         if self.General.run_type == "regionalization":
             if self.Regionalization is None:
-                raise ValueError("Regionalization section is required for calibration run.")
-            self.Regionalization = RegionConfig(**self.Regionalization)
+                raise ValueError("Regionalization section is required for regionalization run.")
+            if isinstance(self.Regionalization, dict):
+                self.Regionalization = RegionConfig(**self.Regionalization)
         return self

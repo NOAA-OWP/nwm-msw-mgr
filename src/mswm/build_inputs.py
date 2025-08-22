@@ -906,8 +906,16 @@ class RealizationBuilder:
             gpkg_name = os.path.splitext(os.path.basename(self.cat_file))[0]
             self.geogrid_file = f"/ngen-app/data/esmf_mesh/{gpkg_name}_ESMF_Mesh.nc"
 
+            # Set time run_type
+            time_run_type = 'calib' if self.run_type == 'calibration' else self.run_type
+
             # Update dynamic parameters in forcing engine configuration file
+<<<<<<< HEAD
             gfun.update_forcing_config(self.cycle_date, self.cycle_hour, self.forcing_template, self.cat_file, self.geogrid_file, self.forcing_config_dir, self.forcing_config_file, self.use_cold_start, self.cold_start_datetime)
+=======
+            gfun.update_forcing_config(self.forcing_template, geogrid_file, self.time_period['run_time_period'][time_run_type][0],
+                                       forcing_config_dir, self.forcing_config_file)
+>>>>>>> 1c068b3 (Add bmi forcing engine support for calibration)
 
             logger.info(f"Configured BMI forcing engine: {self.forcing_config_file}")
 
