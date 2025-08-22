@@ -1081,7 +1081,34 @@ class RealizationBuilder:
                 elif m1 == 'sft':
                     sft_dir = os.path.join(self.input_dir, 'sft_input')
                     smp_dir = os.path.join(self.input_dir, 'smp_input')
+<<<<<<< HEAD
                     gfun.create_sft_smp_input(self.catids, self.modules, self.attr_file, sft_dir, smp_dir, self.run_type)
+=======
+
+                    # Update CFE bmi dir with correct scheme (Schaake/Xinanjiang)
+                    if ('cfes' in self.modules):
+                        # If bmi_dir not provided by input file, create from input dir
+                        if self.conf3['cfe_s_bmi_dir'] is None:
+                            cfe_dir = os.path.join(self.input_dir, 'cfe-s_input')
+                        # If bmi_dir provided by input file, use that path
+                        else:
+                            cfe_dir = self.conf3['cfe_s_bmi_dir']
+                    elif ('cfex' in self.modules):
+                        # If bmi_dir not provided by input file, create from input dir
+                        if self.conf3['cfe_x_bmi_dir'] is None:
+                            cfe_dir = os.path.join(self.input_dir, 'cfe-x_input')
+                        # If bmi_dir provided by input file, use that path
+                        else:
+                            cfe_dir = self.conf3['cfe_x_bmi_dir']
+                    else:
+                        # If CFE BMI config files not provided and cfe not in modules, create cfe input files
+                        cfe_dir = os.path.join(self.input_dir, 'cfe-s_input')
+                        gfun.create_cfe_input(self.catids, ['cfes'] + [self.modules], self.attr_file, cfe_dir, self.run_type, self.is_aet_rootzone)
+
+                    # Create sft input
+                    gfun.create_sft_smp_input(self.catids, self.modules, self.attr_parquet, cfe_dir, sft_dir, smp_dir, self.run_type)
+
+>>>>>>> 273a81d (Change SFT mtemp estimation to avoid forcing files)
                 elif m1 == 'smp':
                     continue
                 elif m1 == 'lasam':
@@ -1269,7 +1296,11 @@ class RealizationBuilder:
                             scheme_form = [self.cat_to_form[cat] for cat in scheme_cat]
 
                             # Create SFT/SMP inputs
+<<<<<<< HEAD
                             gfun.create_sft_smp_input(scheme_cat, scheme_form, self.attr_file, sft_dir, smp_dir, self.run_type)
+=======
+                            gfun.create_sft_smp_input(scheme_cat, scheme_form, self.attr_parquet, cfe_dir, sft_dir, smp_dir, self.run_type)
+>>>>>>> 273a81d (Change SFT mtemp estimation to avoid forcing files)
 
                 # Skip smp, inputs created in tandem with sft
                 elif m1 == 'smp':
