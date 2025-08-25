@@ -2633,7 +2633,6 @@ def create_reg_realization_file(
         # Group formulation
         grp_configs["params"]["modules"] = [model_configs[m1] for m1 in grp_mod if m1 != 'troute']
         grp_main[grp] = [grp_configs]
-        # grp_main[grp]["formulations"] = [grp_configs]
 
     # Set global
     g = {}
