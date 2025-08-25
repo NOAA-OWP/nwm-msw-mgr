@@ -174,8 +174,10 @@ class RealizationBuilder:
         """
         # Relate formulation groups to catchment IDS
         self.grp_to_cat = {}
+        self.grp_to_cat_path = {}
         for grp in self.reg_df['group']:
             cat_path = (Path(self.assign_path.parent) / (grp + "_catchments.csv")).absolute()
+            self.grp_to_cat_path[grp] = str(cat_path)
             if not cat_path.exists():
                 try:
                     raise FileNotFoundError(f'Regionalization catchment group file does not exist: {cat_path}')
@@ -887,156 +889,6 @@ class RealizationBuilder:
         self.real_config = update_troute(self.real_config, self.out_dir)
         logger.info("Updated noah and ueb config files for forecast")
 
-    def _init_config_hooks(self):
-        """
-        Generate BMI configs using NOAA OWP ngen_config_gen repo
-        """
-        # NOT IN USE:
-        from mswm.config_gen.hook_providers import DefaultHookProvider
-
-        # Initialize ngen_config_gen hook provider
-        # Load hydrofabric data
-        try:
-            self.hf = gpd.read_file(self.gpkg_file, layer="divides")
-        except Exception as e:
-            logger.critical(f"Failed to read geopackage `divides` layer: {e}")
-            raise
-
-        try:
-            self.hf_lnk_data = pd.read_parquet(self.attr_file)
-        except Exception as e:
-            logger.critical(f"Failed to attribute file: {e}")
-            raise
-
-        # Subset hydrofabric data to catchments
-        self.hf = self.hf[self.hf["divide_id"].isin(self.catids)]
-        self.hf_lnk_data = self.hf_lnk_data[self.hf_lnk_data["divide_id"].isin(self.catids)]
-
-        # Initialize hook provider and file writer
-        self.hook_provider = DefaultHookProvider(hf=self.hf, hf_lnk_data=self.hf_lnk_data)
-
-        logger.info("Initialized module hook provider")
-
-    def _get_module_hooks(self):
-        """
-        Translate module names into config_gen hooks
-        """
-        # NOT IN USE
-        from mswm.config_gen.models.cfes import Cfes
-        from mswm.config_gen.models.cfex import Cfex
-        from mswm.config_gen.models.pet import Pet
-
-        self.module_to_hook = {
-            "sloth": None,
-            # "NoahOWP": noah_owp,
-            "cfes": Cfes,
-            "cfex": Cfex,
-            "pet": Pet,
-        }
-
-    def _create_bmi_configs_ngen_config_gen(self):
-        """
-        Create BMI config files using ngen_config_gen repo
-        """
-        # NOT IN USE
-        self.run_configs = ['_troute_config_calib.yaml', '_troute_config_valid_control.yaml', '_troute_config_valid_best.yaml']
-        modules1 = self.modules.copy()
-        if 'cfes' in self.modules:
-            modules1 = ['cfes'] + [m1 for m1 in self.modules if m1 != 'cfes']
-        if 'cfex' in self.modules:
-            modules1 = ['cfex'] + [m1 for m1 in self.modules if m1 != 'cfex']
-
-        # loop through modules to create input files
-        for m1 in modules1:
-
-            # module name used by the UI
-            m2 = settings.modules_all.loc[settings.modules_all['module'] == m1, 'name_ui'].iloc[0]
-
-            # define module input directory
-            mod_input_dir = os.path.join(self.input_dir, m2 + '_input')
-            if os.path.isdir(mod_input_dir):
-                if os.path.islink(mod_input_dir):
-                    os.unlink(mod_input_dir)
-
-            # make symlinks to existing input files or create new input files
-            bmi_dir = self.conf3.get(m2.replace('-', '_') + '_bmi_dir')
-            if m1 in ['sloth']:
-                pass
-            elif m1 in ['topmodel']:
-                os.makedirs(mod_input_dir, exist_ok=True)
-                if bmi_dir is None or not os.path.exists(bmi_dir):
-                    # Create topmodel input from attribute file
-                    gfun.create_topmodel_input(self.catids, self.attr_file, self.gpkg_file, mod_input_dir)
-                else:
-                    # Modify existing topmodel inputs
-                    for catID in self.catids:
-                        run_file = os.path.join(bmi_dir, '{}_topmodel'.format(catID) + '.run')
-                        params_file = os.path.join(bmi_dir, '{}_topmodel_params'.format(catID) + '.dat')
-                        subcat_file = os.path.join(bmi_dir, '{}_topmodel_subcat'.format(catID) + '.dat')
-                        gfun.change_topmodel_input(catID, run_file, params_file, subcat_file, mod_input_dir)
-
-            # ignore t-route config files provided via the bmi_dir for now
-            elif m1 != 'troute' and bmi_dir and os.path.isdir(bmi_dir):
-                if not os.listdir(bmi_dir):
-                    try:
-                        raise ValueError(f'BMI folder {bmi_dir} cannot be empty')
-                    except ValueError as e:
-                        logger.critical(e)
-                        raise
-                else:
-
-                    # from EDS (or the user) with correct time period and/or paths
-                    # For SMP, the depth to output soil moisture may need to be adjusted
-                    if m1 == 'noah':
-                        gfun.create_noah_input_template(self.catids, self.time_period, self.conf3[m1 + '_parameter_dir'], mod_input_dir, bmi_dir, self.run_type)
-                    elif m1 == 'topmodel':
-                        continue
-                    elif m1 == 'ueb':
-                        gfun.create_ueb_input(self.catids, self.time_period, self.attr_file, self.conf3[m1 + '_parameter_dir'], mod_input_dir, bmi_dir, self.run_type)
-                    elif m1 in ['sac', 'snow17']:
-                        gfun.change_sac_snow17_input(m1, self.catids, mod_input_dir, bmi_dir)
-                    elif m1 == 'lasam':
-                        gfun.change_lasam_input(self.catids, mod_input_dir, bmi_dir, self.conf3['lasam_parameter_dir'])
-                    elif m1 == "smp" and self.output_dict['output_sm']:
-                        self.output_dict['sm_profile_depth'] = gfun.change_smp_input(self.catids, mod_input_dir, bmi_dir,
-                                                                                     self.output_dict['sm_frac_depth'], self.output_dict['sm_profile_depth'])
-                    elif m1 == "sft":
-                        # Modify SFT inputs to ensure ice_fraction_scheme matches rainfall_runoff model
-                        gfun.change_sft_input(self.catids, modules1, mod_input_dir, bmi_dir, self.run_type)
-                    else:
-                        # Create symbolic link to copy existing bmi config files to input directory
-                        logger.info(f'{m2}: create symlink from {bmi_dir} to {mod_input_dir}')
-                        os.symlink(bmi_dir, mod_input_dir, target_is_directory=True)
-            else:
-                # If filepath to BMI config file is empty:
-                # Initialize config_gen file writer
-                from mswm.config_gen.file_writer import DefaultFileWriter
-                self.file_writer = DefaultFileWriter(mod_input_dir)
-
-                # Get ngen_config_gen hook objects
-                self.hook_objects = [self.module_to_hook.get(m1)]
-
-                # Write BMI config for module
-                from mswm.config_gen.generate import generate_configs
-                generate_configs(
-                    hook_providers=self.hook_provider,
-                    hook_objects=self.hook_objects,
-                    file_writer=self.file_writer,
-                )
-
-                if m1 == 'troute':
-                    for file_name, run_name in zip(self.run_configs, ['calib', 'valid', 'valid']):
-                        routing_config_file = os.path.join(self.work_dir + '/Input', '{}'.format(self.basin) + file_name)
-                        run_name1 = file_name.replace('_troute_config_', '').replace('.yaml', '')
-                        if len(self.time_period['run_time_period'][run_name][0]) != 0 & len(self.time_period['run_time_period'][run_name][0]):
-                            run_range = pd.to_datetime(self.time_period['run_time_period'][run_name])
-                            nts = len(pd.date_range(start=run_range[0], end=run_range[1], freq='5min')) - 1
-                            gfun.create_troute_config(self.gpkg_file, routing_config_file, self.time_period['run_time_period'][run_name][0], nts)
-                            logger.info(f'troute config file for {run_name1} is created at: {routing_config_file}')
-
-                elif m1 != 'troute':
-                    logger.info(f'{m1}: input config files created at: {mod_input_dir}')
-
     def _create_bmi_configs(self):
         """
         Generate BMI config files for modules or link to existing config files
@@ -1071,18 +923,6 @@ class RealizationBuilder:
             # Skip config generation for sloth
             if m1 in ['sloth']:
                 pass
-            # Create bmi configs for topmodel
-            elif m1 in ['topmodel']:
-                if bmi_dir is None or not os.path.exists(bmi_dir):
-                    # Create topmodel input from attribute file
-                    gfun.create_topmodel_input(self.catids, self.attr_file, self.gpkg_file, mod_input_dir)
-                else:
-                    # Modify existing topmodel inputs
-                    for catID in self.catids:
-                        run_file = os.path.join(bmi_dir, '{}_topmodel'.format(catID) + '.run')
-                        params_file = os.path.join(bmi_dir, '{}_topmodel_params'.format(catID) + '.dat')
-                        subcat_file = os.path.join(bmi_dir, '{}_topmodel_subcat'.format(catID) + '.dat')
-                        gfun.change_topmodel_input(catID, run_file, params_file, subcat_file, mod_input_dir)
 
             # Raise error if bmi_dir is invalid path and not empty
             if bmi_dir is not None and not os.path.isdir(bmi_dir):
@@ -1107,7 +947,7 @@ class RealizationBuilder:
                     if m1 == 'noah':
                         gfun.create_noah_input_template(self.catids, self.time_period, self.conf3[m1 + '_parameter_dir'], mod_input_dir, bmi_dir, self.run_type)
                     elif m1 == 'topmodel':
-                        continue
+                        gfun.change_topmodel_input(self.catids, bmi_dir, mod_input_dir)
                     elif m1 == 'ueb':
                         gfun.create_ueb_input(self.catids, self.time_period, self.attr_file, self.conf3[m1 + '_parameter_dir'], mod_input_dir, bmi_dir, self.run_type)
                     elif m1 in ['sac', 'snow17']:
@@ -1132,6 +972,8 @@ class RealizationBuilder:
                 # Create BMI config files from scratch if paths not provided
                 if m1 in ['cfes', 'cfex']:
                     gfun.create_cfe_input(self.catids, self.modules, self.attr_file, mod_input_dir, self.run_type)
+                elif m1 == 'topmodel':
+                    gfun.create_topmodel_input(self.catids, self.attr_file, self.gpkg_file, mod_input_dir)
                 elif m1 == 'ueb':
                     gfun.create_ueb_input(self.catids, self.time_period, self.attr_file, self.conf3[m1 + '_parameter_dir'], mod_input_dir, '', self.run_type)
                 elif m1 == 'snow17':
@@ -1238,18 +1080,6 @@ class RealizationBuilder:
             # Skip config generation for sloth
             if m1 in ['sloth']:
                 pass
-            # Create bmi configs for topmodel
-            elif m1 in ['topmodel']:
-                if bmi_dir is None or not os.path.exists(bmi_dir):
-                    # Create topmodel input from attribute file
-                    gfun.create_topmodel_input(cat_mod, self.attr_file, self.gpkg_file, mod_input_dir)
-                else:
-                    # Modify existing topmodel inputs
-                    for catID in cat_mod:
-                        run_file = os.path.join(bmi_dir, '{}_topmodel'.format(catID) + '.run')
-                        params_file = os.path.join(bmi_dir, '{}_topmodel_params'.format(catID) + '.dat')
-                        subcat_file = os.path.join(bmi_dir, '{}_topmodel_subcat'.format(catID) + '.dat')
-                        gfun.change_topmodel_input(catID, run_file, params_file, subcat_file, mod_input_dir)
 
             # Raise error if bmi_dir is invalid path and not empty
             if bmi_dir is not None and not os.path.isdir(bmi_dir):
@@ -1273,7 +1103,7 @@ class RealizationBuilder:
                     if m1 == 'noah':
                         gfun.create_noah_input_template(cat_mod, self.time_period, self.conf3[m1 + '_parameter_dir'], mod_input_dir, bmi_dir, self.run_type)
                     elif m1 == 'topmodel':
-                        continue
+                        gfun.change_topmodel_input(cat_mod, bmi_dir, mod_input_dir)
                     elif m1 == 'ueb':
                         gfun.create_ueb_input(cat_mod, self.time_period, self.attr_file, self.conf3[m1 + '_parameter_dir'], mod_input_dir, bmi_dir, self.run_type)
                     elif m1 in ['sac', 'snow17']:
@@ -1339,6 +1169,8 @@ class RealizationBuilder:
                 # Create BMI config files from scratch if paths not provided
                 if m1 in ['cfes', 'cfex']:
                     gfun.create_cfe_input(cat_mod, form_cat, self.attr_file, mod_input_dir, self.run_type)
+                elif m1 == 'topmodel':
+                    gfun.create_topmodel_input(cat_mod, self.attr_file, self.gpkg_file, mod_input_dir)
                 elif m1 == 'ueb':
                     gfun.create_ueb_input(cat_mod, self.time_period, self.attr_file, self.conf3[m1 + '_parameter_dir'], mod_input_dir, '', self.run_type)
                 elif m1 == 'snow17':
