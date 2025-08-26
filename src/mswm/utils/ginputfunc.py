@@ -2779,14 +2779,6 @@ def create_reg_realization_file(
         grp_configs["params"]["modules"] = [model_configs[m1] for m1 in grp_mod if m1 != 'troute']
         grp_main[grp] = [grp_configs]
 
-        # Update forcing file path for catchment
-        forcing_map = {
-            "csv": {"file_pattern": ".*{{id}}.*.csv", "path": forcing_dir, "provider": "CsvPerFeature"},
-            "bmi": {"path": forcing_dir, "provider": "ForcingsEngineLumpedDataProvider", "params": {"init_config": str(forcing_config_file)}}
-        }
-
-        catmain["global"]["forcing"] = forcing_map[forcing_provider]
-
     # Initialize global dictionary
     g = {}
 
@@ -2802,7 +2794,11 @@ def create_reg_realization_file(
     g.update({"formulation_groups": grp_main})
 
     # Set forcing group
-    force_main = {"forcing_grp1": {"file_pattern": ".*{{id}}.*.csv", "path": forcing_dir, "provider": "CsvPerFeature"}}
+    forcing_map = {
+        "csv": {"file_pattern": ".*{{id}}.*.csv", "path": forcing_dir, "provider": "CsvPerFeature"},
+        "bmi": {"path": forcing_dir, "provider": "ForcingsEngineLumpedDataProvider", "params": {"init_config": str(forcing_config_file)}}
+    }
+    force_main = {"forcing_grp1": forcing_map[forcing_provider]}
     g.update({"forcing_groups": force_main})
 
     # Catchment groups

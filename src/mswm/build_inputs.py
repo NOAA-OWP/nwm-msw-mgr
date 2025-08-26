@@ -907,7 +907,11 @@ class RealizationBuilder:
             self.geogrid_file = f"/ngen-app/data/esmf_mesh/{gpkg_name}_ESMF_Mesh.nc"
 
             # Set time run_type
-            time_run_type = 'calib' if self.run_type == 'calibration' else self.run_type
+            time_run_type = (
+                'calib' if self.run_type == 'calibration'
+                else 'region' if self.run_type == 'regionalization'
+                else self.run_type
+            )
 
             # Update dynamic parameters in forcing engine configuration file
 <<<<<<< HEAD
