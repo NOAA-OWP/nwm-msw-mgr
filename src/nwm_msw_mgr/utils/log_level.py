@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 log_level = logging.INFO
-MODULE_NAME = "MSWM"
+MODULE_NAME = "MSW-MGR"
 LOG_MODULE_NAME_LEN = 8
 
 
@@ -67,11 +67,11 @@ def log_level_set():
     BASE_DIR = Path(__file__).resolve().parent.parent
 
     if Path("/ngencerf/data").exists():
-        log_file_dir = Path('/ngencerf/data/run-logs/mswm/')
+        log_file_dir = Path('/ngencerf/data/run-logs/nwm-msw-mgr/')
     else:
-        log_file_dir = Path(BASE_DIR) / 'run-logs/mswm/'
+        log_file_dir = Path(BASE_DIR) / 'run-logs/nwm-msw-mgr/'
 
-    log_file_name = f"mswm_{create_timestamp()}.log"
+    log_file_name = f"nwm-msw-mgr_{create_timestamp()}.log"
     os.makedirs(log_file_dir, exist_ok=True)
     logFilePath = os.path.join(log_file_dir, log_file_name)
 

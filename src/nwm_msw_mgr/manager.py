@@ -5,7 +5,7 @@ This module creates a SetupManager to manage the modification of configuration f
 """
 
 import argparse
-from mswm.build_inputs import RealizationBuilder
+from nwm_msw_mgr.build_inputs import RealizationBuilder
 
 
 def build_default(input_path: str):
@@ -42,7 +42,7 @@ def build_region(input_path: str, assign_path: str):
 
 def main():
     # Create command line parser
-    parser = argparse.ArgumentParser(prog="mswm",
+    parser = argparse.ArgumentParser(prog="nwm_msw_mgr",
                                      description="Model Setup Workflow Manager command-line")
     subparser = parser.add_subparsers(dest="command", required=True, help="Available commands")
 
@@ -78,7 +78,7 @@ def main():
     elif args.command == "build_fcst":
         build_fcst(args.input_path, args.forcing_path, args.output_folder)
     else:
-        raise ValueError(f"Unexpected mswm command: {args.command}")
+        raise ValueError(f"Unexpected nwm-msw-mgr command: {args.command}")
 
 
 if __name__ == "__main__":

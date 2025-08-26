@@ -1,5 +1,5 @@
 """
-This module contains Pydantic classes to validate input.config files for the MSWM
+This module contains Pydantic classes to validate input.config files for the NWM-MSW-MGR
 
 @author: Jeff Wade
 """

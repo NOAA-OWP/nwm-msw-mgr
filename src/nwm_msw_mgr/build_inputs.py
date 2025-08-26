@@ -16,12 +16,12 @@ import json
 from collections import defaultdict
 from pydantic import ValidationError
 
-from mswm.utils import ginputfunc as gfun
-from mswm.utils import settings
-from mswm.utils.log_level import log_level_set
-from mswm.utils.process_forcing import update_forcing_in_realization
-from mswm.utils.update_bmi_config import update_noah_ueb, update_troute
-from mswm.utils.input_configuration import InputConfig
+from nwm_msw_mgr.utils import ginputfunc as gfun
+from nwm_msw_mgr.utils import settings
+from nwm_msw_mgr.utils.log_level import log_level_set
+from nwm_msw_mgr.utils.process_forcing import update_forcing_in_realization
+from nwm_msw_mgr.utils.update_bmi_config import update_noah_ueb, update_troute
+from nwm_msw_mgr.utils.input_configuration import InputConfig
 
 
 log_level_set()

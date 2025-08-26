@@ -22,7 +22,7 @@ import geopandas as gpd
 import pandas as pd
 import yaml
 
-from mswm.utils import settings
+from nwm_msw_mgr.utils import settings
 
 
 logger = logging.getLogger(__name__)

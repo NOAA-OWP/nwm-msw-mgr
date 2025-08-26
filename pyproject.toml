@@ -3,7 +3,7 @@ requires = ["setuptools>=65", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "mswm"
+name = "nwm-msw-mgr"
 version = "0.1.1"           # or mark as dynamic if you use setuptools-scm
 requires-python = ">=3.10"
 dependencies = [
@@ -20,3 +20,4 @@ package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
