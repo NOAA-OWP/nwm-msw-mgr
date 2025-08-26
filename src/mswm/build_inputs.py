@@ -873,7 +873,11 @@ class RealizationBuilder:
             self.forcing_config_file = forcing_config_dir / f"{forecast_cycle}_config.yml"
 
             # Set time run_type
-            time_run_type = 'calib' if self.run_type == 'calibration' else self.run_type
+            time_run_type = (
+                'calib' if self.run_type == 'calibration'
+                else 'region' if self.run_type == 'regionalization'
+                else self.run_type
+            )
 
             # Update dynamic parameters in forcing engine configuration file
             gfun.update_forcing_config(self.forcing_template, geogrid_file, self.time_period['run_time_period'][time_run_type][0],
