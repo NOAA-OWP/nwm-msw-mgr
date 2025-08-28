@@ -35,10 +35,19 @@ class UnquotedDumper(yaml.SafeDumper):
     pass
 
 
+class ForcingDumper(yaml.SafeDumper):
+    pass
+
+
 def quoted_str_presenter(dumper, data):
     return dumper.represent_scalar('tag:yaml.org,2002:str', data, style="'")
 
 
+def inline_list_presenter(dumper, data):
+    return dumper.represent_sequence('tag:yaml.org,2002:seq', data, flow_style=True)
+
+
+ForcingDumper.add_representer(list, inline_list_presenter)
 QuotedDumper.add_representer(str, quoted_str_presenter)
 
 
@@ -2339,7 +2348,7 @@ def update_forcing_config(
 
     # Write forcing config yaml file
     with open(forcing_config_file, "w") as file:
-        yaml.dump(forcing_template, file, sort_keys=False, default_flow_style=False)
+        yaml.dump(forcing_template, file, Dumper=ForcingDumper, sort_keys=False, default_flow_style=False)
 
 
 def var_mapping(
