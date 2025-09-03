@@ -880,8 +880,8 @@ class RealizationBuilder:
             )
 
             # Update dynamic parameters in forcing engine configuration file
-            gfun.update_forcing_config(self.forcing_template, geogrid_file, self.time_period['run_time_period'][time_run_type][0],
-                                       forcing_config_dir, self.forcing_config_file)
+            gfun.update_forcing_config(forecast_cycle, self.forcing_template, geogrid_file, self.time_period['run_time_period'][time_run_type][0],
+                                       self.time_period['run_time_period'][time_run_type][1], forcing_config_dir, self.forcing_config_file)
 
             logger.info(f"Configured BMI forcing engine: {self.forcing_config_file}")
 
