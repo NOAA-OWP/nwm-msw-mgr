@@ -2358,7 +2358,7 @@ def update_forcing_config(
         forcing_template['LookBack'] = time_delta
     elif forcing_template['AnAFlag'] == 0:
         forcing_template['RefcstBDateProc'] = start_str
-        forcing_template['ForecastInputHorizons'] = [time_delta]
+        forcing_template['ForecastInputHorizons'] = [time_delta] * len(forcing_template['InputForcingDirectories'])
 
     forcing_template['GeogridIn'] = geogrid_file
 
