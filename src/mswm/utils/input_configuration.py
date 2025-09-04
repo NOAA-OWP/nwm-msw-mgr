@@ -6,7 +6,7 @@ This module contains Pydantic classes to validate input.config files for the MSW
 
 from pydantic import BaseModel, model_validator, field_validator
 from pathlib import Path
-from typing import Optional, Literal
+from typing import Optional, Literal, Union
 
 
 class StrictBaseModel(BaseModel):
@@ -42,6 +42,18 @@ class GeneralConfig(StrictBaseModel):
     output_sm: Optional[bool] = None
     sm_profile_depth: Optional[float] = None
     sm_frac_depth: Optional[float] = None
+    is_aet_rootzone: Optional[Union[int, bool, str]] = None
+
+    # Normalize is_aet_rootzone values
+    @field_validator('is_aet_rootzone')
+    def norm_is_aet_rootzone(cls, val):
+        if val is None:
+            return None
+        if val in ('1', 1, True, "true", "True"):
+            return 1
+        if val in ('0', 0, False, "false", "False"):
+            return 0
+        raise ValueError(f"Invalid value set for is_aet_rootzone: {val}")
 
     # Check optional fields that depend on run_type
     @model_validator(mode="after")

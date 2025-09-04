@@ -188,7 +188,8 @@ def create_cfe_input(
         modules: Union[List[str], List[List[str]]],
         dfa: Union[str, Path],
         cfe_input_dir: Union[str, Path],
-        run_type: str
+        run_type: str,
+        is_aet_rootzone: Union[int, dict]
 ) -> None:
     """ Create BMI initial configuration file for CFE with Schaake or Xianjiang infiltration and runoff scheme
 
@@ -199,6 +200,7 @@ def create_cfe_input(
     dfa: dataframe containing model parameter attributes
     cfe_input_dir: directory to save configuration files
     run_type: type of run (calib, regionalization, or default)
+    is_aet_rootzone: flag for CFE rootzone option
 
     Returns
     ----------
@@ -214,23 +216,25 @@ def create_cfe_input(
 
     os.makedirs(cfe_input_dir, exist_ok=True)
 
-    # surface partitioning scheme
+    # Set surface partitioning scheme and is_aet_rootzone flag
     scheme = 'Schaake'
     if run_type != 'regionalization':
         mods = modules
         if 'cfex' in mods:
             scheme = 'Xinanjiang'
+        rootzone_flag = is_aet_rootzone
 
     # Create bmi config files
     for i in range(len(catids)):
 
         catID = catids[i]
 
-        # Set module list for each catchment during regionalization
+        # Set module list and is_aet_rootzone flag for each catchment during regionalization
         if run_type == 'regionalization':
             mods = modules[i]
             if ('cfex' in mods):
                 scheme = 'Xinanjiang'
+            rootzone_flag = is_aet_rootzone[catID]
 
         # Set sft coupling
         if 'sft' in mods:
@@ -281,6 +285,12 @@ def create_cfe_input(
         f.write("%s" % ("soil_params.wltsmc=" + str(dfa.loc[catID]['mean.smcwlt_soil_layers_stag=1']) + "[m/m]\n"))
         f.write("%s" % ("soil_storage=0.5[m/m]\n"))
 
+        # Add aet_rootzone parameters if option is selected
+        if rootzone_flag == 1:
+            f.write("%s" % ("is_aet_rootzone=1\n"))
+            f.write("%s" % ("max_rootzone_layer=2\n"))
+            f.write("%s" % ("soil_layer_depths=0.1,0.4,1.0,2.0[m]\n"))
+
         # add the new parameters for cfex
         # TODO: read these catchment-specific parameters from the NWMv3 model attributes parquet file
         # The current parquet file we have access to was likely based on NWMv2.1 and hence missing these XAJ parameters
@@ -291,6 +301,64 @@ def create_cfe_input(
             f.write("%s" % ("urban_decimal_fraction=0.0[]\n"))
 
         f.close()
+
+
+def change_cfe_input(
+        catids: List[str],
+        bmi_dir: Union[str, Path],
+        inputDir: Union[str, Path],
+        run_type: str,
+        is_aet_rootzone: Union[int, List[int]]
+) -> None:
+    """ change options in CFE input file
+
+    Parameters
+    ----------
+    catids : catchment IDs in the basin
+    bmi_dir : directory containing bmi configuration files
+    inputDir : directory for storing input files
+    run_type: type of run (calib, regionalization, or default)
+    is_aet_rootzone: flag for CFE rootzone option
+
+    Returns
+    ----------
+    None
+
+    """
+
+    if not os.path.exists(inputDir):
+        os.makedirs(inputDir, exist_ok=True)
+
+    # Set rootzone_flag depending on run_type
+    if run_type != 'regionalization':
+        rootzone_flag = is_aet_rootzone
+
+    for catID in catids:
+
+        # Set is_aet_rootzone flag for each catchment during regionalization
+        if run_type == 'regionalization':
+            rootzone_flag = is_aet_rootzone[catID]
+
+        # Copy existing file
+        bmi_config = os.path.join(bmi_dir, '{}'.format(catID) + '_bmi_config_cfe.txt')
+        new_config = os.path.join(inputDir, '{}'.format(catID) + '_bmi_config_cfe.txt')
+        shutil.copy(bmi_config, new_config)
+
+        # read runfile
+        with open(new_config, 'r') as infile:
+            list_lines = infile.readlines()
+        lst_lines = copy.deepcopy(list_lines)
+
+        # Add aet_rootzone parameters if option is selected
+        if rootzone_flag == 1:
+            lst_lines[-1] += '\n'
+            lst_lines.append("%s" % ("is_aet_rootzone=1\n"))
+            lst_lines.append("%s" % ("max_rootzone_layer=2\n"))
+            lst_lines.append("%s" % ("soil_layer_depths=0.1,0.4,1.0,2.0[m]\n"))
+
+        # Save file
+        with open(new_config, 'w') as outfile:
+            outfile.writelines(lst_lines)
 
 
 def create_noah_input(

@@ -209,10 +209,10 @@ class RealizationBuilder:
         params_dict = {
             'cfes': ['b', 'satdk', 'satpsi', 'slope',
                      'maxsmc', 'wltsmc', 'max_gw_storage', 'Cgw', 'expon',
-                     'refkdt', 'Kn', 'Klf'],
+                     'refkdt', 'Kn', 'Klf', 'is_aet_rootzone'],
             'cfex': ['b', 'satdk', 'satpsi', 'slope',
                      'maxsmc', 'wltsmc', 'max_gw_storage', 'Cgw', 'expon',
-                     'refkdt', 'Kn', 'Klf', 'a_Xinanjiang_inflection_point_parameter',
+                     'refkdt', 'Kn', 'Klf', 'is_aet_rootzone', 'a_Xinanjiang_inflection_point_parameter',
                      'b_Xinanjiang_shape_parameter', 'x_Xinanjiang_shape_parameter'],
             'lasam': ['ponded_depth_max', 'field_capacity', 'smcmin', 'smcmax', 'van_genuchten_alpha', 'van_genuchten_n', 'hydraulic_conductivity'],
             'noah': ['RSURF_EXP', 'CWP', 'VCMX25', 'MP', 'MFSNO', 'RSURF_SNOW', 'SCAMAX'],
@@ -488,6 +488,10 @@ class RealizationBuilder:
                 self.modules.remove("smp")
                 self.modules.insert(sft_index, "smp")
 
+        # If CFE in modules, retrieve is_aet_rootzone flag
+        if any(m in self.modules for m in ['cfes', 'cfex']):
+            self.is_aet_rootzone = self.conf1.get('is_aet_rootzone') or 0
+
         logger.info(f"Final list of modules in formulation: {self.modules}")
 
     def _parse_reg_modules(self):
@@ -497,6 +501,7 @@ class RealizationBuilder:
         """
         logger.info(f"Available module names: {settings.modules_all['name_ui'].tolist()}")
         self.grp_to_form = {}
+        self.grp_is_aet_rootzone = {}
 
         for idx, row in self.reg_df.iterrows():
             modules0 = [x.replace(" ", "") for x in re.split(' ', row['formulation'])]
@@ -559,6 +564,10 @@ class RealizationBuilder:
                 if smp_index > sft_index:
                     modules.remove("smp")
                     modules.insert(sft_index, "smp")
+
+            # If CFE in modules, retrieve is_aet_rootzone flag
+            if any(m in modules for m in ['cfes', 'cfex']):
+                self.grp_is_aet_rootzone[row['group']] = row['is_aet_rootzone']
 
             # Store with regionalization group id
             self.grp_to_form[row['group']] = modules
@@ -630,13 +639,16 @@ class RealizationBuilder:
 
     def _map_cat_to_grp(self):
         """
-        Map catchments to regionalization groups
+        Map catchments to regionalization groups and assign is_aet_rootzone flags for cfe
         """
         # Relate catchments and their groups
         self.cat_to_grp = {}
+        self.cat_to_aet_rootzone = {}
         for grp, cats in self.grp_to_cat.items():
             for cat in cats:
                 self.cat_to_grp[cat] = grp
+                # Assign aet_rootzone flags for cfe
+                self.cat_to_aet_rootzone[cat] = self.grp_is_aet_rootzone[grp]
 
     def _map_cat_to_form(self):
         """
@@ -948,6 +960,8 @@ class RealizationBuilder:
                         gfun.create_noah_input_template(self.catids, self.time_period, self.conf3[m1 + '_parameter_dir'], mod_input_dir, bmi_dir, self.run_type)
                     elif m1 == 'topmodel':
                         gfun.change_topmodel_input(self.catids, bmi_dir, mod_input_dir)
+                    elif m1 == 'cfes':
+                        gfun.change_cfe_input(self.catids, bmi_dir, mod_input_dir, self.run_type, self.is_aet_rootzone)
                     elif m1 == 'ueb':
                         gfun.create_ueb_input(self.catids, self.time_period, self.attr_file, self.conf3[m1 + '_parameter_dir'], mod_input_dir, bmi_dir, self.run_type)
                     elif m1 in ['sac', 'snow17']:
@@ -971,7 +985,7 @@ class RealizationBuilder:
             else:
                 # Create BMI config files from scratch if paths not provided
                 if m1 in ['cfes', 'cfex']:
-                    gfun.create_cfe_input(self.catids, self.modules, self.attr_file, mod_input_dir, self.run_type)
+                    gfun.create_cfe_input(self.catids, self.modules, self.attr_file, mod_input_dir, self.run_type, self.is_aet_rootzone)
                 elif m1 == 'topmodel':
                     gfun.create_topmodel_input(self.catids, self.attr_file, self.gpkg_file, mod_input_dir)
                 elif m1 == 'ueb':
@@ -1008,7 +1022,7 @@ class RealizationBuilder:
                     else:
                         # If CFE BMI config files not provided and cfe not in modules, create cfe input files
                         cfe_dir = os.path.join(self.input_dir, 'cfe-s_input')
-                        gfun.create_cfe_input(self.catids, ['cfes'] + [self.modules], self.attr_file, cfe_dir, self.run_type)
+                        gfun.create_cfe_input(self.catids, ['cfes'] + [self.modules], self.attr_file, cfe_dir, self.run_type, self.is_aet_rootzone)
 
                     # Create sft input
                     gfun.create_sft_smp_input(self.catids, self.modules, self.attr_parquet, cfe_dir, self.conf3['forcing_dir'], sft_dir, smp_dir, self.run_type)
@@ -1104,6 +1118,8 @@ class RealizationBuilder:
                         gfun.create_noah_input_template(cat_mod, self.time_period, self.conf3[m1 + '_parameter_dir'], mod_input_dir, bmi_dir, self.run_type)
                     elif m1 == 'topmodel':
                         gfun.change_topmodel_input(cat_mod, bmi_dir, mod_input_dir)
+                    elif m1 == 'cfes':
+                        gfun.change_cfe_input(cat_mod, bmi_dir, mod_input_dir, self.run_type, self.cat_to_aet_rootzone)
                     elif m1 == 'ueb':
                         gfun.create_ueb_input(cat_mod, self.time_period, self.attr_file, self.conf3[m1 + '_parameter_dir'], mod_input_dir, bmi_dir, self.run_type)
                     elif m1 in ['sac', 'snow17']:
@@ -1146,7 +1162,7 @@ class RealizationBuilder:
                                 # If LASAM is selected, create cfe input files required for sft (assume ice_fraction_scheme is cfes)
                                 if scheme not in ('cfes', 'cfex'):
                                     scheme_form_cfes = [form + ['cfes'] for form in scheme_form]
-                                    gfun.create_cfe_input(scheme_cat, scheme_form_cfes, self.attr_file, cfe_dir, self.run_type)
+                                    gfun.create_cfe_input(scheme_cat, scheme_form_cfes, self.attr_file, cfe_dir, self.run_type, self.cat_to_aet_rootzone)
 
                                 # Create SFT inputs
                                 gfun.change_sft_input(scheme_cat, scheme_form, mod_input_dir, bmi_dir, self.run_type)
@@ -1168,7 +1184,7 @@ class RealizationBuilder:
             else:
                 # Create BMI config files from scratch if paths not provided
                 if m1 in ['cfes', 'cfex']:
-                    gfun.create_cfe_input(cat_mod, form_cat, self.attr_file, mod_input_dir, self.run_type)
+                    gfun.create_cfe_input(cat_mod, form_cat, self.attr_file, mod_input_dir, self.run_type, self.cat_to_aet_rootzone)
                 elif m1 == 'topmodel':
                     gfun.create_topmodel_input(cat_mod, self.attr_file, self.gpkg_file, mod_input_dir)
                 elif m1 == 'ueb':
@@ -1215,7 +1231,7 @@ class RealizationBuilder:
                             # If LASAM is selected, create cfe input files required for sft (assume ice_fraction_scheme is cfes)
                             if scheme not in ('cfes', 'cfex'):
                                 scheme_form_cfes = [form + ['cfes'] for form in scheme_form]
-                                gfun.create_cfe_input(scheme_cat, scheme_form_cfes, self.attr_file, cfe_dir, self.run_type)
+                                gfun.create_cfe_input(scheme_cat, scheme_form_cfes, self.attr_file, cfe_dir, self.run_type, self.cat_to_aet_rootzone)
 
                             # Create SFT/SMP inputs
                             gfun.create_sft_smp_input(scheme_cat, scheme_form, self.attr_parquet, cfe_dir, self.conf3['forcing_dir'], sft_dir, smp_dir, self.run_type)
