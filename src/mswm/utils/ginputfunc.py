@@ -2133,7 +2133,7 @@ def update_forcing_config(
         forcing_template: dict,
         geogrid_file: str,
         start_period: str,
-        end_period: str, 
+        end_period: str,
         forcing_config_dir: Path,
         forcing_config_file: Path
 ) -> None:
@@ -2159,7 +2159,10 @@ def update_forcing_config(
     # Format start_period and end_period for config file
     start_dt = datetime.datetime.strptime(start_period, '%Y-%m-%d %H:%M:%S')
     end_dt = datetime.datetime.strptime(end_period, '%Y-%m-%d %H:%M:%S')
-    start_str = start_dt.strftime('%Y%m%d%H%M')
+
+    # Shift forecast start date by one hour
+    start_shift = start_dt - datetime.timedelta(hours=1)
+    start_str = start_shift.strftime('%Y%m%d%H%M')
     end_str = end_dt.strftime('%Y%m%d%H%M')
 
     # Compute time difference between start and end time
