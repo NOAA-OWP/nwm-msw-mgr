@@ -357,6 +357,49 @@ class RealizationBuilder:
 
         logger.info('Input.config sections parsed')
 
+    def _parse_forcing_engine(self):
+        """
+        Extract forcing engine parameters from input.config
+        """
+        # Retrieve forcing engine variables
+        self.forecast_cycle = self.conf3.get('forecast_cycle', None)
+        self.forcing_provider = self.conf3.get('forcing_provider')
+
+        if self.forcing_provider == 'bmi' and self.forecast_cycle is not None:
+
+            self.cycle_date = self.conf3.get('cycle_date')
+            self.cycle_hour = self.conf3.get('cycle_hour')
+            self.geogrid_file = self.conf3.get('geogrid_file')
+            self.forcing_template_dir = self.conf3.get('forcing_template_dir')
+
+            # Ensure forcing template file exists
+            self.forcing_template_file = (Path(self.forcing_template_dir) / f"{self.forecast_cycle}_config.yml").absolute()
+            if not self.forcing_template_file.exists():
+                try:
+                    raise FileNotFoundError(f'Forcing template file does not exist: {self.forcing_template_file}')
+                except FileNotFoundError as e:
+                    logger.critical(e)
+                    raise
+
+            # Read forcing template file
+            try:
+                with open(self.forcing_template_file) as file:
+                    self.forcing_template = yaml.safe_load(file)
+            except FileNotFoundError as e:
+                logger.critical(f'Config file does not exist: {self.forcing_template_file}\n{e}')
+                raise
+            except yaml.YAMLError as e:
+                logger.critical(f"YAML parsing error in config file: {self.forcing_template_file}\n{e}")
+                raise
+            except Exception as e:
+                logger.critical(f"Unexpected error loading config at: {self.forcing_template_file}\n{e}")
+                raise
+
+            # Retrieve ngen start and end time based on forecast cycle date, hour and configuration
+            self.fcst_start, self.fcst_end = gfun.create_fcst_times(self.forecast_cycle, self.cycle_date, self.cycle_hour)
+
+            logger.info('Ngen start and end time set from forcing cycle')
+
     def _parse_time(self):
         """
         Set run time variables for calibration, regionalization, and default runs
@@ -373,7 +416,10 @@ class RealizationBuilder:
             self.time_period = {"run_time_period": {"region": [self.conf1['start_period'], self.conf1['end_period']]}}
         # Retrieve time period for default
         elif self.run_type == 'default':
-            self.time_period = {"run_time_period": {"default": [self.conf1['start_period'], self.conf1['end_period']]}}
+            if self.forcing_provider == 'csv':
+                self.time_period = {"run_time_period": {"default": [self.conf1['start_period'], self.conf1['end_period']]}}
+            elif self.forcing_provider == 'bmi':
+                self.time_period = {"run_time_period": {"default": [self.fcst_start, self.fcst_end]}}
 
         # Confirm times are properly formatted and in correct order
         errors = []
@@ -796,7 +842,6 @@ class RealizationBuilder:
         Extract forcing files and symlink to input directory
         """
         # Retrieve forcing_provider and forcing_dir
-        self.forcing_provider = self.conf3.get('forcing_provider')
         self.forcing_dir = (self.conf3.get('forcing_dir', "") or None)
 
         # Create forcing directory
@@ -840,48 +885,12 @@ class RealizationBuilder:
         """
         if self.forcing_provider == 'bmi':
 
-            # Retrieve forcing engine variables
-            forecast_cycle = self.conf3.get('forecast_cycle')
-            geogrid_file = self.conf3.get('geogrid_file')
-            forcing_template_dir = self.conf3.get('forcing_template_dir')
-
-            # Ensure forcing template file exists
-            forcing_template_file = (Path(forcing_template_dir) / f"{forecast_cycle}_config.yml").absolute()
-            if not forcing_template_file.exists():
-                try:
-                    raise FileNotFoundError(f'Forcing template file does not exist: {forcing_template_file}')
-                except FileNotFoundError as e:
-                    logger.critical(e)
-                    raise
-
-            # Read forcing template file
-            try:
-                with open(forcing_template_file) as file:
-                    self.forcing_template = yaml.safe_load(file)
-            except FileNotFoundError as e:
-                logger.critical(f'Config file does not exist: {forcing_template_file}\n{e}')
-                raise
-            except yaml.YAMLError as e:
-                logger.critical(f"YAML parsing error in config file: {forcing_template_file}\n{e}")
-                raise
-            except Exception as e:
-                logger.critical(f"Unexpected error loading config at: {forcing_template_file}\n{e}")
-                raise
-
             # Set target directory for forcing config file
             forcing_config_dir = Path(self.input_dir) / 'forcing_config'
-            self.forcing_config_file = forcing_config_dir / f"{forecast_cycle}_config.yml"
-
-            # Set time run_type
-            time_run_type = (
-                'calib' if self.run_type == 'calibration'
-                else 'region' if self.run_type == 'regionalization'
-                else self.run_type
-            )
+            self.forcing_config_file = forcing_config_dir / f"{self.forecast_cycle}_config.yml"
 
             # Update dynamic parameters in forcing engine configuration file
-            gfun.update_forcing_config(forecast_cycle, self.forcing_template, geogrid_file, self.time_period['run_time_period'][time_run_type][0],
-                                       self.time_period['run_time_period'][time_run_type][1], forcing_config_dir, self.forcing_config_file)
+            gfun.update_forcing_config(self.cycle_date, self.cycle_hour, self.forcing_template, self.geogrid_file, forcing_config_dir, self.forcing_config_file)
 
             logger.info(f"Configured BMI forcing engine: {self.forcing_config_file}")
 
@@ -1457,6 +1466,7 @@ class RealizationBuilder:
                 logging.critical(e)
                 raise
 
+        self._parse_forcing_engine()
         self._parse_time()
         self._parse_calib_settings()
         self._parse_modules()
@@ -1493,6 +1503,7 @@ class RealizationBuilder:
                 logging.critical(e)
                 raise
 
+        self._parse_forcing_engine()
         self._load_reg_formulation()
         self._load_reg_catchments()
         self._parse_time()
@@ -1548,6 +1559,7 @@ class RealizationBuilder:
                 logging.critical(e)
                 raise
 
+        self._parse_forcing_engine()
         self._parse_time()
         self._parse_modules()
         self._validate_processes()
