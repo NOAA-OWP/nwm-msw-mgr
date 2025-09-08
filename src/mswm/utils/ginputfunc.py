@@ -2310,6 +2310,31 @@ def create_reg_realization_file(
     grp_main = {}
     grps = list(grp_to_form.keys())
 
+    # Set variable name mapping based on forcing provider
+    name_prcp = {"csv": "atmosphere_water__liquid_equivalent_precipitation_rate",
+                 "bmi": "RAINRATE_ELEMENT"}
+
+    name_Q2 = {"csv": "atmosphere_air_water~vapor__relative_saturation",
+               "bmi": "Q2D_ELEMENT"}
+
+    name_temp = {"csv": "land_surface_air__temperature",
+                 "bmi": "T2D_ELEMENT"}
+
+    name_xwind = {"csv": "land_surface_wind__x_component_of_velocity",
+                  "bmi": "U2D_ELEMENT"}
+
+    name_ywind = {"csv": "land_surface_wind__y_component_of_velocity",
+                  "bmi": "V2D_ELEMENT"}
+
+    name_lw = {"csv": "land_surface_radiation~incoming~longwave__energy_flux",
+               "bmi": "LWDOWN_ELEMENT"}
+
+    name_sw = {"csv": "land_surface_radiation~incoming~shortwave__energy_flux",
+               "bmi": "SWDOWN_ELEMENT"}
+
+    name_pressure = {"csv": "land_surface_air__pressure",
+                     "bmi": "PSFC_ELEMENT"}
+
     for grp in grps:
 
         model_configs = {}
@@ -2319,26 +2344,6 @@ def create_reg_realization_file(
 
         # noah
         if 'noah' in grp_mod:
-
-            if forcing_provider == 'csv':
-                noah_var_names = {"PRCPNONC": "atmosphere_water__liquid_equivalent_precipitation_rate",
-                                  "Q2": "atmosphere_air_water~vapor__relative_saturation",
-                                  "SFCTMP": "land_surface_air__temperature",
-                                  "UU": "land_surface_wind__x_component_of_velocity",
-                                  "VV": "land_surface_wind__y_component_of_velocity",
-                                  "LWDN": "land_surface_radiation~incoming~longwave__energy_flux",
-                                  "SOLDN": "land_surface_radiation~incoming~shortwave__energy_flux",
-                                  "SFCPRS": "land_surface_air__pressure"}
-            elif forcing_provider == 'bmi':
-                noah_var_names = {"PRCPNONC": "RAINRATE_ELEMENT",
-                                  "Q2": "Q2D_ELEMENT",
-                                  "SFCTMP": "T2D_ELEMENT",
-                                  "UU": "U2D_ELEMENT",
-                                  "VV": "V2D_ELEMENT",
-                                  "LWDN": "LWDOWN_ELEMENT",
-                                  "SOLDN": "SWDOWN_ELEMENT",
-                                  "SFCPRS": "PSFC_ELEMENT"}
-
             model_configs['noah'] = {"name": "bmi_fortran",
                                      "params": {"name": "bmi_fortran",
                                                 "model_type_name": get_model_type_name('noah'),
@@ -2346,7 +2351,14 @@ def create_reg_realization_file(
                                                 "library_file": lib_mod['noah'],
                                                 "init_config": os.path.join(bmi_dir['noah'], '{{id}}_region.input'),
                                                 "allow_exceed_end_time": True, "fixed_time_step": False, "uses_forcing_file": False,
-                                                "variables_names_map": noah_var_names,
+                                                "variables_names_map": {"PRCPNONC": name_prcp.get(forcing_provider),
+                                                                        "Q2": name_Q2.get(forcing_provider),
+                                                                        "SFCTMP": name_temp.get(forcing_provider),
+                                                                        "UU": name_xwind.get(forcing_provider),
+                                                                        "VV": name_ywind.get(forcing_provider),
+                                                                        "LWDN": name_lw.get(forcing_provider),
+                                                                        "SOLDN": name_sw.get(forcing_provider),
+                                                                        "SFCPRS": name_pressure.get(forcing_provider)},
                                                 "model_params": grp_params['noah'][grp]}}
 
         # cfe or cfex
@@ -2364,7 +2376,7 @@ def create_reg_realization_file(
 
             # variable name mapping section
             pet_in = "water_potential_evaporation_flux"
-            pcp_in = "atmosphere_water__liquid_equivalent_precipitation_rate"
+            pcp_in = name_prcp.get(forcing_provider)
             var_maps = var_mapping(grp_mod, pet_in, pcp_in, output_dict)
 
             # module output variable for input to t-route
@@ -2383,7 +2395,7 @@ def create_reg_realization_file(
                                                     "model_params": grp_params['topmodel'][grp]}}
             # variable name mapping section
             pet_in = "water_potential_evaporation_flux"
-            pcp_in = "atmosphere_water__liquid_equivalent_precipitation_rate"
+            pcp_in = name_prcp.get(forcing_provider)
             var_maps = var_mapping(grp_mod, pet_in, pcp_in, output_dict)
 
             # module output variable for input to t-route
@@ -2404,7 +2416,7 @@ def create_reg_realization_file(
             pet_in = "pet"
             pcp_in = "precip"
             var_maps = var_mapping(grp_mod, pet_in, pcp_in, output_dict)
-            var_maps['input']['tair'] = "land_surface_air__temperature"
+            var_maps['input']['tair'] = name_temp.get(forcing_provider)
 
             # module output variable for input to t-route
             main_output_variable = "tci"
@@ -2419,8 +2431,8 @@ def create_reg_realization_file(
                                            "allow_exceed_end_time": True, "fixed_time_step": False, "uses_forcing_file": False,
                                            "main_output_variable": "raim",
                                            "variables_names_map": {
-                                               "precip": "atmosphere_water__liquid_equivalent_precipitation_rate",
-                                               "tair": "land_surface_air__temperature"},
+                                               "precip": name_prcp.get(forcing_provider),
+                                               "tair": name_temp.get(forcing_provider)},
                                            "model_params": grp_params['snow17'][grp]}}
 
         # ueb
@@ -2434,14 +2446,14 @@ def create_reg_realization_file(
                                         "allow_exceed_end_time": True, "fixed_time_step": False, "uses_forcing_file": False,
                                         "main_output_variable": "SWIT",
                                         "variables_names_map": {
-                                            "Prec": "atmosphere_water__liquid_equivalent_precipitation_rate",
-                                            "Ta": "land_surface_air__temperature",
-                                            "qair": "atmosphere_air_water~vapor__relative_saturation",
-                                            "uebu2d": "land_surface_wind__x_component_of_velocity",
-                                            "uebv2d": "land_surface_wind__y_component_of_velocity",
-                                            "Qli": "land_surface_radiation~incoming~longwave__energy_flux",
-                                            "Qsi": "land_surface_radiation~incoming~shortwave__energy_flux",
-                                            "AP": "land_surface_air__pressure"},
+                                            "Prec": name_prcp.get(forcing_provider),
+                                            "Ta": name_temp.get(forcing_provider),
+                                            "qair": name_Q2.get(forcing_provider),
+                                            "uebu2d": name_xwind.get(forcing_provider),
+                                            "uebv2d": name_ywind.get(forcing_provider),
+                                            "Qli": name_lw.get(forcing_provider),
+                                            "Qsi": name_sw.get(forcing_provider),
+                                            "AP": name_pressure.get(forcing_provider)},
                                         "model_params": grp_params['ueb'][grp]}}
 
         # pet
@@ -2734,28 +2746,33 @@ def create_realization_file(
     if run_type == 'calibration':
         run_type = 'calib'
 
+    # Set variable name mapping based on forcing provider
+    name_prcp = {"csv": "atmosphere_water__liquid_equivalent_precipitation_rate",
+                 "bmi": "RAINRATE_ELEMENT"}
+
+    name_Q2 = {"csv": "atmosphere_air_water~vapor__relative_saturation",
+               "bmi": "Q2D_ELEMENT"}
+
+    name_temp = {"csv": "land_surface_air__temperature",
+                 "bmi": "T2D_ELEMENT"}
+
+    name_xwind = {"csv": "land_surface_wind__x_component_of_velocity",
+                  "bmi": "U2D_ELEMENT"}
+
+    name_ywind = {"csv": "land_surface_wind__y_component_of_velocity",
+                  "bmi": "V2D_ELEMENT"}
+
+    name_lw = {"csv": "land_surface_radiation~incoming~longwave__energy_flux",
+               "bmi": "LWDOWN_ELEMENT"}
+
+    name_sw = {"csv": "land_surface_radiation~incoming~shortwave__energy_flux",
+               "bmi": "SWDOWN_ELEMENT"}
+
+    name_pressure = {"csv": "land_surface_air__pressure",
+                     "bmi": "PSFC_ELEMENT"}
+
     # noah
     if 'noah' in modules:
-
-        if forcing_provider == 'csv':
-            noah_var_names = {"PRCPNONC": "atmosphere_water__liquid_equivalent_precipitation_rate",
-                              "Q2": "atmosphere_air_water~vapor__relative_saturation",
-                              "SFCTMP": "land_surface_air__temperature",
-                              "UU": "land_surface_wind__x_component_of_velocity",
-                              "VV": "land_surface_wind__y_component_of_velocity",
-                              "LWDN": "land_surface_radiation~incoming~longwave__energy_flux",
-                              "SOLDN": "land_surface_radiation~incoming~shortwave__energy_flux",
-                              "SFCPRS": "land_surface_air__pressure"}
-        elif forcing_provider == 'bmi':
-            noah_var_names = {"PRCPNONC": "RAINRATE_ELEMENT",
-                              "Q2": "Q2D_ELEMENT",
-                              "SFCTMP": "T2D_ELEMENT",
-                              "UU": "U2D_ELEMENT",
-                              "VV": "V2D_ELEMENT",
-                              "LWDN": "LWDOWN_ELEMENT",
-                              "SOLDN": "SWDOWN_ELEMENT",
-                              "SFCPRS": "PSFC_ELEMENT"}
-
         model_configs['noah'] = {"name": "bmi_fortran",
                                  "params": {"name": "bmi_fortran",
                                             "model_type_name": get_model_type_name('noah'),
@@ -2763,7 +2780,14 @@ def create_realization_file(
                                             "library_file": lib_mod['noah'],
                                             "init_config": os.path.join(bmi_dir['noah'], '{{id}}_' + run_type + '.input'),
                                             "allow_exceed_end_time": True, "fixed_time_step": False, "uses_forcing_file": False,
-                                            "variables_names_map": noah_var_names}}
+                                            "variables_names_map": {"PRCPNONC": name_prcp.get(forcing_provider),
+                                                                    "Q2": name_Q2.get(forcing_provider),
+                                                                    "SFCTMP": name_temp.get(forcing_provider),
+                                                                    "UU": name_xwind.get(forcing_provider),
+                                                                    "VV": name_ywind.get(forcing_provider),
+                                                                    "LWDN": name_lw.get(forcing_provider),
+                                                                    "SOLDN": name_sw.get(forcing_provider),
+                                                                    "SFCPRS": name_pressure.get(forcing_provider)}}}
 
     # cfe or cfex
     if 'cfes' in modules or 'cfex' in modules:
@@ -2779,7 +2803,7 @@ def create_realization_file(
 
         # variable name mapping section
         pet_in = "water_potential_evaporation_flux"
-        pcp_in = "atmosphere_water__liquid_equivalent_precipitation_rate"
+        pcp_in = name_prcp.get(forcing_provider)
         var_maps = var_mapping(modules, pet_in, pcp_in, output_dict)
 
         # module output variable for input to t-route
@@ -2797,7 +2821,7 @@ def create_realization_file(
                                                 "registration_function": "register_bmi_topmodel"}}
         # variable name mapping section
         pet_in = "water_potential_evaporation_flux"
-        pcp_in = "atmosphere_water__liquid_equivalent_precipitation_rate"
+        pcp_in = name_prcp.get(forcing_provider)
         var_maps = var_mapping(modules, pet_in, pcp_in, output_dict)
 
         # module output variable for input to t-route
@@ -2818,7 +2842,7 @@ def create_realization_file(
         pet_in = "pet"
         pcp_in = "precip"
         var_maps = var_mapping(modules, pet_in, pcp_in, output_dict)
-        var_maps['input']['tair'] = "land_surface_air__temperature"
+        var_maps['input']['tair'] = name_temp.get(forcing_provider)
 
         # module output variable for input to t-route
         main_output_variable = "tci"
@@ -2833,8 +2857,8 @@ def create_realization_file(
                                        "allow_exceed_end_time": True, "fixed_time_step": False, "uses_forcing_file": False,
                                        "main_output_variable": "raim",
                                        "variables_names_map": {
-                                           "precip": "atmosphere_water__liquid_equivalent_precipitation_rate",
-                                           "tair": "land_surface_air__temperature"
+                                           "precip": name_prcp.get(forcing_provider),
+                                           "tair": name_temp.get(forcing_provider)
                                        }}}
 
     # ueb
@@ -2848,14 +2872,14 @@ def create_realization_file(
                                     "allow_exceed_end_time": True, "fixed_time_step": False, "uses_forcing_file": False,
                                     "main_output_variable": "SWIT",
                                     "variables_names_map": {
-                                        "Prec": "atmosphere_water__liquid_equivalent_precipitation_rate",
-                                        "Ta": "land_surface_air__temperature",
-                                        "qair": "atmosphere_air_water~vapor__relative_saturation",
-                                        "uebu2d": "land_surface_wind__x_component_of_velocity",
-                                        "uebv2d": "land_surface_wind__y_component_of_velocity",
-                                        "Qli": "land_surface_radiation~incoming~longwave__energy_flux",
-                                        "Qsi": "land_surface_radiation~incoming~shortwave__energy_flux",
-                                        "AP": "land_surface_air__pressure"}}}
+                                        "Prec": name_prcp.get(forcing_provider),
+                                        "Ta": name_temp.get(forcing_provider),
+                                        "qair": name_Q2.get(forcing_provider),
+                                        "uebu2d": name_xwind.get(forcing_provider),
+                                        "uebv2d": name_ywind.get(forcing_provider),
+                                        "Qli": name_lw.get(forcing_provider),
+                                        "Qsi": name_sw.get(forcing_provider),
+                                        "AP": name_pressure.get(forcing_provider)}}}
 
     # pet
     if 'pet' in modules:
