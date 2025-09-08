@@ -960,7 +960,7 @@ class RealizationBuilder:
                         gfun.create_noah_input_template(self.catids, self.time_period, self.conf3[m1 + '_parameter_dir'], mod_input_dir, bmi_dir, self.run_type)
                     elif m1 == 'topmodel':
                         gfun.change_topmodel_input(self.catids, bmi_dir, mod_input_dir)
-                    elif m1 == 'cfes':
+                    elif m1 in ['cfes', 'cfex']:
                         gfun.change_cfe_input(self.catids, bmi_dir, mod_input_dir, self.run_type, self.is_aet_rootzone)
                     elif m1 == 'ueb':
                         gfun.create_ueb_input(self.catids, self.time_period, self.attr_file, self.conf3[m1 + '_parameter_dir'], mod_input_dir, bmi_dir, self.run_type)
@@ -1118,7 +1118,7 @@ class RealizationBuilder:
                         gfun.create_noah_input_template(cat_mod, self.time_period, self.conf3[m1 + '_parameter_dir'], mod_input_dir, bmi_dir, self.run_type)
                     elif m1 == 'topmodel':
                         gfun.change_topmodel_input(cat_mod, bmi_dir, mod_input_dir)
-                    elif m1 == 'cfes':
+                    elif m1 in ['cfes', 'cfex']:
                         gfun.change_cfe_input(cat_mod, bmi_dir, mod_input_dir, self.run_type, self.cat_to_aet_rootzone)
                     elif m1 == 'ueb':
                         gfun.create_ueb_input(cat_mod, self.time_period, self.attr_file, self.conf3[m1 + '_parameter_dir'], mod_input_dir, bmi_dir, self.run_type)
