@@ -2506,6 +2506,26 @@ def create_reg_realization_file(
 
         # noah
         if 'noah' in grp_mod:
+
+            if forcing_provider == 'csv':
+                noah_var_names = {"PRCPNONC": "atmosphere_water__liquid_equivalent_precipitation_rate",
+                                  "Q2": "atmosphere_air_water~vapor__relative_saturation",
+                                  "SFCTMP": "land_surface_air__temperature",
+                                  "UU": "land_surface_wind__x_component_of_velocity",
+                                  "VV": "land_surface_wind__y_component_of_velocity",
+                                  "LWDN": "land_surface_radiation~incoming~longwave__energy_flux",
+                                  "SOLDN": "land_surface_radiation~incoming~shortwave__energy_flux",
+                                  "SFCPRS": "land_surface_air__pressure"}
+            elif forcing_provider == 'bmi':
+                noah_var_names = {"PRCPNONC": "RAINRATE_ELEMENT",
+                                  "Q2": "Q2D_ELEMENT",
+                                  "SFCTMP": "T2D_ELEMENT",
+                                  "UU": "U2D_ELEMENT",
+                                  "VV": "V2D_ELEMENT",
+                                  "LWDN": "LWDOWN_ELEMENT",
+                                  "SOLDN": "SWDOWN_ELEMENT",
+                                  "SFCPRS": "PSFC_ELEMENT"}
+
             model_configs['noah'] = {"name": "bmi_fortran",
                                      "params": {"name": "bmi_fortran",
                                                 "model_type_name": get_model_type_name('noah'),
@@ -2513,6 +2533,7 @@ def create_reg_realization_file(
                                                 "library_file": lib_mod['noah'],
                                                 "init_config": os.path.join(bmi_dir['noah'], '{{id}}_region.input'),
                                                 "allow_exceed_end_time": True, "fixed_time_step": False, "uses_forcing_file": False,
+<<<<<<< HEAD
                                                 "variables_names_map": {
                                                     "PRCPNONC": "atmosphere_water__liquid_equivalent_precipitation_rate",
                                                     "Q2": "atmosphere_air_water~vapor__relative_saturation",
@@ -2524,6 +2545,10 @@ def create_reg_realization_file(
                                                     "SFCPRS": "land_surface_air__pressure"}}}
             if grp_params.get('noah', {}).get(grp):
                 model_configs['noah']['params']['model_params'] = grp_params['noah'][grp]
+=======
+                                                "variables_names_map": noah_var_names,
+                                                "model_params": grp_params['noah'][grp]}}
+>>>>>>> 728eb7e (Modify noah variable names for bmi)
 
         # cfe or cfex
         if 'cfes' in grp_mod or 'cfex' in grp_mod:
@@ -2893,6 +2918,26 @@ def create_realization_file(
 
     # noah
     if 'noah' in modules:
+
+        if forcing_provider == 'csv':
+            noah_var_names = {"PRCPNONC": "atmosphere_water__liquid_equivalent_precipitation_rate",
+                              "Q2": "atmosphere_air_water~vapor__relative_saturation",
+                              "SFCTMP": "land_surface_air__temperature",
+                              "UU": "land_surface_wind__x_component_of_velocity",
+                              "VV": "land_surface_wind__y_component_of_velocity",
+                              "LWDN": "land_surface_radiation~incoming~longwave__energy_flux",
+                              "SOLDN": "land_surface_radiation~incoming~shortwave__energy_flux",
+                              "SFCPRS": "land_surface_air__pressure"}
+        elif forcing_provider == 'bmi':
+            noah_var_names = {"PRCPNONC": "RAINRATE_ELEMENT",
+                              "Q2": "Q2D_ELEMENT",
+                              "SFCTMP": "T2D_ELEMENT",
+                              "UU": "U2D_ELEMENT",
+                              "VV": "V2D_ELEMENT",
+                              "LWDN": "LWDOWN_ELEMENT",
+                              "SOLDN": "SWDOWN_ELEMENT",
+                              "SFCPRS": "PSFC_ELEMENT"}
+
         model_configs['noah'] = {"name": "bmi_fortran",
                                  "params": {"name": "bmi_fortran",
                                             "model_type_name": get_model_type_name('noah'),
@@ -2900,15 +2945,7 @@ def create_realization_file(
                                             "library_file": lib_mod['noah'],
                                             "init_config": os.path.join(bmi_dir['noah'], '{{id}}_' + run_type + '.input'),
                                             "allow_exceed_end_time": True, "fixed_time_step": False, "uses_forcing_file": False,
-                                            "variables_names_map": {
-                                                "PRCPNONC": "atmosphere_water__liquid_equivalent_precipitation_rate",
-                                                "Q2": "atmosphere_air_water~vapor__relative_saturation",
-                                                "SFCTMP": "land_surface_air__temperature",
-                                                "UU": "land_surface_wind__x_component_of_velocity",
-                                                "VV": "land_surface_wind__y_component_of_velocity",
-                                                "LWDN": "land_surface_radiation~incoming~longwave__energy_flux",
-                                                "SOLDN": "land_surface_radiation~incoming~shortwave__energy_flux",
-                                                "SFCPRS": "land_surface_air__pressure"}}}
+                                            "variables_names_map": noah_var_names}}
 
     # cfe or cfex
     if 'cfes' in modules or 'cfex' in modules:
