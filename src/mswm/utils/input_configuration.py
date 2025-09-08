@@ -62,9 +62,9 @@ class GeneralConfig(StrictBaseModel):
         if self.run_type != "regionalization" and not self.models:
             raise ValueError("`models` must be specified for a default and calibration runs.")
 
-        # Start_period and end_period required unless run_type is calibration
-        if self.run_type != "calibration" and (not self.start_period or not self.end_period):
-            raise ValueError("`start_period` and `end_period` must be specified for default and regionalization runs.")
+        # Start_period and end_period required unless run_type is calibration or default
+        if self.run_type == "regionalization" and (not self.start_period or not self.end_period):
+            raise ValueError("`start_period` and `end_period` must be specified for regionalization runs.")
 
         return self
 

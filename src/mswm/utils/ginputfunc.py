@@ -14,7 +14,7 @@ import logging
 import shutil
 import math
 from pathlib import Path
-from typing import List, Union, Dict
+from typing import List, Union, Dict, Tuple
 from collections import OrderedDict
 from pyproj import Transformer
 import geopandas as gpd
@@ -57,6 +57,7 @@ def is_probably_regex(pattern):
 
 __all__ = [
     'change_hydrofab_attr',
+    'create_fcst_times',
     'create_walk_file',
     'create_cfe_input',
     'create_noah_input',
@@ -2315,12 +2316,52 @@ def create_troute_config(
         yaml.dump(config, file, sort_keys=False, default_flow_style=False, indent=4)
 
 
-def update_forcing_config(
+def create_fcst_times(
         forecast_cycle: str,
+        cycle_date: str,
+        cycle_hour: str,
+) -> Tuple[str, str]:
+    """ Compute forecast start and end time based on selected forecast cycle, date, and hour
+
+    Parameters
+    ----------
+    forecast_cycle : string describing the forecast cycle
+    cycle_date : date of forecast cycle
+    cycle_hour : hour of forecast cycle (00z)
+
+    Returns
+    ----------
+    fcst_start: datetime of ngen start time for forecast
+    fcst_end: datetime of ngen end time for forecast
+
+    """
+
+    # Confirm forecast_cycle is valid
+    if forecast_cycle not in ['ana', 'aorc', 'ext_ana', 'lr', 'mrb', 'nwm', 'sr']:
+        try:
+            raise Exception(f"Forecast cycle {forecast_cycle} does not match valid cycle name")
+        except Exception as e:
+            logger.critical(e)
+            raise
+
+    # Convert cycle date and hour to datetime
+    cycle_datetime = datetime.datetime.strptime(cycle_date, "%Y-%m-%d").replace(hour=int(cycle_hour.replace("z", "")))
+
+    # Construct start and end times based on forecast cycle
+    start_map = {"sr": 1}
+    end_map = {"sr": 18}
+
+    fcst_start = datetime.datetime.strftime(cycle_datetime + datetime.timedelta(hours=start_map.get(forecast_cycle)), "%Y-%m-%d %H:%M:%S")
+    fcst_end = datetime.datetime.strftime(cycle_datetime + datetime.timedelta(hours=end_map.get(forecast_cycle)), "%Y-%m-%d %H:%M:%S")
+
+    return fcst_start, fcst_end
+
+
+def update_forcing_config(
+        cycle_date: str,
+        cycle_hour: str,
         forcing_template: dict,
         geogrid_file: str,
-        start_period: str,
-        end_period: str,
         forcing_config_dir: Path,
         forcing_config_file: Path
 ) -> None:
@@ -2328,11 +2369,10 @@ def update_forcing_config(
 
     Parameters
     ----------
-    forecast_cycle: name of forecast cycle
+    cycle_date : date of forecast cycle
+    cycle_hour : hour of forecast cycle (00z)
     forcing_template : dictionary of forcing bmi config template file
     geogrid_file: path to geogrid file
-    start_period: start time for model run
-    end_period: end time for model run
     forcing_config_dir: directory path for forcing config file
     forcing_config_dir: output path for forcing config file
 
@@ -2343,26 +2383,14 @@ def update_forcing_config(
     # Create directory for storing config file
     os.makedirs(forcing_config_dir, exist_ok=True)
 
-    # Format start_period and end_period for config file
-    start_dt = datetime.datetime.strptime(start_period, '%Y-%m-%d %H:%M:%S')
-    end_dt = datetime.datetime.strptime(end_period, '%Y-%m-%d %H:%M:%S')
+    # Format cycle_date and hour for config file
+    cycle_datetime = datetime.datetime.strptime(cycle_date, "%Y-%m-%d").replace(hour=int(cycle_hour.replace("z", "")))
 
     # Shift forecast start date by one hour
-    start_shift = start_dt - datetime.timedelta(hours=1)
-    start_str = start_shift.strftime('%Y%m%d%H%M')
-    end_str = end_dt.strftime('%Y%m%d%H%M')
-
-    # Compute time difference between start and end time
-    time_delta = int((end_dt - start_dt).total_seconds() / 60)
+    cycle_str = cycle_datetime.strftime('%Y%m%d%H%M')
 
     # Update forcing_template with dynamic variables
-    if forcing_template['AnAFlag'] == 1:
-        forcing_template['RefcstBDateProc'] = end_str
-        forcing_template['LookBack'] = time_delta
-    elif forcing_template['AnAFlag'] == 0:
-        forcing_template['RefcstBDateProc'] = start_str
-        forcing_template['ForecastInputHorizons'] = [time_delta] * len(forcing_template['InputForcingDirectories'])
-
+    forcing_template['RefcstBDateProc'] = cycle_str
     forcing_template['GeogridIn'] = geogrid_file
 
     # Write forcing config yaml file

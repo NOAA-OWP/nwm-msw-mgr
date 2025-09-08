@@ -429,7 +429,10 @@ class RealizationBuilder:
             self.time_period = {"run_time_period": {"region": [self.conf1['start_period'], self.conf1['end_period']]}}
         # Retrieve time period for default
         elif self.run_type == 'default':
-            self.time_period = {"run_time_period": {"default": [self.conf1['start_period'], self.conf1['end_period']]}}
+            if self.forcing_provider == 'csv':
+                self.time_period = {"run_time_period": {"default": [self.conf1['start_period'], self.conf1['end_period']]}}
+            elif self.forcing_provider == 'bmi':
+                self.time_period = {"run_time_period": {"default": [self.fcst_start, self.fcst_end]}}
 
         # Confirm times are properly formatted and in correct order
         errors = []
@@ -849,6 +852,9 @@ class RealizationBuilder:
         """
         Extract forcing files and symlink to input directory
         """
+        # Retrieve forcing_provider and forcing_dir
+        self.forcing_dir = (self.conf3.get('forcing_dir', "") or None)
+
         # Create forcing directory
         self.forcing_path = os.path.join(self.input_dir, 'forcing')
 
@@ -896,11 +902,7 @@ class RealizationBuilder:
 
             # Set target directory for forcing config file
             self.forcing_config_dir = Path(self.input_dir) / 'forcing_config'
-
-            if self.use_cold_start is True:
-                self.forcing_config_file = self.forcing_config_dir / "cold_start_config.yml"
-            else:
-                self.forcing_config_file = self.forcing_config_dir / f"{self.forecast_configuration}_config.yml"
+            self.forcing_config_file = self.forcing_config_dir / f"{self.forecast_cycle}_config.yml"
 
             # Construct ESMF mesh file path
             gpkg_name = os.path.splitext(os.path.basename(self.cat_file))[0]
