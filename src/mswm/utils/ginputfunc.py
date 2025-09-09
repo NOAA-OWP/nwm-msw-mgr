@@ -2161,8 +2161,13 @@ def create_fcst_times(
     cycle_datetime = datetime.datetime.strptime(cycle_date, "%Y-%m-%d").replace(hour=int(cycle_hour.replace("z", "")))
 
     # Construct start and end times based on forecast cycle
-    start_map = {"sr": 1}
-    end_map = {"sr": 18}
+    start_map = {"sr": 1,
+                 "mrb": 1,
+                 "lr": 1}
+    end_map = {"sr": 18,
+               "mrb": 240,
+               "lr": 18
+               } 
 
     fcst_start = datetime.datetime.strftime(cycle_datetime + datetime.timedelta(hours=start_map.get(forecast_cycle)), "%Y-%m-%d %H:%M:%S")
     fcst_end = datetime.datetime.strftime(cycle_datetime + datetime.timedelta(hours=end_map.get(forecast_cycle)), "%Y-%m-%d %H:%M:%S")
