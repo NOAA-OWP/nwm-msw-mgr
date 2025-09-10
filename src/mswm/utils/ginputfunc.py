@@ -2317,6 +2317,7 @@ def create_troute_config(
 
 
 def create_fcst_times(
+        forcing_template: dict,
         forecast_cycle: str,
         cycle_date: str,
         cycle_hour: str,
@@ -2325,6 +2326,7 @@ def create_fcst_times(
 
     Parameters
     ----------
+    forecast_template: dictionary of forecast config file template
     forecast_cycle : string describing the forecast cycle
     cycle_date : date of forecast cycle
     cycle_hour : hour of forecast cycle (00z)
@@ -2337,7 +2339,7 @@ def create_fcst_times(
     """
 
     # Confirm forecast_cycle is valid
-    if forecast_cycle not in ['ana', 'aorc', 'ext_ana', 'lr', 'mrb', 'nwm', 'sr']:
+    if forecast_cycle not in ['ana', 'standard_ana', 'aorc', 'extended_ana', 'long_range_mem1', 'long_range_mem2', 'long_range_mem3', 'long_range_mem4', 'medium_range_blend', 'nwm', 'short_range']:
         try:
             raise Exception(f"Forecast cycle {forecast_cycle} does not match valid cycle name")
         except Exception as e:
@@ -2347,17 +2349,27 @@ def create_fcst_times(
     # Convert cycle date and hour to datetime
     cycle_datetime = datetime.datetime.strptime(cycle_date, "%Y-%m-%d").replace(hour=int(cycle_hour.replace("z", "")))
 
-    # Construct start and end times based on forecast cycle
-    start_map = {"sr": 1,
-                 "mrb": 1,
-                 "lr": 1}
-    end_map = {"sr": 18,
-               "mrb": 240,
-               "lr": 18
-               } 
+    # Retireve AnAFlag
+    ana_flag = forcing_template['AnAFlag']
 
-    fcst_start = datetime.datetime.strftime(cycle_datetime + datetime.timedelta(hours=start_map.get(forecast_cycle)), "%Y-%m-%d %H:%M:%S")
-    fcst_end = datetime.datetime.strftime(cycle_datetime + datetime.timedelta(hours=end_map.get(forecast_cycle)), "%Y-%m-%d %H:%M:%S")
+    # Construct start and end times based on forecast cycle
+    if ana_flag == 0:
+
+        # Retrieve forecast input horizon from config file
+        forcing_horizon = int(forcing_template['ForecastInputHorizons'][0] / 60)
+        start_delta = 1
+
+        fcst_start = datetime.datetime.strftime(cycle_datetime + datetime.timedelta(hours=start_delta), "%Y-%m-%d %H:%M:%S")
+        fcst_end = datetime.datetime.strftime(cycle_datetime + datetime.timedelta(hours=forcing_horizon), "%Y-%m-%d %H:%M:%S")
+
+    # Construct start and end times based on analysis cycle
+    elif ana_flag == 1:
+
+        # Retrieve analysis lookback from config file
+        forcing_lookback = int(forcing_template['LookBack'] / 60)
+
+        fcst_start = datetime.datetime.strftime(cycle_datetime - datetime.timedelta(hours=forcing_lookback), "%Y-%m-%d %H:%M:%S")
+        fcst_end = datetime.datetime.strftime(cycle_datetime, "%Y-%m-%d %H:%M:%S")
 
     return fcst_start, fcst_end
 
