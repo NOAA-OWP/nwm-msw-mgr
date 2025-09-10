@@ -396,7 +396,7 @@ class RealizationBuilder:
                 raise
 
             # Retrieve ngen start and end time based on forecast cycle date, hour and configuration
-            self.fcst_start, self.fcst_end = gfun.create_fcst_times(self.forecast_cycle, self.cycle_date, self.cycle_hour)
+            self.fcst_start, self.fcst_end = gfun.create_fcst_times(self.forcing_template, self.forecast_cycle, self.cycle_date, self.cycle_hour)
 
             logger.info('Ngen start and end time set from forcing cycle')
 
