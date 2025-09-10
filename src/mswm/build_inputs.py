@@ -791,6 +791,10 @@ class RealizationBuilder:
                                           crs="EPSG:5070")
         self.attr_file = self.attr_file.to_crs("EPSG:4326")
 
+        # Update coordinates with reprojected values
+        self.attr_file[x_col] = self.attr_file.geometry.x
+        self.attr_file[y_col] = self.attr_file.geometry.y
+
         logger.info(f"Attribute file loaded from: {self.gpkg_file}")
 
     def _extract_forcing(self):
