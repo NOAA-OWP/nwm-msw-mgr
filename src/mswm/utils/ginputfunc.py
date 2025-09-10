@@ -2339,7 +2339,8 @@ def create_fcst_times(
     """
 
     # Confirm forecast_cycle is valid
-    if forecast_cycle not in ['ana', 'standard_ana', 'aorc', 'extended_ana', 'long_range_mem1', 'long_range_mem2', 'long_range_mem3', 'long_range_mem4', 'medium_range_blend', 'nwm', 'short_range']:
+    if forecast_cycle not in ['ana', 'standard_ana', 'aorc', 'extended_ana', 'long_range_mem1', 'long_range_mem2', 'long_range_mem3', 'long_range_mem4',
+                              'medium_range_blend', 'nwm', 'short_range', 'short_range_alaska']:
         try:
             raise Exception(f"Forecast cycle {forecast_cycle} does not match valid cycle name")
         except Exception as e:
