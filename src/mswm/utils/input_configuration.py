@@ -143,17 +143,50 @@ class CalibConfig(StrictBaseModel):
         return self
 
 
-class DataFileConfig(StrictBaseModel):
+class ForcingConfig(StrictBaseModel):
     """
-    Input.config DataFile section requirement
+    Input.config Forcing section requirement
     """
     forcing_provider: Literal['csv', 'bmi']
     forcing_dir: Optional[str] = None
-    forecast_cycle: Optional[str] = None
+    forecast_cycle: Optional[Literal['ana', 'standard_ana', 'aorc', 'extended_ana', 'long_range_mem1', 'long_range_mem2', 'long_range_mem3', 'long_range_mem4',
+                                     'medium_range_blend', 'nwm', 'short_range', 'short_range_alaska', 'medium_range_blend_alaska', 'short_range_extended_alaska',
+                                     'short_range_hawaii', 'short_range_puertorico', 'extended_ana_alaska', 'standard_ana_alaska', 'standard_ana_hawaii',
+                                     'standard_ana_puertorico']] = None
     cycle_date: Optional[str] = None
     cycle_hour: Optional[str] = None
     geogrid_file: Optional[str] = None
     forcing_template_dir: Optional[str] = None
+    use_cold_start: Optional[bool] = None
+    cold_start_time: Optional[str] = None
+
+    # Check optional fields that depend on forcing_provider
+    @model_validator(mode="after")
+    def check_required_fields(self):
+
+        # forcing_dir required if forcing_provider is csv
+        if self.forcing_provider == 'csv' and self.forcing_dir is None:
+            raise ValueError("`forcing_dir` must be specified for a run using csv forcing provider.")
+
+        # forecast_cycle required if forcing_provider is csv
+        if self.forcing_provider == 'bmi' and self.forecast_cycle is None:
+            raise ValueError("`forecast_cycle` must be specified for a run using bmi forcing provider.")
+
+        # geogrid_file required if forcing_provider is csv
+        if self.forcing_provider == 'bmi' and self.geogrid_file is None:
+            raise ValueError("`geogrid_file` must be specified for a run using bmi forcing provider.")
+
+        # forcing dir required if forcing_provider is csv
+        if self.forcing_provider == 'bmi' and self.forcing_template_dir is None:
+            raise ValueError("`forcing_template_dir` must be specified for a run using bmi forcing provider.")
+
+        return self
+
+
+class DataFileConfig(StrictBaseModel):
+    """
+    Input.config DataFile section requirement
+    """
     obs_dir: Optional[str] = None
     nwmretro_file: Optional[str] = None
     hydrofab_file: str
@@ -191,28 +224,6 @@ class DataFileConfig(StrictBaseModel):
     topmodel_lib: Optional[str] = None
     ueb_lib: Optional[str] = None
 
-    # Check optional fields that depend on forcing_provider
-    @model_validator(mode="after")
-    def check_required_fields(self):
-
-        # forcing_dir required if forcing_provider is csv
-        if self.forcing_provider == 'csv' and self.forcing_dir is None:
-            raise ValueError("`forcing_dir` must be specified for a run using csv forcing provider.")
-
-        # forecast_cycle required if forcing_provider is csv
-        if self.forcing_provider == 'bmi' and self.forecast_cycle is None:
-            raise ValueError("`forecast_cycle` must be specified for a run using bmi forcing provider.")
-
-        # geogrid_file required if forcing_provider is csv
-        if self.forcing_provider == 'bmi' and self.geogrid_file is None:
-            raise ValueError("`geogrid_file` must be specified for a run using bmi forcing provider.")
-
-        # forcing dir required if forcing_provider is csv
-        if self.forcing_provider == 'bmi' and self.forcing_template_dir is None:
-            raise ValueError("`forcing_template_dir` must be specified for a run using bmi forcing provider.")
-
-        return self
-
 
 class ParallelConfig(StrictBaseModel):
     """
@@ -227,17 +238,18 @@ class InputConfig(StrictBaseModel):
     """
     Class to organize input.config section requirements
     """
-    General: GeneralConfig
+    General: Optional[GeneralConfig] = None
     Regionalization: Optional[Union[dict, RegionConfig]] = None
     Calibration: Optional[Union[dict, CalibConfig]] = None
-    DataFile: DataFileConfig
+    Forcing: Optional[ForcingConfig] = None
+    DataFile: Optional[DataFileConfig] = None
     Parallel: Optional[ParallelConfig] = None
 
     # Check optional sections are present
     # only validate sections that are required for run type
     @model_validator(mode="after")
     def check_calibration(self):
-        if self.General.run_type == "calibration":
+        if self.General is not None and self.General.run_type == "calibration":
             if self.Calibration is None:
                 raise ValueError("Calibration section is required for calibration run.")
             if isinstance(self.Calibration, dict):
@@ -245,7 +257,7 @@ class InputConfig(StrictBaseModel):
         return self
 
     def check_regionalization(self):
-        if self.General.run_type == "regionalization":
+        if self.General is not None and self.General.run_type == "regionalization":
             if self.Regionalization is None:
                 raise ValueError("Regionalization section is required for regionalization run.")
             if isinstance(self.Regionalization, dict):
