@@ -14,14 +14,12 @@ def update_forcing_in_realization(
         gpkg_file: Path,
 ) -> dict:
     """
-    Read forcing file(s) to retrieve start time and end time of the forcing data,
-    and adjust the realization configuration accordingly:
+    Adjust the realization configuration with forecast or cold start information accordingly:
         1) update forcing information
         2) update start and end times
 
     Arguments
     ---------
-    forc_file: file path to forcing data (a single .nc file or a folder containing a csv file for each catchment)
     real_config: dictionary containing the realization configuration
     gpkg_file: file path the GeoPacakge file
 

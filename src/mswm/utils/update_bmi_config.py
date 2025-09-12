@@ -8,9 +8,9 @@ import yaml
 logger = logging.getLogger(__name__)
 
 
-def update_noah_ueb(
+def update_noah_ueb_times(
         real_config: dict,
-        out_dir: Path,
+        input_dir_dir: Path,
 ) -> dict:
     """
     For noah-owp-modular & UEB, create new BMI config files with adjusted start/end times, and then
@@ -19,7 +19,7 @@ def update_noah_ueb(
     Arguments
     ---------
     real_config: dictionary containing the realization configuration
-    out_dir: folder for the new BMI config files
+    input_dir: folder for the new BMI config files
 
     Returns
     -------
@@ -49,7 +49,7 @@ def update_noah_ueb(
             # read the BMI config files from the source directory in the realization file
             src0 = m1['params']['init_config']
             src = Path(src0.replace('{{id}}', '*'))
-            dst = Path(out_dir, mod_dict[m1['params']['model_type_name']] + '_input')
+            dst = Path(input_dir, mod_dict[m1['params']['model_type_name']] + '_input')
 
             try:
                 dst.mkdir(parents=True, exist_ok=True)
@@ -94,7 +94,7 @@ def update_noah_ueb(
 
 def update_troute(
         real_config: dict,
-        out_dir: Path,
+        input_dir: Path,
 ) -> dict:
     """
     For t-route, create new BMI config file with adjusted start/end times, and then
@@ -103,7 +103,7 @@ def update_troute(
     Arguments
     ---------
     real_config: dictionary containing the realization configuration
-    out_dir: folder for the new BMI config files
+    input_dir: folder for the new BMI config files
 
     Returns
     -------
@@ -153,7 +153,7 @@ def update_troute(
 
     # write to new t-route config file
     try:
-        new_file = Path(out_dir, os.path.basename(src))
+        new_file = Path(input_dir, os.path.basename(src))
         with open(new_file, 'w') as file:
             yaml.dump(rt_config, file, sort_keys=False, default_flow_style=False, indent=4)
     except yaml.YAMLError as e:

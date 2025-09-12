@@ -8,11 +8,11 @@ import argparse
 from mswm.build_inputs import RealizationBuilder
 
 
-def build_default(input_path: str):
+def build_default(input_path: str, use_cold_start: bool = False):
     """
     Call RealizationBuilder class to generate realization and config files with default parameters
     """
-    rb = RealizationBuilder(input_path=input_path)
+    rb = RealizationBuilder(input_path=input_path, use_cold_start=use_cold_start)
     rb.build_default_realization()
 
 
@@ -24,11 +24,11 @@ def build_calib(input_path: str):
     rb.build_calib_realization()
 
 
-def build_fcst(input_path: str, forcing_path: str, output_folder: str):
+def build_fcst(input_path: str, valid_yaml: str, fcst_run_name: str, use_cold_start: bool = False):
     """
     Call RealizationBuilder class to generate forecast realization and config files
     """
-    rb = RealizationBuilder(input_path=input_path, forcing_path=forcing_path, output_folder=output_folder)
+    rb = RealizationBuilder(input_path=input_path, valid_yaml=valid_yaml, fcst_run_name=fcst_run_name, use_cold_start=use_cold_start)
     rb.build_fcst_realization()
 
 
@@ -49,6 +49,7 @@ def main():
     # subcommand: build_default
     build_default_sub = subparser.add_parser("build_default", help="Create default realization")
     build_default_sub.add_argument("input_path", help="Input configuration file")
+    build_default_sub.add_argument("use_cold_start", required=False, help="Cold start flag (True or False)")
 
     # subcommand: build_calib
     build_calib_sub = subparser.add_parser("build_calib", help="Create calibration realization")
@@ -60,10 +61,10 @@ def main():
 
     # subcommand: build_fcst
     build_fcst_sub = subparser.add_parser("build_fcst", help="Create forecast realization")
-    build_fcst_sub.add_argument("input_path", help="Path to the config yaml file for a validation run")
-    build_fcst_sub.add_argument("forcing_path", help="Path to the NetCDF forcing file OR "
-                                                     "a folder containing .csv forcing files for all catchments")
-    build_fcst_sub.add_argument("output_folder", help="Path to the folder to be created for storing inputs/outputs from running ngen")
+    build_fcst_sub.add_argument("input_path", help="Input configuration file")
+    build_fcst_sub.add_argument("calib_yaml", help="Path to the config yaml file for a validation run")
+    build_fcst_sub.add_argument("fcst_run_name", help="Name of the folder to be created for storing inputs/outputs from running ngen")
+    build_fcst_sub.add_argument("use_cold_start", required=False, help="Cold start flag (True or False)")
 
     args = parser.parse_args()
 
@@ -75,7 +76,7 @@ def main():
     elif args.command == "build_region":
         build_region(args.input_path)
     elif args.command == "build_fcst":
-        build_fcst(args.input_path, args.forcing_path, args.output_folder)
+        build_fcst(args.input_path, args.calib_yaml, args.fcst_run_name, args.use_cold_start)
     else:
         raise ValueError(f"Unexpected mswm command: {args.command}")
 

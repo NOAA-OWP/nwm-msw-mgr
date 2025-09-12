@@ -20,8 +20,6 @@ from pydantic import ValidationError
 from mswm.utils import ginputfunc as gfun
 from mswm.utils import settings
 from mswm.utils.log_level import log_level_set
-from mswm.utils.process_forcing import update_forcing_in_realization
-from mswm.utils.update_bmi_config import update_noah_ueb, update_troute
 from mswm.utils.input_configuration import InputConfig
 
 
@@ -37,10 +35,18 @@ if not logging.getLogger().hasHandlers():
 
 
 class RealizationBuilder:
+<<<<<<< HEAD
     def __init__(self, input_path: str, forcing_path: str | None = None, output_folder: str | None = None):
         self.input_path = Path(input_path)
+=======
+    def __init__(self, input_path: str, calib_yaml: str | None = None, use_cold_start: bool = False, assign_path: str | None = None, forcing_path: str | None = None, fcst_run_name: str | None = None):
+        self.input_path = Path(input_path)
+        self.calib_yaml = Path(calib_yaml) if calib_yaml else None
+        self.use_cold_start = use_cold_start
+        self.assign_path = Path(assign_path) if assign_path else None
+>>>>>>> f5242f1 (Add support for cold_start and calibration to forecast workflow)
         self.forcing_path = Path(forcing_path) if forcing_path else None
-        self.output_folder = output_folder if output_folder else None
+        self.fcst_run_name = fcst_run_name if fcst_run_name else None
         logger.info(f"Initialized RealizationBuilder with {input_path}")
 
     def _load_config(self):
@@ -96,7 +102,7 @@ class RealizationBuilder:
 
         # Validate input.config structure and variables using Pydantic
         try:
-            self.input_configs = InputConfig(**configs).dict()
+            self.input_configs = InputConfig(**configs).model_dump()
         except ValidationError as e:
             logger.critical(f"Input.config Pydantic validation failed: {self.input_path}{e}")
             raise
@@ -107,29 +113,29 @@ class RealizationBuilder:
         Read yaml-based configuration file from previous ngen-cal run
         """
         # Confirm config yaml file exists
-        self.config_yaml = Path(self.input_path).absolute()
-        if not self.config_yaml.exists():
+        self.calib_yaml = Path(self.calib_yaml).absolute()
+        if not self.calib_yaml.exists():
             try:
-                raise FileNotFoundError(f'Config file does not exist: {self.config_yaml}')
+                raise FileNotFoundError(f'Config calib yaml file does not exist: {self.calib_yaml}')
             except FileNotFoundError as e:
                 logger.critical(e)
                 raise
 
         # Read the yaml-based configuration file
         try:
-            with open(self.config_yaml) as file:
-                self.conf = yaml.safe_load(file)
+            with open(self.calib_yaml) as file:
+                self.calib_conf = yaml.safe_load(file)
         except FileNotFoundError as e:
-            logger.critical(f'Config file does not exist: {self.config_yaml}\n{e}')
+            logger.critical(f'Config calib yaml file does not exist: {self.calib_yaml}\n{e}')
             raise
         except yaml.YAMLError as e:
-            logger.critical(f"YAML parsing error in config file: {self.input_path}\n{e}")
+            logger.critical(f"YAML parsing error in calib config yaml file: {self.calib_yaml}\n{e}")
             raise
         except Exception as e:
-            logger.critical(f"Unexpected error loading config at: {self.input_path}\n{e}")
+            logger.critical(f"Unexpected error loading calib config yaml file at: {self.calib_yaml}\n{e}")
             raise
 
-        logger.info(f"Configuration yaml file loaded:  {self.config_yaml}")
+        logger.info(f"Configuration yaml file loaded:  {self.calib_yaml}")
 
     def _load_reg_formulation(self):
         """
@@ -275,16 +281,16 @@ class RealizationBuilder:
         """
         # Set realization file path
         try:
-            self.real_input_file = Path(self.conf['model']['realization']).absolute()
+            self.real_input_file = Path(self.calib_conf['model']['realization']).absolute()
 
             # Get hydrofabric gpkg paths
-            self.gpkg_cats = self.conf['model']['catchments']
-            self.gpkg_nexus = self.conf['model']['nexus']
+            self.gpkg_cats = self.calib_conf['model']['catchments']
+            self.gpkg_nexus = self.calib_conf['model']['nexus']
 
             # Get ngen executable path
-            self.ngen_exe = self.conf['model']['binary']
+            self.ngen_exe = self.calib_conf['model']['binary']
         except Exception as e:
-            logger.critical(f"Yaml config calib file is missing fields: {self.input_path}\n{e}")
+            logger.critical(f"Yaml config calib file is missing fields: {self.calib_yaml}\n{e}")
             raise
 
         logger.info("Yaml file parsed")
@@ -314,30 +320,6 @@ class RealizationBuilder:
         except Exception as e:
             logger.critical(f"Unexpected error reading realization file: {self.real_input_file}\n{e}")
 
-    def _create_fcst_output_dir(self):
-        """
-        Create output directory for forecast run
-        """
-        # create output directory
-        try:
-            out_dir0 = Path(self.conf['general']['yaml_file']).parent.parent.resolve(strict=True)
-        except KeyError as e:
-            logger.critical(f"Yaml file path not found in config calib yaml file: {e}")
-            raise
-        except FileNotFoundError as e:
-            logger.critical(f"Invalid yaml file path: {self.conf['general']['yaml_file']} - {e}")
-            raise
-
-        self.out_dir = Path(out_dir0, 'Forecast_Run', self.output_folder)
-
-        try:
-            self.out_dir.mkdir(parents=True, exist_ok=True)
-        except Exception as e:
-            logger.critical(f"Invalid yaml file path: {self.out_dir} - {e}")
-            raise
-
-        logger.info(f'New run directory created at: {self.out_dir}')
-
     def _parse_config(self):
         """
         Parse sections from input.config file
@@ -360,6 +342,32 @@ class RealizationBuilder:
             self.parallelSec = None
 
         logger.info('Input.config sections parsed')
+
+    def _create_fcst_dir(self):
+        """
+        Create directory for forecast run
+        """
+        # create fcst directory
+        try:
+            fcst_dir0 = Path(self.calib_conf['general']['yaml_file']).parent.parent.resolve(strict=True)
+        except KeyError as e:
+            logger.critical(f"Yaml file path not found in config calib yaml file: {e}")
+            raise
+        except FileNotFoundError as e:
+            logger.critical(f"Invalid yaml file path: {self.calib_conf['general']['yaml_file']} - {e}")
+            raise
+
+        # Create forecast run directory or cold start run directory
+        fcst_dir_name = 'Cold_Start_Run' if self.use_cold_start else 'Forecast_Run'
+        self.input_dir = Path(fcst_dir0, fcst_dir_name, self.fcst_run_name)
+
+        try:
+            self.input_dir.mkdir(parents=True, exist_ok=True)
+        except Exception as e:
+            logger.critical(f"Invalid yaml file path: {self.input_dir} - {e}")
+            raise
+
+        logger.info(f'New run directory created at: {self.input_dir}')
 
     def _parse_forcing_engine(self):
         """
@@ -852,8 +860,6 @@ class RealizationBuilder:
         """
         Extract forcing files and symlink to input directory
         """
-        # Retrieve forcing_provider and forcing_dir
-        self.forcing_dir = (self.conf3.get('forcing_dir', "") or None)
 
         # Create forcing directory
         self.forcing_path = os.path.join(self.input_dir, 'forcing')
@@ -963,7 +969,7 @@ class RealizationBuilder:
         """
         Update forcing and time related info in realization file
         """
-        self.real_config = update_forcing_in_realization(Path(self.forcing_path), self.real_config, self.gpkg_cats)
+        self.real_config = gfun.update_forcing_in_realization(self.real_config, self.forcing_path, self.forcing_config_file, self.fcst_start, self.fcst_end)
         logger.info("Updated forecast realization file")
 
     def _update_fcst_noah_ueb(self):
@@ -971,14 +977,14 @@ class RealizationBuilder:
         For UEB and Noah-OWP-Modular, create new BMI config files with new time info, and
         update path to BMI configs in realization file accordingly
         """
-        self.real_config = update_noah_ueb(self.real_config, self.out_dir)
+        self.real_config = gfun.update_noah_ueb_times(self.real_config, self.input_dir)
         logger.info("Updated noah and ueb config files for forecast if used")
 
     def _update_fcst_troute(self):
         """
         Update BMI config files for t-route for forecast period
         """
-        self.real_config = update_troute(self.real_config, self.out_dir)
+        self.real_config = gfun.update_troute(self.real_config, self.input_dir)
         logger.info("Updated noah and ueb config files for forecast")
 
     def _create_bmi_configs(self):
@@ -1370,7 +1376,7 @@ class RealizationBuilder:
         Write updated forecast realization file
         """
         # save the new realization file
-        self.realization_file = Path(self.out_dir, os.path.basename(self.real_input_file))
+        self.realization_file = Path(self.input_dir, os.path.basename(self.real_input_file))
         try:
             with open(self.realization_file, 'w') as outfile:
                 json.dump(self.real_config, outfile, indent=4, separators=(", ", ": "), sort_keys=False)

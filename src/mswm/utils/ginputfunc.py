@@ -75,8 +75,12 @@ __all__ = [
     'change_sft_input',
     'change_topmodel_input',
     'create_topmodel_input',
+    'update_noah_ueb_times',
+    'update_troute',
     'create_troute_config',
+    'create_fcst_times',
     'update_forcing_config',
+    'update_forcing_in_realization',
     'create_reg_realization_file',
     'create_realization_file',
     'create_calib_config_file',
@@ -2167,6 +2171,169 @@ def create_topmodel_input(
             outfile.write(out_hyd_fptr)
 
 
+def update_noah_ueb_times(
+        real_config: dict,
+        input_dir: Path,
+) -> dict:
+    """
+    For noah-owp-modular & UEB, create new BMI config files with adjusted start/end times, and then
+        update path to BMI config files in realization file accordingly
+
+    Arguments
+    ---------
+    real_config: dictionary containing the realization configuration
+    input_dir: folder for the new BMI config files
+
+    Returns
+    -------
+    dictionary containing adjusted realization config
+
+    """
+    try:
+        module_config = real_config['global']['formulations'][0]['params']['modules']
+        start_time = real_config['time']['start_time']
+        end_time = real_config['time']['end_time']
+    except Exception as e:
+        logger.critical(f"Yaml config calib file is missing fields: {e}")
+        raise
+
+    try:
+        startdate = pd.to_datetime(start_time, format="%Y-%m-%d %H:%M:%S").strftime("%Y%m%d%H%M")
+        enddate = pd.to_datetime(end_time, format="%Y-%m-%d %H:%M:%S").strftime("%Y%m%d%H%M")
+    except Exception as e:
+        logger.critical(f"Error converting yaml config times: {real_config['time']}\n{e}")
+        raise
+
+    mod_dict = {'NoahOWP': 'noah-owp-modular', 'UEB': 'ueb'}
+
+    for i1, m1 in enumerate(module_config):
+        if m1['params']['model_type_name'] in ['NoahOWP', 'UEB']:
+
+            # read the BMI config files from the source directory in the realization file
+            src0 = m1['params']['init_config']
+            src = Path(src0.replace('{{id}}', '*'))
+            dst = Path(input_dir, mod_dict[m1['params']['model_type_name']] + '_input')
+
+            try:
+                dst.mkdir(parents=True, exist_ok=True)
+            except OSError as e:
+                logger.critical(f"Failed to create directory: {dst}\n{e}")
+
+            for f1 in glob.glob(f'{src}'):
+                with open(f1) as f:
+                    lines = f.readlines()
+
+                # update start/end times
+                for i2, l1 in enumerate(lines):
+                    if m1['params']['model_type_name'] == 'NoahOWP':
+                        if 'startdate' in l1:
+                            lines[i2] = "  " + "startdate".ljust(19) + "= " + "'" + startdate + "'" + "               ! UTC time start of simulation (YYYYMMDDhhmm)\n"
+                        elif 'enddate' in l1:
+                            lines[i2] = "  " + "enddate".ljust(19) + "= " + "'" + enddate + "'" + "               ! UTC time end of simulation (YYYYMMDDhhmm)\n"
+                    elif m1['params']['model_type_name'] == 'UEB':
+                        lines[8] = f'{startdate[:4]} {startdate[4:6]} {startdate[6:8]} {startdate[8:10]}.0\n'
+                        lines[9] = f'{enddate[:4]} {enddate[4:6]} {enddate[6:8]} {enddate[8:10]}.0\n'
+
+                        # write to new BMI config files
+                try:
+                    with open(Path(dst, os.path.basename(f1)), 'w') as outfile:
+                        outfile.writelines(lines)
+                except FileNotFoundError as e:
+                    logger.critical(f"File not found error when writing to {dst}\n{e}")
+                    raise
+                except PermissionError as e:
+                    logger.critical(f"Permission denied when writing to {dst}\n{e}")
+                    raise
+                except OSError as e:
+                    logger.critical(f"OS error when writing to {dst}\n{e}")
+                    raise
+
+            # replace path to BMI config file in realization file
+            module_config[i1]['params']['init_config'] = str(Path(dst, os.path.basename(src0)))
+            real_config['global']['formulations'][0]['params']['modules'] = module_config
+
+    return real_config
+
+
+def update_troute(
+        real_config: dict,
+        input_dir: Path,
+) -> dict:
+    """
+    For t-route, create new BMI config file with adjusted start/end times, and then
+        update path to BMI config files in realization file accordingly
+
+    Arguments
+    ---------
+    real_config: dictionary containing the realization configuration
+    input_dir: folder for the new BMI config files
+
+    Returns
+    -------
+    dictionary containing adjusted realization config
+
+    """
+
+    # make sure the source t-route config exists
+    src = Path(real_config['routing']['t_route_config_file_with_path']).absolute()
+    if not src.exists():
+        try:
+            raise FileNotFoundError(src)
+        except FileNotFoundError as e:
+            logger.critical(e)
+            raise
+
+    try:
+        with open(src) as fp1:
+            rt_config = yaml.safe_load(fp1)
+    except FileNotFoundError as e:
+        logger.critical(f'Config file does not exist: {src}\n{e}')
+        raise
+    except yaml.YAMLError as e:
+        logger.critical(f"YAML parsing error in config file: {src}\n{e}")
+        raise
+    except Exception as e:
+        logger.critical(f"Unexpected error loading config at: {src}\n{e}")
+        raise
+
+    # compute number of time steps and max_loop_size
+    try:
+        start_time = pd.to_datetime(real_config['time']['start_time'], format="%Y-%m-%d %H:%M:%S")
+        end_time = pd.to_datetime(real_config['time']['end_time'], format="%Y-%m-%d %H:%M:%S")
+        nts = len(pd.date_range(start=start_time, end=end_time, freq='5min')) - 1
+    except Exception as e:
+        logger.critical(f"Error converting yaml config times: {real_config['time']}\n{e}")
+        raise
+
+    max_loop_size = divmod(nts * 300, 3600)[0] + 1
+    stream_output_time = divmod(nts * 300, 3600)[0] + 1
+
+    # update t-route config
+    rt_config['compute_parameters']['restart_parameters']['start_datetime'] = str(start_time)
+    rt_config['compute_parameters']['forcing_parameters']['nts'] = nts
+    rt_config['compute_parameters']['forcing_parameters']['max_loop_size'] = max_loop_size
+    rt_config['output_parameters']['stream_output']['stream_output_time'] = stream_output_time
+
+    # write to new t-route config file
+    try:
+        new_file = Path(input_dir, os.path.basename(src))
+        with open(new_file, 'w') as file:
+            yaml.dump(rt_config, file, sort_keys=False, default_flow_style=False, indent=4)
+    except yaml.YAMLError as e:
+        logger.critical(f"YAML serialization error: {new_file}\n{e}")
+        raise
+    except TypeError as e:
+        logger.critical(f"Non-serializable object pased to yaml.dump: {new_file}\n{e}")
+        raise
+    except OSError as e:
+        logger.critical(f"Unexpected error while writing YAML file: {new_file}\n{e}")
+
+    # update path to new t-route config in realization
+    real_config['routing']['t_route_config_file_with_path'] = str(new_file)
+
+    return real_config
+
+
 def create_troute_config(
         gpkg_file: Union[str, Path],
         rt_cfg_file: Union[str, Path],
@@ -2318,18 +2485,20 @@ def create_troute_config(
 
 def create_fcst_times(
         forcing_template: dict,
-        forecast_cycle: str,
         cycle_date: str,
         cycle_hour: str,
+        use_cold_start: bool,
+        cold_start_time: str = None
 ) -> Tuple[str, str]:
     """ Compute forecast start and end time based on selected forecast cycle, date, and hour
 
     Parameters
     ----------
     forecast_template: dictionary of forecast config file template
-    forecast_cycle : string describing the forecast cycle
     cycle_date : date of forecast cycle
     cycle_hour : hour of forecast cycle (00z)
+    use_cold_start : boolean flag for using cold start period
+    cold_start_time : datetime str of beginning of cold start period
 
     Returns
     ----------
@@ -2338,30 +2507,27 @@ def create_fcst_times(
 
     """
 
-    # Confirm forecast_cycle is valid
-    if forecast_cycle not in ['ana', 'standard_ana', 'aorc', 'extended_ana', 'long_range_mem1', 'long_range_mem2', 'long_range_mem3', 'long_range_mem4',
-                              'medium_range_blend', 'nwm', 'short_range', 'short_range_alaska']:
-        try:
-            raise Exception(f"Forecast cycle {forecast_cycle} does not match valid cycle name")
-        except Exception as e:
-            logger.critical(e)
-            raise
-
     # Convert cycle date and hour to datetime
-    cycle_datetime = datetime.datetime.strptime(cycle_date, "%Y-%m-%d").replace(hour=int(cycle_hour.replace("z", "")))
+    cycle_dt = datetime.datetime.strptime(cycle_date, "%Y-%m-%d").replace(hour=int(cycle_hour.replace("z", "")))
 
-    # Retireve AnAFlag
+    # Retrieve AnAFlag
     ana_flag = forcing_template['AnAFlag']
 
+    # Construct start and end times for cold start period
+    if use_cold_start is True:
+
+        fcst_start = cold_start_time
+        fcst_end = datetime.datetime.strftime(cycle_dt + datetime.timedelta(hours=1), "%Y-%m-%d %H:%M:%S")
+
     # Construct start and end times based on forecast cycle
-    if ana_flag == 0:
+    elif ana_flag == 0:
 
         # Retrieve forecast input horizon from config file
         forcing_horizon = int(forcing_template['ForecastInputHorizons'][0] / 60)
         start_delta = 1
 
-        fcst_start = datetime.datetime.strftime(cycle_datetime + datetime.timedelta(hours=start_delta), "%Y-%m-%d %H:%M:%S")
-        fcst_end = datetime.datetime.strftime(cycle_datetime + datetime.timedelta(hours=forcing_horizon), "%Y-%m-%d %H:%M:%S")
+        fcst_start = datetime.datetime.strftime(cycle_dt + datetime.timedelta(hours=start_delta), "%Y-%m-%d %H:%M:%S")
+        fcst_end = datetime.datetime.strftime(cycle_dt + datetime.timedelta(hours=forcing_horizon), "%Y-%m-%d %H:%M:%S")
 
     # Construct start and end times based on analysis cycle
     elif ana_flag == 1:
@@ -2369,8 +2535,8 @@ def create_fcst_times(
         # Retrieve analysis lookback from config file
         forcing_lookback = int(forcing_template['LookBack'] / 60)
 
-        fcst_start = datetime.datetime.strftime(cycle_datetime - datetime.timedelta(hours=forcing_lookback), "%Y-%m-%d %H:%M:%S")
-        fcst_end = datetime.datetime.strftime(cycle_datetime, "%Y-%m-%d %H:%M:%S")
+        fcst_start = datetime.datetime.strftime(cycle_dt - datetime.timedelta(hours=forcing_lookback), "%Y-%m-%d %H:%M:%S")
+        fcst_end = datetime.datetime.strftime(cycle_dt, "%Y-%m-%d %H:%M:%S")
 
     return fcst_start, fcst_end
 
@@ -2381,7 +2547,9 @@ def update_forcing_config(
         forcing_template: dict,
         geogrid_file: str,
         forcing_config_dir: Path,
-        forcing_config_file: Path
+        forcing_config_file: Path,
+        use_cold_start: bool,
+        cold_start_time: str = None
 ) -> None:
     """ update bmi forcing engine config yaml file
 
@@ -2393,27 +2561,73 @@ def update_forcing_config(
     geogrid_file: path to geogrid file
     forcing_config_dir: directory path for forcing config file
     forcing_config_dir: output path for forcing config file
+    use_cold_start : boolean flag for using cold start period
+    cold_start_time : datetime str of beginning of cold start period
 
     Returns
     ----------
     None
     """
+
     # Create directory for storing config file
     os.makedirs(forcing_config_dir, exist_ok=True)
 
     # Format cycle_date and hour for config file
-    cycle_datetime = datetime.datetime.strptime(cycle_date, "%Y-%m-%d").replace(hour=int(cycle_hour.replace("z", "")))
+    cycle_dt = datetime.datetime.strptime(cycle_date, "%Y-%m-%d").replace(hour=int(cycle_hour.replace("z", "")))
+    cycle_str = cycle_dt.strftime('%Y%m%d%H%M')
 
-    # Shift forecast start date by one hour
-    cycle_str = cycle_datetime.strftime('%Y%m%d%H%M')
+    # Set Refcstbdateproc
+    if use_cold_start is True:
+        cold_start_dt = datetime.datetime.strptime(cold_start_time, "%Y-%m-%d %H:%M:%S")
+        refcstbdateproc = (cold_start_dt + datetime.timedelta(hours=1)).strftime("%Y%m%d%H%M")
+    else:
+        refcstbdateproc = cycle_str
 
     # Update forcing_template with dynamic variables
-    forcing_template['RefcstBDateProc'] = cycle_str
+    forcing_template['RefcstBDateProc'] = refcstbdateproc
     forcing_template['GeogridIn'] = geogrid_file
 
     # Write forcing config yaml file
     with open(forcing_config_file, "w") as file:
         yaml.dump(forcing_template, file, Dumper=ForcingDumper, sort_keys=False, default_flow_style=False)
+
+
+def update_forcing_in_realization(
+        real_config: dict,
+        forcing_path: Path,
+        forcing_config_file: Path,
+        fcst_start: str,
+        fcst_end: str
+) -> dict:
+    """
+    Adjust the realization configuration with forecast or cold start information accordingly:
+        1) update forcing information
+        2) update start and end times
+
+    Arguments
+    ---------
+    real_config: dictionary containing the realization configuration
+    forcing_path: path to run /forcing/ folder
+    forcing_config_file: path to forcing engine configuration yaml file
+    fcst_start: cold_start or fcst ngen start time
+    fcst_end: cold_start or fcst ngen end time
+
+    Returns
+    -------
+    dictionary containing the adjusted realization config
+
+    """
+
+    # Update realization file for forcing
+    real_config['global']['forcing'] = {"path": str(forcing_path),
+                                        "provider": "ForcingsEngineLumpedDataProvider",
+                                        "params": {"init_config": str(forcing_config_file)}}
+
+    # Update time period in realization file
+    real_config['time']['start_time'] = fcst_start
+    real_config['time']['end_time'] = fcst_end
+
+    return real_config
 
 
 def var_mapping(
