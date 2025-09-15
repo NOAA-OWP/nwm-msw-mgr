@@ -2258,6 +2258,7 @@ def update_noah_ueb_times(
 def update_troute(
         real_config: dict,
         input_dir: Path,
+        basename_opt: str
 ) -> dict:
     """
     For t-route, create new BMI config file with adjusted start/end times, and then
@@ -2267,6 +2268,7 @@ def update_troute(
     ---------
     real_config: dictionary containing the realization configuration
     input_dir: folder for the new BMI config files
+    basename_opt: new file basename for forecast or cold start
 
     Returns
     -------
@@ -2315,8 +2317,10 @@ def update_troute(
     rt_config['output_parameters']['stream_output']['stream_output_time'] = stream_output_time
 
     # write to new t-route config file
+    new_basename = os.path.basename(src).replace("valid_best", basename_opt)
+
     try:
-        new_file = Path(input_dir, os.path.basename(src))
+        new_file = Path(input_dir, new_basename)
         with open(new_file, 'w') as file:
             yaml.dump(rt_config, file, sort_keys=False, default_flow_style=False, indent=4)
     except yaml.YAMLError as e:
@@ -2597,7 +2601,8 @@ def update_forcing_in_realization(
         forcing_path: Path,
         forcing_config_file: Path,
         fcst_start: str,
-        fcst_end: str
+        fcst_end: str,
+        basename_opt: str
 ) -> dict:
     """
     Adjust the realization configuration with forecast or cold start information accordingly:
@@ -2611,6 +2616,7 @@ def update_forcing_in_realization(
     forcing_config_file: path to forcing engine configuration yaml file
     fcst_start: cold_start or fcst ngen start time
     fcst_end: cold_start or fcst ngen end time
+    basename_opt: new file basename for forecast or cold start
 
     Returns
     -------
@@ -2626,6 +2632,9 @@ def update_forcing_in_realization(
     # Update time period in realization file
     real_config['time']['start_time'] = fcst_start
     real_config['time']['end_time'] = fcst_end
+
+    # Update troute path
+    real_config['routing']['t_route_config_file_with_path'].replace('valid_best', basename_opt)
 
     return real_config
 
