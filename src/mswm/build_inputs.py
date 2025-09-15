@@ -35,9 +35,9 @@ if not logging.getLogger().hasHandlers():
 
 
 class RealizationBuilder:
-    def __init__(self, input_path: str, calib_yaml: str | None = None, use_cold_start: bool = False, assign_path: str | None = None, forcing_path: str | None = None, fcst_run_name: str | None = None):
+    def __init__(self, input_path: str, valid_yaml: str | None = None, use_cold_start: bool = False, assign_path: str | None = None, forcing_path: str | None = None, fcst_run_name: str | None = None):
         self.input_path = Path(input_path)
-        self.calib_yaml = Path(calib_yaml) if calib_yaml else None
+        self.valid_yaml = Path(valid_yaml) if valid_yaml else None
         self.use_cold_start = use_cold_start
         self.assign_path = Path(assign_path) if assign_path else None
         self.forcing_path = Path(forcing_path) if forcing_path else None
@@ -105,32 +105,32 @@ class RealizationBuilder:
 
     def _load_yaml(self):
         """
-        Read yaml-based configuration file from previous ngen-cal run
+        Read yaml-based configuration file from previous ngen calibration run
         """
         # Confirm config yaml file exists
-        self.calib_yaml = Path(self.calib_yaml).absolute()
-        if not self.calib_yaml.exists():
+        self.valid_yaml = Path(self.valid_yaml).absolute()
+        if not self.valid_yaml.exists():
             try:
-                raise FileNotFoundError(f'Config calib yaml file does not exist: {self.calib_yaml}')
+                raise FileNotFoundError(f'Config valid yaml file does not exist: {self.valid_yaml}')
             except FileNotFoundError as e:
                 logger.critical(e)
                 raise
 
         # Read the yaml-based configuration file
         try:
-            with open(self.calib_yaml) as file:
-                self.calib_conf = yaml.safe_load(file)
+            with open(self.valid_yaml) as file:
+                self.valid_conf = yaml.safe_load(file)
         except FileNotFoundError as e:
-            logger.critical(f'Config calib yaml file does not exist: {self.calib_yaml}\n{e}')
+            logger.critical(f'Config valid yaml file does not exist: {self.valid_yaml}\n{e}')
             raise
         except yaml.YAMLError as e:
-            logger.critical(f"YAML parsing error in calib config yaml file: {self.calib_yaml}\n{e}")
+            logger.critical(f"YAML parsing error in valid config yaml file: {self.valid_yaml}\n{e}")
             raise
         except Exception as e:
-            logger.critical(f"Unexpected error loading calib config yaml file at: {self.calib_yaml}\n{e}")
+            logger.critical(f"Unexpected error loading valid config yaml file at: {self.valid_yaml}\n{e}")
             raise
 
-        logger.info(f"Configuration yaml file loaded:  {self.calib_yaml}")
+        logger.info(f"Configuration yaml file loaded:  {self.valid_yaml}")
 
     def _load_reg_formulation(self):
         """
@@ -266,16 +266,16 @@ class RealizationBuilder:
         """
         # Set realization file path
         try:
-            self.real_input_file = Path(self.calib_conf['model']['realization']).absolute()
+            self.real_input_file = Path(self.valid_conf['model']['realization']).absolute()
 
             # Get hydrofabric gpkg paths
-            self.gpkg_cats = self.calib_conf['model']['catchments']
-            self.gpkg_nexus = self.calib_conf['model']['nexus']
+            self.gpkg_cats = self.valid_conf['model']['catchments']
+            self.gpkg_nexus = self.valid_conf['model']['nexus']
 
             # Get ngen executable path
-            self.ngen_exe = self.calib_conf['model']['binary']
+            self.ngen_exe = self.valid_conf['model']['binary']
         except Exception as e:
-            logger.critical(f"Yaml config calib file is missing fields: {self.calib_yaml}\n{e}")
+            logger.critical(f"Yaml config valid file is missing fields: {self.valid_yaml}\n{e}")
             raise
 
         logger.info("Yaml file parsed")
@@ -337,17 +337,20 @@ class RealizationBuilder:
         """
         # create fcst directory
         try:
-            fcst_dir0 = Path(self.calib_conf['general']['yaml_file']).parent.parent.resolve(strict=True)
+            fcst_dir0 = Path(self.valid_conf['general']['yaml_file']).parent.parent.resolve(strict=True)
         except KeyError as e:
-            logger.critical(f"Yaml file path not found in config calib yaml file: {e}")
+            logger.critical(f"Yaml file path not found in config valid yaml file: {e}")
             raise
         except FileNotFoundError as e:
-            logger.critical(f"Invalid yaml file path: {self.calib_conf['general']['yaml_file']} - {e}")
+            logger.critical(f"Invalid yaml file path: {self.valid_conf['general']['yaml_file']} - {e}")
             raise
 
         # Create forecast run directory or cold start run directory
         fcst_dir_name = 'Cold_Start_Run' if self.use_cold_start else 'Forecast_Run'
         self.input_dir = Path(fcst_dir0, fcst_dir_name, self.fcst_run_name)
+
+        # Set file basename for forecast or cold start
+        self.basename_opt = "fcst" if not self.use_cold_start else "cold_start"
 
         try:
             self.input_dir.mkdir(parents=True, exist_ok=True)
@@ -954,7 +957,7 @@ class RealizationBuilder:
         """
         Update forcing and time related info in realization file
         """
-        self.real_config = gfun.update_forcing_in_realization(self.real_config, self.forcing_path, self.forcing_config_file, self.fcst_start, self.fcst_end)
+        self.real_config = gfun.update_forcing_in_realization(self.real_config, self.forcing_path, self.forcing_config_file, self.fcst_start, self.fcst_end, self.basename_opt)
         logger.info("Updated forecast realization file")
 
     def _update_fcst_noah_ueb(self):
@@ -969,7 +972,7 @@ class RealizationBuilder:
         """
         Update BMI config files for t-route for forecast period
         """
-        self.real_config = gfun.update_troute(self.real_config, self.input_dir)
+        self.real_config = gfun.update_troute(self.real_config, self.input_dir, self.basename_opt)
         logger.info("Updated noah and ueb config files for forecast")
 
     def _create_bmi_configs(self):
@@ -1370,8 +1373,11 @@ class RealizationBuilder:
         """
         Write updated forecast realization file
         """
+        # Update realization file basename
+        new_basename = os.path.basename(self.real_input_file).replace("valid_best", self.basename_opt)
+
         # save the new realization file
-        self.realization_file = Path(self.input_dir, os.path.basename(self.real_input_file))
+        self.realization_file = Path(self.input_dir, new_basename)
         try:
             with open(self.realization_file, 'w') as outfile:
                 json.dump(self.real_config, outfile, indent=4, separators=(", ", ": "), sort_keys=False)
