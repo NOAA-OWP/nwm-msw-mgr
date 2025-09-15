@@ -1830,9 +1830,12 @@ def change_sft_input(
             lines0 = f.readlines()
         lines1 = copy.deepcopy(lines0)
 
-        # Find index of ice_fraction_scheme line
+        # Find index of ice_fraction_scheme line and update icefscheme
         idx = [i for i, s in enumerate(lines0) if s.startswith('ice')]
-        lines1[idx[0]] = f'ice_fraction_scheme={icefscheme}\n'
+        if len(idx) > 0:
+            lines1[idx[0]] = f'ice_fraction_scheme={icefscheme}\n'
+        else:
+            lines1.append(f'ice_fraction_scheme={icefscheme}\n')
 
         # Save to new parameter file
         with open(param_file, 'w') as outfile:
