@@ -365,22 +365,27 @@ class RealizationBuilder:
         Extract forcing engine parameters from input.config
         """
         # Retrieve forcing engine variables
-        self.forecast_cycle = self.forcingSec.get('forecast_cycle', None)
+        self.forecast_configuration = self.forcingSec.get('forecast_configuration', None)
         self.forcing_provider = self.forcingSec.get('forcing_provider')
 
         # Retrieve cold_start_tim
         self.cold_start_time = self.forcingSec.get('cold_start_time', None)
 
-        if self.forcing_provider == 'bmi' and self.forecast_cycle is not None:
+        if self.forcing_provider == 'bmi' and self.forecast_configuration is not None:
 
-            self.cycle_date = self.forcingSec.get('cycle_date')
+            cycle_datetime = self.forcingSec.get('cycle_datetime')
             self.cycle_hour = self.forcingSec.get('cycle_hour')
             self.geogrid_file = self.forcingSec.get('geogrid_file')
             self.forcing_template_dir = self.forcingSec.get('forcing_template_dir')
 
+            # Construct cycle date and cycle hour
+            cycle_dt = datetime.strptime(cycle_datetime, "%Y-%m-%d %H:%M:%S")
+            self.cycle_date = cycle_dt.strftime("%Y-%m-%d")
+            self.cycle_hour = cycle_dt.strftime("%H") + "z"
+
             # Ensure forcing template file exists
-            forecast_cycle_str = 'cold_start' if self.use_cold_start else self.forecast_cycle
-            self.forcing_template_file = (Path(self.forcing_template_dir) / f"{forecast_cycle_str}_config.yml").absolute()
+            forecast_configuration_str = 'cold_start' if self.use_cold_start else self.forecast_configuration
+            self.forcing_template_file = (Path(self.forcing_template_dir) / f"{forecast_configuration_str}_config.yml").absolute()
             if not self.forcing_template_file.exists():
                 try:
                     raise FileNotFoundError(f'Forcing template file does not exist: {self.forcing_template_file}')
@@ -900,7 +905,7 @@ class RealizationBuilder:
             if self.use_cold_start is True:
                 self.forcing_config_file = self.forcing_config_dir / "cold_start_config.yml"
             else:
-                self.forcing_config_file = self.forcing_config_dir / f"{self.forecast_cycle}_config.yml"
+                self.forcing_config_file = self.forcing_config_dir / f"{self.forecast_configuration}_config.yml"
 
             # Update dynamic parameters in forcing engine configuration file
             gfun.update_forcing_config(self.cycle_date, self.cycle_hour, self.forcing_template, self.geogrid_file, self.forcing_config_dir, self.forcing_config_file, self.use_cold_start, self.cold_start_time)
