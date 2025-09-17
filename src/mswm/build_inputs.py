@@ -369,7 +369,7 @@ class RealizationBuilder:
         self.forcing_provider = self.forcingSec.get('forcing_provider')
 
         # Retrieve cold_start_tim
-        self.cold_start_time = self.forcingSec.get('cold_start_time', None)
+        self.cold_start_datetime = self.forcingSec.get('cold_start_datetime', None)
 
         if self.forcing_provider == 'bmi' and self.forecast_configuration is not None:
 
@@ -408,7 +408,7 @@ class RealizationBuilder:
                 raise
 
             # Retrieve ngen start and end time based on forecast cycle date, hour and configuration
-            self.fcst_start, self.fcst_end = gfun.create_fcst_times(self.forcing_template, self.cycle_date, self.cycle_hour, self.use_cold_start, self.cold_start_time)
+            self.fcst_start, self.fcst_end = gfun.create_fcst_times(self.forcing_template, self.cycle_date, self.cycle_hour, self.use_cold_start, self.cold_start_datetime)
 
             logger.info('Ngen start and end time set from forcing cycle')
 
@@ -907,8 +907,12 @@ class RealizationBuilder:
             else:
                 self.forcing_config_file = self.forcing_config_dir / f"{self.forecast_configuration}_config.yml"
 
+            # Construct ESMF mesh file path
+            gpkg_name = os.path.splitext(os.path.basename(self.cat_file))[0]
+            self.geogrid_file = f"/ngen-app/data/esmf_mesh/{gpkg_name}_ESMF_Mesh.nc"
+
             # Update dynamic parameters in forcing engine configuration file
-            gfun.update_forcing_config(self.cycle_date, self.cycle_hour, self.forcing_template, self.geogrid_file, self.forcing_config_dir, self.forcing_config_file, self.use_cold_start, self.cold_start_time)
+            gfun.update_forcing_config(self.cycle_date, self.cycle_hour, self.forcing_template, self.cat_file, self.geogrid_file, self.forcing_config_dir, self.forcing_config_file, self.use_cold_start, self.cold_start_datetime)
 
             logger.info(f"Configured BMI forcing engine: {self.forcing_config_file}")
 
@@ -1121,7 +1125,7 @@ class RealizationBuilder:
                         if len(self.time_period['run_time_period'][run_name][0]) != 0 & len(self.time_period['run_time_period'][run_name][0]):
                             run_range = pd.to_datetime(self.time_period['run_time_period'][run_name])
                             nts = len(pd.date_range(start=run_range[0], end=run_range[1], freq='5min')) - 1
-                            gfun.create_troute_config(self.gpkg_file, routing_config_file, self.time_period['run_time_period'][run_name][0], nts)
+                            gfun.create_troute_config(self.cat_file, routing_config_file, self.time_period['run_time_period'][run_name][0], nts)
                             logger.info(f'troute config file for {run_name1} is created at: {routing_config_file}')
 
                 if m1 != 'troute':

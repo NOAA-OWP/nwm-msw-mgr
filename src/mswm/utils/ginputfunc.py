@@ -2304,7 +2304,7 @@ def create_fcst_times(
         cycle_date: str,
         cycle_hour: str,
         use_cold_start: bool,
-        cold_start_time: str = None
+        cold_start_datetime: str = None
 ) -> Tuple[str, str]:
     """ Compute forecast start and end time based on selected forecast cycle, date, and hour
 
@@ -2314,7 +2314,7 @@ def create_fcst_times(
     cycle_date : date of forecast cycle
     cycle_hour : hour of forecast cycle (00z)
     use_cold_start : boolean flag for using cold start period
-    cold_start_time : datetime str of beginning of cold start period
+    cold_start_datetime : datetime str of beginning of cold start period
 
     Returns
     ----------
@@ -2332,7 +2332,7 @@ def create_fcst_times(
     # Construct start and end times for cold start period
     if use_cold_start is True:
 
-        fcst_start = cold_start_time
+        fcst_start = cold_start_datetime
         fcst_end = datetime.datetime.strftime(cycle_dt + datetime.timedelta(hours=1), "%Y-%m-%d %H:%M:%S")
 
     # Construct start and end times based on forecast cycle
@@ -2361,11 +2361,12 @@ def update_forcing_config(
         cycle_date: str,
         cycle_hour: str,
         forcing_template: dict,
+        gpkg_file: str,
         geogrid_file: str,
         forcing_config_dir: Path,
         forcing_config_file: Path,
         use_cold_start: bool,
-        cold_start_time: str = None
+        cold_start_datetime: str = None
 ) -> None:
     """ update bmi forcing engine config yaml file
 
@@ -2374,11 +2375,12 @@ def update_forcing_config(
     cycle_date : date of forecast cycle
     cycle_hour : hour of forecast cycle (00z)
     forcing_template : dictionary of forcing bmi config template file
+    gpkg_file: path to geopackage file
     geogrid_file: path to geogrid file
     forcing_config_dir: directory path for forcing config file
     forcing_config_dir: output path for forcing config file
     use_cold_start : boolean flag for using cold start period
-    cold_start_time : datetime str of beginning of cold start period
+    cold_start_datetime : datetime str of beginning of cold start period
 
     Returns
     ----------
@@ -2394,7 +2396,7 @@ def update_forcing_config(
 
     # Set Refcstbdateproc
     if use_cold_start is True:
-        cold_start_dt = datetime.datetime.strptime(cold_start_time, "%Y-%m-%d %H:%M:%S")
+        cold_start_dt = datetime.datetime.strptime(cold_start_datetime, "%Y-%m-%d %H:%M:%S")
         refcstbdateproc = (cold_start_dt + datetime.timedelta(hours=1)).strftime("%Y%m%d%H%M")
     else:
         refcstbdateproc = cycle_str
@@ -2402,6 +2404,7 @@ def update_forcing_config(
     # Update forcing_template with dynamic variables
     forcing_template['RefcstBDateProc'] = refcstbdateproc
     forcing_template['GeogridIn'] = geogrid_file
+    forcing_template['Geopackage'] = gpkg_file
 
     # Write forcing config yaml file
     with open(forcing_config_file, "w") as file:

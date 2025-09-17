@@ -154,10 +154,9 @@ class ForcingConfig(StrictBaseModel):
                                              'short_range_hawaii', 'short_range_puertorico', 'extended_ana_alaska', 'standard_ana_alaska', 'standard_ana_hawaii',
                                              'standard_ana_puertorico']] = None
     cycle_datetime: Optional[str] = None
-    geogrid_file: Optional[str] = None
     forcing_template_dir: Optional[str] = None
     use_cold_start: Optional[bool] = None
-    cold_start_time: Optional[str] = None
+    cold_start_datetime: Optional[str] = None
 
     # Check optional fields that depend on forcing_provider
     @model_validator(mode="after")
@@ -170,10 +169,6 @@ class ForcingConfig(StrictBaseModel):
         # forecast_configuration required if forcing_provider is csv
         if self.forcing_provider == 'bmi' and self.forecast_configuration is None:
             raise ValueError("`forecast_cycle` must be specified for a run using bmi forcing provider.")
-
-        # geogrid_file required if forcing_provider is csv
-        if self.forcing_provider == 'bmi' and self.geogrid_file is None:
-            raise ValueError("`geogrid_file` must be specified for a run using bmi forcing provider.")
 
         # forcing dir required if forcing_provider is csv
         if self.forcing_provider == 'bmi' and self.forcing_template_dir is None:
