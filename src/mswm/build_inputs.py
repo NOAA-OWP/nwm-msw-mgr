@@ -913,6 +913,10 @@ class RealizationBuilder:
             gpkg_name = os.path.splitext(os.path.basename(self.cat_file))[0]
             self.geogrid_file = f"/ngen-app/data/esmf_mesh/{gpkg_name}_ESMF_Mesh.nc"
 
+            # Construct ESMF mesh file path
+            gpkg_name = os.path.splitext(os.path.basename(self.cat_file))[0]
+            self.geogrid_file = f"/ngen-app/data/esmf_mesh/{gpkg_name}_ESMF_Mesh.nc"
+
             # Update dynamic parameters in forcing engine configuration file
             gfun.update_forcing_config(self.cycle_date, self.cycle_hour, self.forcing_template, self.cat_file, self.geogrid_file, self.forcing_config_dir, self.forcing_config_file, self.use_cold_start, self.cold_start_datetime)
 
@@ -1105,7 +1109,7 @@ class RealizationBuilder:
                         if len(self.time_period['run_time_period'][run_name][0]) != 0 & len(self.time_period['run_time_period'][run_name][0]):
                             run_range = pd.to_datetime(self.time_period['run_time_period'][run_name])
                             nts = len(pd.date_range(start=run_range[0], end=run_range[1], freq='5min')) - 1
-                            gfun.create_troute_config(self.gpkg_file, routing_config_file, self.time_period['run_time_period'][run_name][0], nts)
+                            gfun.create_troute_config(self.cat_file, routing_config_file, self.time_period['run_time_period'][run_name][0], nts)
                             logger.info(f'troute config file for {run_name1} is created at: {routing_config_file}')
 
                 if m1 != 'troute':
