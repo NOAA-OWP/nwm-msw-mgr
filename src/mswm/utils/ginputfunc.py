@@ -2582,15 +2582,13 @@ def update_forcing_config(
     cycle_dt = datetime.datetime.strptime(cycle_date, "%Y-%m-%d").replace(hour=int(cycle_hour.replace("z", "")))
     cycle_str = cycle_dt.strftime('%Y%m%d%H%M')
 
-    # Set Refcstbdateproc
+    # Set lookback minutes for cold start period
     if use_cold_start is True:
         cold_start_dt = datetime.datetime.strptime(cold_start_datetime, "%Y-%m-%d %H:%M:%S")
-        refcstbdateproc = (cold_start_dt + datetime.timedelta(hours=1)).strftime("%Y%m%d%H%M")
-    else:
-        refcstbdateproc = cycle_str
+        forcing_template['LookBack'] = int((cycle_dt - cold_start_dt).total_seconds() / 60)
 
     # Update forcing_template with dynamic variables
-    forcing_template['RefcstBDateProc'] = refcstbdateproc
+    forcing_template['RefcstBDateProc'] = cycle_str
     forcing_template['GeogridIn'] = geogrid_file
     forcing_template['Geopackage'] = gpkg_file
 

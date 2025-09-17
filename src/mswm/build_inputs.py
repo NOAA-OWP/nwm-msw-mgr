@@ -391,9 +391,15 @@ class RealizationBuilder:
             self.cycle_date = cycle_dt.strftime("%Y-%m-%d")
             self.cycle_hour = cycle_dt.strftime("%H") + "z"
 
+            # Construct forecing template file name
+            if self.use_cold_start:
+                forcing_region = next((f"_{reg}" for reg in ["alaska", "hawaii", "puertorico"] if reg in self.forecast_configuration), "")
+                self.forecast_configuration_str = f"cold_start{forcing_region}_config.yml"
+            else:
+                self.forecast_configuration_str = f"{self.forecast_configuration}_config.yml"
+
             # Ensure forcing template file exists
-            forecast_configuration_str = 'cold_start' if self.use_cold_start else self.forecast_configuration
-            self.forcing_template_file = (Path(self.forcing_template_dir) / f"{forecast_configuration_str}_config.yml").absolute()
+            self.forcing_template_file = (Path(self.forcing_template_dir) / self.forecast_configuration_str).absolute()
             if not self.forcing_template_file.exists():
                 try:
                     raise FileNotFoundError(f'Forcing template file does not exist: {self.forcing_template_file}')
@@ -914,11 +920,11 @@ class RealizationBuilder:
             self.geogrid_file = f"/ngen-app/data/esmf_mesh/{gpkg_name}_ESMF_Mesh.nc"
 
             # Construct ESMF mesh file path
-            gpkg_name = os.path.splitext(os.path.basename(self.cat_file))[0]
+            gpkg_name = os.path.splitext(os.path.basename(self.gpkg_cats))[0]
             self.geogrid_file = f"/ngen-app/data/esmf_mesh/{gpkg_name}_ESMF_Mesh.nc"
 
             # Update dynamic parameters in forcing engine configuration file
-            gfun.update_forcing_config(self.cycle_date, self.cycle_hour, self.forcing_template, self.cat_file, self.geogrid_file, self.forcing_config_dir, self.forcing_config_file, self.use_cold_start, self.cold_start_datetime)
+            gfun.update_forcing_config(self.cycle_date, self.cycle_hour, self.forcing_template, self.gpkg_cats, self.geogrid_file, self.forcing_config_dir, self.forcing_config_file, self.use_cold_start, self.cold_start_datetime)
 
             logger.info(f"Configured BMI forcing engine: {self.forcing_config_file}")
 
