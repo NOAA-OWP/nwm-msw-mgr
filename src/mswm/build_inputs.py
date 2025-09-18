@@ -13,6 +13,7 @@ from datetime import datetime
 import geopandas as gpd
 import pandas as pd
 import json
+import yaml
 from collections import defaultdict
 from pydantic import ValidationError
 
@@ -334,15 +335,16 @@ class RealizationBuilder:
         Parse sections from input.config file
         """
         # reassign config sections for convenience
-        self.conf1 = self.input_configs['General']
-        self.run_type = self.conf1.get("run_type")
+        self.conf1 = self.input_configs.get('General')
+        self.run_type = self.conf1.get("run_type") if self.conf1 else None
 
-        # Load run_type specific config section
-        if self.run_type in ('calibration', 'regionalization'):
-            self.conf2 = self.input_configs.get(self.run_type.capitalize())
-        self.conf3 = self.input_configs['DataFile']
+        # Load run_type specific config section or empty dict for default
+        run_key = (self.run_type or "").capitalize()
+        self.conf2 = self.input_configs.get(run_key, {})
 
-        # get the parallel section
+        # Retrieve input.config sections
+        self.conf3 = self.input_configs.get('DataFile')
+        self.forcingSec = self.input_configs.get('Forcing')
         self.parallelSec = self.input_configs.get('Parallel')
 
         # Use parallel ngen only when the number of processors is greater than 1
@@ -350,9 +352,61 @@ class RealizationBuilder:
             self.parallelSec = None
 
         # Parse attribute file
-        self.attr_parquet = self.conf3['attributes_file']
+        self.attr_parquet = self.conf3['attributes_file'] if self.conf1 else None
 
         logger.info('Input.config sections parsed')
+
+    def _parse_forcing_engine(self):
+        """
+        Extract forcing engine parameters from input.config
+        """
+        # Retrieve forcing engine variables
+        self.forecast_configuration = self.forcingSec.get('forecast_configuration', None)
+        self.forcing_provider = self.forcingSec.get('forcing_provider')
+
+        # Retrieve cold_start_tim
+        self.cold_start_datetime = self.forcingSec.get('cold_start_datetime', None)
+
+        if self.forcing_provider == 'bmi' and self.forecast_configuration is not None:
+
+            cycle_datetime = self.forcingSec.get('cycle_datetime')
+            self.cycle_hour = self.forcingSec.get('cycle_hour')
+            self.geogrid_file = self.forcingSec.get('geogrid_file')
+            self.forcing_template_dir = self.forcingSec.get('forcing_template_dir')
+
+            # Construct cycle date and cycle hour
+            cycle_dt = datetime.strptime(cycle_datetime, "%Y-%m-%d %H:%M:%S")
+            self.cycle_date = cycle_dt.strftime("%Y-%m-%d")
+            self.cycle_hour = cycle_dt.strftime("%H") + "z"
+
+            # Ensure forcing template file exists
+            forecast_configuration_str = 'cold_start' if self.use_cold_start else self.forecast_configuration
+            self.forcing_template_file = (Path(self.forcing_template_dir) / f"{forecast_configuration_str}_config.yml").absolute()
+            if not self.forcing_template_file.exists():
+                try:
+                    raise FileNotFoundError(f'Forcing template file does not exist: {self.forcing_template_file}')
+                except FileNotFoundError as e:
+                    logger.critical(e)
+                    raise
+
+            # Read forcing template file
+            try:
+                with open(self.forcing_template_file) as file:
+                    self.forcing_template = yaml.safe_load(file)
+            except FileNotFoundError as e:
+                logger.critical(f'Config file does not exist: {self.forcing_template_file}\n{e}')
+                raise
+            except yaml.YAMLError as e:
+                logger.critical(f"YAML parsing error in config file: {self.forcing_template_file}\n{e}")
+                raise
+            except Exception as e:
+                logger.critical(f"Unexpected error loading config at: {self.forcing_template_file}\n{e}")
+                raise
+
+            # Retrieve ngen start and end time based on forecast cycle date, hour and configuration
+            self.fcst_start, self.fcst_end = gfun.create_fcst_times(self.forcing_template, self.cycle_date, self.cycle_hour, self.use_cold_start, self.cold_start_datetime)
+
+            logger.info('Ngen start and end time set from forcing cycle')
 
     def _parse_time(self):
         """
@@ -795,21 +849,6 @@ class RealizationBuilder:
         self.attr_file[x_col] = self.attr_file.geometry.x
         self.attr_file[y_col] = self.attr_file.geometry.y
 
-        logger.info(f"Attribute file loaded from: {self.gpkg_file}")
-
-    def _extract_forcing(self):
-        """
-        Extract forcing files and symlink to input directory
-        """
-        # Create forcing directory
-        missing_catchment_files = []
-        self.forcing_path = os.path.join(self.input_dir, 'forcing')
-        try:
-            os.makedirs(self.forcing_path, exist_ok=True)
-        except Exception as e:
-            logger.critical(f"Invalid forcing directory: {e}. Check `main_dir` variable")
-            raise
-
         # Read catchment ids from geopackage
         try:
             self.catids = gpd.read_file(self.gpkg_file, layer='divides')['divide_id'].tolist()
@@ -817,25 +856,73 @@ class RealizationBuilder:
             logger.critical(f"Error while reading geopackage file: {e}")
             raise
 
-        # Symlink forcing files
-        for catID in self.catids:
-            ffile = os.path.join(self.conf3['forcing_dir'], catID + '.csv')
-            # Make sure we have the file
-            if not os.path.exists(ffile):
-                logger.info(f'Forcing file {ffile} does not exist')
-                missing_catchment_files.append(ffile)
-            else:
-                target = os.path.join(self.forcing_path, os.path.basename(ffile))
-                if not os.path.exists(target):
-                    os.symlink(ffile, target)
-        if missing_catchment_files:
-            try:
-                raise Exception(f"Missing catchment files in forcing data: {self.conf3['forcing_dir']}")
-            except Exception as e:
-                logger.critical(e)
-                raise
+        logger.info(f"Attribute file loaded from: {self.gpkg_file}")
 
-        logger.info(f"Extracted forcing data from: {self.conf3['forcing_dir']}")
+    def _extract_forcing(self):
+        """
+        Extract forcing files and symlink to input directory
+        """
+        # Create forcing directory
+        self.forcing_path = os.path.join(self.input_dir, 'forcing')
+
+        try:
+            os.makedirs(self.forcing_path, exist_ok=True)
+        except Exception as e:
+            logger.critical(f"Invalid forcing directory: {e}. Check `main_dir` variable")
+            raise
+
+        # For csv provider
+        if self.forcing_provider == 'csv':
+
+            # Retrieve forcing_provider and forcing_dir
+            self.forcing_dir = (self.forcingSec.get('forcing_dir', "") or None)
+
+            # Symlink forcing files
+            missing_catchment_files = []
+            for catID in self.catids:
+                ffile = os.path.join(self.forcing_dir, catID + '.csv')
+                # Make sure we have the file
+                if not os.path.exists(ffile):
+                    logger.info(f'Forcing file {ffile} does not exist')
+                    missing_catchment_files.append(ffile)
+                else:
+                    target = os.path.join(self.forcing_path, os.path.basename(ffile))
+                    if not os.path.exists(target):
+                        os.symlink(ffile, target)
+            if missing_catchment_files:
+                try:
+                    raise Exception(f"Missing catchment files in forcing data: {self.forcing_dir}")
+                except Exception as e:
+                    logger.critical(e)
+                    raise
+
+            # Set dummy forcing_config_file variable
+            self.forcing_config_file = ""
+
+            logger.info(f"Extracted CSV forcing data from: {self.forcing_dir}")
+
+    def _configure_forcing_engine(self):
+        """
+        Extract forcing engine parameters and configure forcing engine yml files
+        """
+        if self.forcing_provider == 'bmi':
+
+            # Set target directory for forcing config file
+            self.forcing_config_dir = Path(self.input_dir) / 'forcing_config'
+
+            if self.use_cold_start is True:
+                self.forcing_config_file = self.forcing_config_dir / "cold_start_config.yml"
+            else:
+                self.forcing_config_file = self.forcing_config_dir / f"{self.forecast_configuration}_config.yml"
+
+            # Construct ESMF mesh file path
+            gpkg_name = os.path.splitext(os.path.basename(self.cat_file))[0]
+            self.geogrid_file = f"/ngen-app/data/esmf_mesh/{gpkg_name}_ESMF_Mesh.nc"
+
+            # Update dynamic parameters in forcing engine configuration file
+            gfun.update_forcing_config(self.cycle_date, self.cycle_hour, self.forcing_template, self.cat_file, self.geogrid_file, self.forcing_config_dir, self.forcing_config_file, self.use_cold_start, self.cold_start_datetime)
+
+            logger.info(f"Configured BMI forcing engine: {self.forcing_config_file}")
 
     def _extract_streamflow_obs(self):
         """
@@ -1413,6 +1500,7 @@ class RealizationBuilder:
                 logging.critical(e)
                 raise
 
+        self._parse_forcing_engine()
         self._parse_time()
         self._parse_calib_settings()
         self._parse_modules()
@@ -1421,6 +1509,7 @@ class RealizationBuilder:
         self._create_input_dir()
         self._extract_hydrofabric()
         self._extract_forcing()
+        self._configure_forcing_engine()
         self._extract_streamflow_obs()
         self._set_output_vars()
         self._create_bmi_configs()
@@ -1448,6 +1537,7 @@ class RealizationBuilder:
                 logging.critical(e)
                 raise
 
+        self._parse_forcing_engine()
         self._load_reg_formulation()
         self._load_reg_catchments()
         self._parse_time()
@@ -1461,6 +1551,7 @@ class RealizationBuilder:
         self._create_input_dir()
         self._extract_hydrofabric()
         self._extract_forcing()
+        self._configure_forcing_engine()
         self._set_output_vars()
         self._create_reg_bmi_configs()
         self._write_region_realization()
@@ -1473,10 +1564,16 @@ class RealizationBuilder:
         """
         logger.info("Building forecast realization from %s", self.input_path)
 
+        self._load_config()
+        self._validate_config()
         self._load_yaml()
         self._parse_yaml()
+        self._parse_config()
         self._load_realization()
-        self._create_fcst_output_dir()
+        self._create_fcst_dir()
+        self._parse_forcing_engine()
+        self._extract_forcing()
+        self._configure_forcing_engine()
         self._update_fcst_realization()
         self._update_fcst_noah_ueb()
         self._update_fcst_troute()
@@ -1502,6 +1599,7 @@ class RealizationBuilder:
                 logging.critical(e)
                 raise
 
+        self._parse_forcing_engine()
         self._parse_time()
         self._parse_modules()
         self._validate_processes()
@@ -1509,6 +1607,7 @@ class RealizationBuilder:
         self._create_input_dir()
         self._extract_hydrofabric()
         self._extract_forcing()
+        self._configure_forcing_engine()
         self._set_output_vars()
         self._create_bmi_configs()
         self._write_realization()

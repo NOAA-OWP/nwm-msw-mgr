@@ -155,11 +155,44 @@ class CalibConfig(StrictBaseModel):
         return self
 
 
+class ForcingConfig(StrictBaseModel):
+    """
+    Input.config Forcing section requirement
+    """
+    forcing_provider: Literal['csv', 'bmi']
+    forcing_dir: Optional[str] = None
+    forecast_configuration: Optional[Literal['ana', 'standard_ana', 'aorc', 'extended_ana', 'long_range_mem1', 'long_range_mem2', 'long_range_mem3', 'long_range_mem4',
+                                             'medium_range_blend', 'nwm', 'short_range', 'short_range_alaska', 'medium_range_blend_alaska', 'short_range_extended_alaska',
+                                             'short_range_hawaii', 'short_range_puertorico', 'extended_ana_alaska', 'standard_ana_alaska', 'standard_ana_hawaii',
+                                             'standard_ana_puertorico']] = None
+    cycle_datetime: Optional[str] = None
+    forcing_template_dir: Optional[str] = None
+    use_cold_start: Optional[bool] = None
+    cold_start_datetime: Optional[str] = None
+
+    # Check optional fields that depend on forcing_provider
+    @model_validator(mode="after")
+    def check_required_fields(self):
+
+        # forcing_dir required if forcing_provider is csv
+        if self.forcing_provider == 'csv' and self.forcing_dir is None:
+            raise ValueError("`forcing_dir` must be specified for a run using csv forcing provider.")
+
+        # forecast_configuration required if forcing_provider is csv
+        if self.forcing_provider == 'bmi' and self.forecast_configuration is None:
+            raise ValueError("`forecast_cycle` must be specified for a run using bmi forcing provider.")
+
+        # forcing dir required if forcing_provider is csv
+        if self.forcing_provider == 'bmi' and self.forcing_template_dir is None:
+            raise ValueError("`forcing_template_dir` must be specified for a run using bmi forcing provider.")
+
+        return self
+
+
 class DataFileConfig(StrictBaseModel):
     """
     Input.config DataFile section requirement
     """
-    forcing_dir: str
     obs_dir: Optional[str] = None
     nwmretro_file: Optional[str] = None
     hydrofab_file: str
@@ -211,10 +244,11 @@ class InputConfig(StrictBaseModel):
     """
     Class to organize input.config section requirements
     """
-    General: GeneralConfig
+    General: Optional[GeneralConfig] = None
     Regionalization: Optional[RegionConfig] = None
     Calibration: Optional[CalibConfig] = None
-    DataFile: DataFileConfig
+    Forcing: Optional[ForcingConfig] = None
+    DataFile: Optional[DataFileConfig] = None
     Parallel: Optional[ParallelConfig] = None
 
     # Check optional sections are present
