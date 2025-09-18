@@ -2461,7 +2461,7 @@ def create_reg_realization_file(
             if 'cfes' in grp_mod or 'cfex' in grp_mod:
                 if 'sft' not in grp_mod:
                     model_params = {
-                        "sloth_ice_fraction_schaake(1,double,m,node)": 0.0,
+                        "sloth_ice_fraction_schaake(1,double,1,node)": 0.0,
                         "sloth_ice_fraction_xinanjiang(1,double,1,node)": 0.0,
                         "sloth_smp(1,double,1,node)": 0.0}
                 else:
@@ -2854,7 +2854,7 @@ def create_realization_file(
         if 'cfes' in modules or 'cfex' in modules:
             if 'sft' not in modules:
                 model_params = {
-                    "sloth_ice_fraction_schaake(1,double,m,node)": 0.0,
+                    "sloth_ice_fraction_schaake(1,double,1,node)": 0.0,
                     "sloth_ice_fraction_xinanjiang(1,double,1,node)": 0.0,
                     "sloth_smp(1,double,1,node)": 0.0}
             else:
