@@ -919,12 +919,15 @@ class RealizationBuilder:
             gpkg_name = os.path.splitext(os.path.basename(self.cat_file))[0]
             self.geogrid_file = f"/ngen-app/data/esmf_mesh/{gpkg_name}_ESMF_Mesh.nc"
 
+            # Set geopackage file path
+            gpkg_path = self.cat_file if hasattr(self, "cat_file") and self.cat_file else self.gpkg_cats
+
             # Construct ESMF mesh file path
-            gpkg_name = os.path.splitext(os.path.basename(self.gpkg_cats))[0]
+            gpkg_name = os.path.splitext(os.path.basename(gpkg_path))[0]
             self.geogrid_file = f"/ngen-app/data/esmf_mesh/{gpkg_name}_ESMF_Mesh.nc"
 
             # Update dynamic parameters in forcing engine configuration file
-            gfun.update_forcing_config(self.cycle_date, self.cycle_hour, self.forcing_template, self.gpkg_cats, self.geogrid_file, self.forcing_config_dir, self.forcing_config_file, self.use_cold_start, self.cold_start_datetime)
+            gfun.update_forcing_config(self.cycle_date, self.cycle_hour, self.forcing_template, gpkg_path, self.geogrid_file, self.forcing_config_dir, self.forcing_config_file, self.use_cold_start, self.cold_start_datetime)
 
             logger.info(f"Configured BMI forcing engine: {self.forcing_config_file}")
 
