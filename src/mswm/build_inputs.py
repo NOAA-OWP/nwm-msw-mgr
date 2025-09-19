@@ -628,7 +628,9 @@ class RealizationBuilder:
 
             # If CFE in modules, retrieve is_aet_rootzone flag
             if any(m in modules for m in ['cfes', 'cfex']):
-                self.grp_is_aet_rootzone[row['gage_id']] = row['is_aet_rootzone']
+                self.grp_is_aet_rootzone[row['gage_id']] = (
+                    row['is_aet_rootzone'] if 'is_aet_rootzone' in self.reg_df.columns and pd.notna(row['is_aet_rootzone']) else 0
+                )
 
             # Store with regionalization group id
             self.grp_to_form[row['gage_id']] = modules
