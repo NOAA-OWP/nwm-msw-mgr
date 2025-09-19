@@ -37,9 +37,8 @@ if not logging.getLogger().hasHandlers():
 
 
 class RealizationBuilder:
-    def __init__(self, input_path: str, assign_path: str | None = None, forcing_path: str | None = None, output_folder: str | None = None):
+    def __init__(self, input_path: str, forcing_path: str | None = None, output_folder: str | None = None):
         self.input_path = Path(input_path)
-        self.assign_path = Path(assign_path) if assign_path else None
         self.forcing_path = Path(forcing_path) if forcing_path else None
         self.output_folder = output_folder if output_folder else None
         logger.info(f"Initialized RealizationBuilder with {input_path}")
@@ -137,6 +136,11 @@ class RealizationBuilder:
         """
         Load regionalization formulation CSV file containing formulation groups and parameters
         """
+        # Retrieve paths from input.config
+        self.regionalization = self.input_configs.get('Regionalization')
+        self.assign_path = Path(self.regionalization['form_assign_file'])
+        self.cat_grp_path = Path(self.regionalization['cat_grp_file'])
+
         # Confirm regionalization formulation assignment file exists
         self.assign_file = Path(self.assign_path).absolute()
         if not self.assign_file.exists():
@@ -146,8 +150,18 @@ class RealizationBuilder:
                 logger.critical(e)
                 raise
 
-        # Load regionalization formulation assignment file
+        # Confirm catchment group file exists
+        self.cat_grp_file = Path(self.cat_grp_path).absolute()
+        if not self.cat_grp_file.exists():
+            try:
+                raise FileNotFoundError(f'Regionalization catchment group file does not exist: {self.cat_grp_file}')
+            except FileNotFoundError as e:
+                logger.critical(e)
+                raise
+
+        # Load regionalization formulation assignment and catchment group files
         self.reg_df = pd.read_csv(self.assign_file)
+        self.cat_grp_df = pd.read_csv(self.cat_grp_file)
 
         # Check that formulation file is not empty
         if self.reg_df.empty:
@@ -157,48 +171,50 @@ class RealizationBuilder:
                 logger.critical(e)
                 raise
 
+        # Check that catchment group file is not empty
+        if self.cat_grp_df.empty:
+            try:
+                raise ValueError(f"Regionalization catchment group file is empty: {self.cat_grp_file}")
+            except ValueError as e:
+                logger.critical(e)
+                raise
+
         # Check that formulation file is properly formatted
-        req_columns = {'group', 'formulation'}
-        if not req_columns.issubset(self.reg_df.columns):
-            missing_cols = req_columns - set(self.reg_df.columns)
+        form_req_columns = {'gage_id', 'formulation'}
+        if not form_req_columns.issubset(self.reg_df.columns):
+            missing_cols = form_req_columns - set(self.reg_df.columns)
             try:
                 raise ValueError(f"Regionalization formulation file is missing required columns: {missing_cols}")
             except ValueError as e:
                 logger.critical(e)
                 raise
 
+        # Check that catchment group file is properly formatted
+        cat_req_columns = {'gage_id', 'divide_id'}
+        if not cat_req_columns.issubset(self.cat_grp_df.columns):
+            missing_cols = cat_req_columns - set(self.cat_grp_df.columns)
+            try:
+                raise ValueError(f"Regionalization formulation file is missing required columns: {missing_cols}")
+            except ValueError as e:
+                logger.critical(e)
+                raise
+
+        if self.cat_grp_df["divide_id"].isnull().all():
+            try:
+                raise ValueError(f"Regionalization catchment group file must not have missing values: {self.cat_grp_file}")
+            except ValueError as e:
+                logger.critical(e)
+                raise
+
         logger.info(f"Regionalization formulation file loaded: {self.assign_file}")
+        logger.info(f"Regionalization catchment group file loaded: {self.cat_grp_file}")
 
     def _load_reg_catchments(self):
         """"
         Load grouped catchment files produced by regionalization and store grouped catchment ids
         """
         # Relate formulation groups to catchment IDS
-        self.grp_to_cat = {}
-        self.grp_to_cat_path = {}
-        for grp in self.reg_df['group']:
-            cat_path = (Path(self.assign_path.parent) / (grp + "_catchments.csv")).absolute()
-            self.grp_to_cat_path[grp] = str(cat_path)
-            if not cat_path.exists():
-                try:
-                    raise FileNotFoundError(f'Regionalization catchment group file does not exist: {cat_path}')
-                except FileNotFoundError as e:
-                    logger.critical(e)
-                    raise
-
-            # Load catchment group file
-            cat_df = pd.read_csv(cat_path)
-
-            # Check that formulation file is properly formatted
-            if "divide_id" not in cat_df.columns or cat_df["divide_id"].isnull().all():
-                try:
-                    raise ValueError(f"Regionalization catchment group file must contain `divide_id` column: {cat_path}")
-                except ValueError as e:
-                    logger.critical(e)
-                    raise
-
-            # Store group id and associated catchments
-            self.grp_to_cat[grp] = cat_df.divide_id.tolist()
+        self.grp_to_cat = (self.cat_grp_df.groupby("gage_id")["divide_id"].apply(list).to_dict())
 
         logger.info(f"Regionalization catchment files loaded from: {self.assign_file}")
 
@@ -240,7 +256,7 @@ class RealizationBuilder:
         for mod, params in params_dict.items():
             self.grp_params[mod] = {}
             for _, row in self.reg_df.iterrows():
-                group = row['group']
+                group = row['gage_id']
                 param_values = {}
                 for param in params:
                     value = row[param]
@@ -584,20 +600,20 @@ class RealizationBuilder:
             # add sloth if CFE or LASAM is selected
             module_found = [x for x in ['cfes', 'cfex', 'lasam'] if x in modules]
             if len(module_found) == 1 and 'sloth' not in modules:
-                logger.info(f"CFE or LASAM is used in the formulation. SLOTH added to module list: {row['group']}")
+                logger.info(f"CFE or LASAM is used in the formulation. SLOTH added to module list: {row['gage_id']}")
                 modules = ['sloth'] + modules
 
             # make sure SMP and SFT are always selected together
             if 'smp' in modules and 'sft' not in modules:
-                logger.info(f"SMP and SFT must be selected together. SFT added to module list: {row['group']}")
+                logger.info(f"SMP and SFT must be selected together. SFT added to module list: {row['gage_id']}")
                 modules = modules + ['sft']
             if 'sft' in modules and 'smp' not in modules:
-                logger.info(f"SMP and SFT must be selected together. SMP added to module list: {row['group']}")
+                logger.info(f"SMP and SFT must be selected together. SMP added to module list: {row['gage_id']}")
                 modules = modules + ['smp']
 
             # always ensure troute is included
             if 'troute' not in modules:
-                logger.info(f"T-Route must be included in the formulation. T-Route added to module list: {row['group']}")
+                logger.info(f"T-Route must be included in the formulation. T-Route added to module list: {row['gage_id']}")
                 modules = modules + ['troute']
 
             # make sure SMP, SFT, SAC-SMA, and LASAM are not paired with PET, as PET does not provide the required inputs
@@ -621,12 +637,12 @@ class RealizationBuilder:
 
             # If CFE in modules, retrieve is_aet_rootzone flag
             if any(m in modules for m in ['cfes', 'cfex']):
-                self.grp_is_aet_rootzone[row['group']] = row['is_aet_rootzone']
+                self.grp_is_aet_rootzone[row['gage_id']] = row['is_aet_rootzone']
 
             # Store with regionalization group id
-            self.grp_to_form[row['group']] = modules
+            self.grp_to_form[row['gage_id']] = modules
 
-            logger.info(f"Final list of modules in formulation for {row['group']}: {modules}")
+            logger.info(f"Final list of modules in formulation for {row['gage_id']}: {modules}")
 
     def _validate_processes(self):
         """
