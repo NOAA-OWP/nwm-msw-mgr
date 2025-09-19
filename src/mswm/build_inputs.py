@@ -250,6 +250,8 @@ class RealizationBuilder:
                 group = row['gage_id']
                 param_values = {}
                 for param in params:
+                    if param not in self._reg_df.columns:
+                        contiue
                     value = row[param]
                     # If parameter is empty, leave out of parameter dictionary
                     if not math.isnan(value):
@@ -627,10 +629,10 @@ class RealizationBuilder:
                     modules.insert(sft_index, "smp")
 
             # If CFE in modules, retrieve is_aet_rootzone flag
+            self.grp_is_aet_rootzone[row['gage_id']] = 0
             if any(m in modules for m in ['cfes', 'cfex']):
-                self.grp_is_aet_rootzone[row['gage_id']] = (
-                    row['is_aet_rootzone'] if 'is_aet_rootzone' in self.reg_df.columns else 0
-                )
+                if 'is_aet_rootzone' in self.reg_df.columns:
+                    self.grp_is_aet_rootzone[row['gage_id']] = row['is_aet_rootzone'] 
 
             # Store with regionalization group id
             self.grp_to_form[row['gage_id']] = modules
