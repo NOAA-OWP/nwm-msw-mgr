@@ -24,27 +24,19 @@ def build_calib(input_path: str):
     rb.build_calib_realization()
 
 
-<<<<<<< HEAD
 def build_fcst(input_path: str, valid_yaml: str, fcst_run_name: str, use_cold_start: bool = False):
     """
     Call RealizationBuilder class to generate forecast realization and config files
     """
     rb = RealizationBuilder(input_path=input_path, valid_yaml=valid_yaml, fcst_run_name=fcst_run_name, use_cold_start=use_cold_start)
-=======
-def build_fcst(input_path: str, valid_yaml: str, fcst_run_name: str, use_cold_start: bool):
-    """
-    Call RealizationBuilder class to generate forecast realization and config files
-    """
-    rb = RealizationBuilder(input_path, valid_yaml, fcst_run_name, use_cold_start)
->>>>>>> 5624f51 (Update readme and example files for forecast)
     rb.build_fcst_realization()
 
 
-def build_region(input_path: str):
+def build_region(input_path: str, assign_path: str):
     """
     Call RealizationBuilder class to generate realization and config files for regionalization
     """
-    rb = RealizationBuilder(input_path=input_path)
+    rb = RealizationBuilder(input_path=input_path, assign_path=assign_path)
     rb.build_region_realization()
 
 
@@ -57,7 +49,7 @@ def main():
     # subcommand: build_default
     build_default_sub = subparser.add_parser("build_default", help="Create default realization")
     build_default_sub.add_argument("input_path", help="Input configuration file")
-    build_default_sub.add_argument("use_cold_start", required=False, help="Cold start flag (True or False)")
+    build_default_sub.add_argument("--use_cold_start", action="store_true", help="Enable cold start flag when passed")
 
     # subcommand: build_calib
     build_calib_sub = subparser.add_parser("build_calib", help="Create calibration realization")
@@ -72,13 +64,13 @@ def main():
     build_fcst_sub.add_argument("input_path", help="Input configuration file")
     build_fcst_sub.add_argument("valid_yaml", help="Path to the config yaml file for a validation run")
     build_fcst_sub.add_argument("fcst_run_name", help="Name of the folder to be created for storing inputs/outputs from running ngen")
-    build_fcst_sub.add_argument("use_cold_start", required=False, help="Cold start flag (True or False)")
+    build_fcst_sub.add_argument("--use_cold_start", action="store_true", help="Enable cold start flag when passed")
 
     args = parser.parse_args()
 
     # Parser logic
     if args.command == "build_default":
-        build_default(args.input_path)
+        build_default(args.input_path, args.use_cold_start)
     elif args.command == "build_calib":
         build_calib(args.input_path)
     elif args.command == "build_region":
