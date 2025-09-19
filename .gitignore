@@ -90,5 +90,6 @@ dist/
 # Ngen FIles #
 #############
 cat*
+!catchment_groups.csv
 nex*
 troute*
