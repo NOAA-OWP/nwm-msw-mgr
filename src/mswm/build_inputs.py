@@ -240,15 +240,6 @@ class RealizationBuilder:
             'ueb': ['ems', 'cg', 'zo', 'rho', 'rhog', 'ks', 'de', 'avo', 'df', 'apr', 'cc', 'hcan', 'lai', 'subalb']
         }
 
-        # Ensure that all calibratable parameters are columns in dataframe
-        self.missing_cols = [col for cols in params_dict.values() for col in cols if col not in self.reg_df.columns]
-        if self.missing_cols:
-            try:
-                raise ValueError(f"The following calibratable parameters are missing from the regionalization formulation file: {self.missing_cols}")
-            except ValueError as e:
-                logger.critical(e)
-                raise
-
         # For each module, retrieve group and corresponding parameter values
         # Raise errors for non-numeric strings, leaving empty parameter values out of realization section
         self.grp_params = {}
