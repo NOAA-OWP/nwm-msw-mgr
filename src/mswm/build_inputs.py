@@ -250,8 +250,8 @@ class RealizationBuilder:
                 group = row['gage_id']
                 param_values = {}
                 for param in params:
-                    if param not in self._reg_df.columns:
-                        contiue
+                    if param not in self.reg_df.columns:
+                        continue
                     value = row[param]
                     # If parameter is empty, leave out of parameter dictionary
                     if not math.isnan(value):
