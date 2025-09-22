@@ -160,7 +160,7 @@ class RealizationBuilder:
                 raise
 
         # Load regionalization formulation assignment and catchment group files
-        self.reg_df = pd.read_csv(self.assign_file)
+        self.reg_df = pd.read_csv(self.assign_file, dtype={'gage_id': str})
         self.cat_grp_df = pd.read_csv(self.cat_grp_file, dtype={'gage_id': str})
 
         # Check that formulation file is not empty
