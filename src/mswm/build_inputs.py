@@ -1452,6 +1452,8 @@ class RealizationBuilder:
                                                     self.work_dir,
                                                     self.basin) if self.parallelSec else None
 
+        logger.info(f"Partition file is created at: {self.part_file}")
+
     def _create_calib_model_dict(self):
         """
         Create calibration model dictionary used to create config yaml file
@@ -1590,6 +1592,7 @@ class RealizationBuilder:
         self._set_output_vars()
         self._create_reg_bmi_configs()
         self._write_region_realization()
+        self._write_partition()
 
         logger.info("Regionalization run set up successfully")
 
@@ -1647,5 +1650,6 @@ class RealizationBuilder:
         self._set_output_vars()
         self._create_bmi_configs()
         self._write_realization()
+        self._write_partition()
 
         logger.info("Default run set up successfully")
