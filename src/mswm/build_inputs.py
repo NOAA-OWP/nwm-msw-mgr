@@ -800,6 +800,29 @@ class RealizationBuilder:
 
         logger.info(f"Input directory created at: {self.input_dir}")
 
+    def _symlink_ngen(self):
+        """
+        Symlink ngen executable into Input run folder
+        """
+        # Set Symlink ngen path
+        try:
+            exe_path = Path(self.conf3['ngen_exe_file']).resolve()
+        except FileNotFoundError as e:
+            logger.critical(f"ngen executable not found: {self.conf3['ngen_exe_file']}: {e}")
+            raise
+        symlink_path = Path(self.input_dir) / "ngen"
+
+        # Remove existing symlink
+        if symlink_path.exists() or symlink_path.is_symlink():
+            symlink_path.unlink()
+
+        # Link ngen executable
+        try:
+            os.symlink(exe_path, symlink_path)
+            logger.info("Created symlink to ngen executable")
+        except OSError as e:
+            logger.critical(f"Failed to create symlink: {symlink_path} -> {exe_path}: {e}")
+
     def _extract_hydrofabric(self):
         """
         Extract hydrofabric geopackage and form catchment, nexus, and crosswalk files
@@ -1560,6 +1583,7 @@ class RealizationBuilder:
         self._map_mod_to_cat()
         self._set_lib_paths()
         self._create_input_dir()
+        self._symlink_ngen()
         self._extract_hydrofabric()
         self._extract_forcing()
         self._configure_forcing_engine()
@@ -1616,6 +1640,7 @@ class RealizationBuilder:
         self._validate_processes()
         self._set_lib_paths()
         self._create_input_dir()
+        self._symlink_ngen()
         self._extract_hydrofabric()
         self._extract_forcing()
         self._configure_forcing_engine()
