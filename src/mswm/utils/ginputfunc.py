@@ -2336,8 +2336,9 @@ def create_reg_realization_file(
                                                     "VV": "land_surface_wind__y_component_of_velocity",
                                                     "LWDN": "land_surface_radiation~incoming~longwave__energy_flux",
                                                     "SOLDN": "land_surface_radiation~incoming~shortwave__energy_flux",
-                                                    "SFCPRS": "land_surface_air__pressure"},
-                                                "model_params": grp_params['noah'][grp]}}
+                                                    "SFCPRS": "land_surface_air__pressure"}}}
+            if grp_params.get('noah', {}).get(grp):
+                model_configs['noah']['params']['model_params'] = grp_params['noah'][grp]
 
         # cfe or cfex
         if 'cfes' in grp_mod or 'cfex' in grp_mod:
@@ -2349,8 +2350,9 @@ def create_reg_realization_file(
                                             "library_file": lib_mod[m1],
                                             "init_config": os.path.join(bmi_dir[m1], '{{id}}_bmi_config_cfe.txt'),
                                             "allow_exceed_end_time": True, "fixed_time_step": False, "uses_forcing_file": False,
-                                            "registration_function": "register_bmi_cfe",
-                                            "model_params": grp_params[m1][grp]}}
+                                            "registration_function": "register_bmi_cfe"}}
+            if grp_params.get('m1', {}).get(grp):
+                model_configs['m1']['params']['model_params'] = grp_params['m1'][grp]
 
             # variable name mapping section
             pet_in = "water_potential_evaporation_flux"
@@ -2369,8 +2371,10 @@ def create_reg_realization_file(
                                                     "library_file": lib_mod['topmodel'],
                                                     "init_config": os.path.join(bmi_dir['topmodel'], '{{id}}_topmodel.run'),
                                                     "allow_exceed_end_time": True, "fixed_time_step": False, "uses_forcing_file": False,
-                                                    "registration_function": "register_bmi_topmodel",
-                                                    "model_params": grp_params['topmodel'][grp]}}
+                                                    "registration_function": "register_bmi_topmodel"}}
+            if grp_params.get('topmodel', {}).get(grp):
+                model_configs['topmodel']['params']['model_params'] = grp_params['topmodel'][grp]
+
             # variable name mapping section
             pet_in = "water_potential_evaporation_flux"
             pcp_in = "atmosphere_water__liquid_equivalent_precipitation_rate"
@@ -2387,8 +2391,9 @@ def create_reg_realization_file(
                                         "library_file": lib_mod['sac'],
                                         "init_config": os.path.join(bmi_dir['sac'], 'sac-init-' + '{{id}}.namelist.input'),
                                         "allow_exceed_end_time": True, "fixed_time_step": False, "uses_forcing_file": False,
-                                        "main_output_variable": "tci",
-                                        "model_params": grp_params['sac'][grp]}}
+                                        "main_output_variable": "tci"}}
+            if grp_params.get('sac', {}).get(grp):
+                model_configs['sac']['params']['model_params'] = grp_params['sac'][grp]
 
             # variable name mapping section
             pet_in = "pet"
@@ -2410,8 +2415,9 @@ def create_reg_realization_file(
                                            "main_output_variable": "raim",
                                            "variables_names_map": {
                                                "precip": "atmosphere_water__liquid_equivalent_precipitation_rate",
-                                               "tair": "land_surface_air__temperature"},
-                                           "model_params": grp_params['snow17'][grp]}}
+                                               "tair": "land_surface_air__temperature"}}}
+            if grp_params.get('snow17', {}).get(grp):
+                model_configs['snow17']['params']['model_params'] = grp_params['snow17'][grp]
 
         # ueb
         if 'ueb' in grp_mod:
@@ -2431,8 +2437,9 @@ def create_reg_realization_file(
                                             "uebv2d": "land_surface_wind__y_component_of_velocity",
                                             "Qli": "land_surface_radiation~incoming~longwave__energy_flux",
                                             "Qsi": "land_surface_radiation~incoming~shortwave__energy_flux",
-                                            "AP": "land_surface_air__pressure"},
-                                        "model_params": grp_params['ueb'][grp]}}
+                                            "AP": "land_surface_air__pressure"}}}
+            if grp_params.get('ueb', {}).get(grp):
+                model_configs['ueb']['params']['model_params'] = grp_params['ueb'][grp]
 
         # pet
         if 'pet' in grp_mod:
@@ -2529,8 +2536,9 @@ def create_reg_realization_file(
                                                  "library_file": lib_mod['lasam'],
                                                  "init_config": os.path.join(bmi_dir['lasam'], '{{id}}_bmi_config_lasam.txt'),
                                                  "allow_exceed_end_time": True,
-                                                 "uses_forcing_file": False,
-                                                 "model_params": grp_params['lasam'][grp]}}
+                                                 "uses_forcing_file": False}}
+            if grp_params.get('lasam', {}).get(grp):
+                model_configs['lasam']['params']['model_params'] = grp_params['lasam'][grp]
 
             # variable name mapping section
             pet_in = "potential_evapotranspiration_rate"
@@ -2539,32 +2547,6 @@ def create_reg_realization_file(
 
             # module output variable for input to t-route
             main_output_variable = "total_discharge"
-
-        if 'lstm' in grp_mod:
-            model_configs['lstm'] = {"name": "bmi_python",
-                                     "params": {"python_type": "lstm.bmi_lstm.bmi_LSTM",
-                                                "model_type_name": get_model_type_name('lstm'),
-                                                "main_output_variable": "land_surface_water__runoff_depth",
-                                                "init_config": os.path.join(bmi_dir['lstm'], '{{id}}.yml'),
-                                                "allow_exceed_end_time": True,
-                                                "uses_forcing_file": False}}
-
-            # variable name mapping section
-            variables_names_map = dict()
-            variables_names_map["streamflow_cms"] = "land_surface_water__runoff_volume_flux",
-            variables_names_map["pytorch_model_path"] = os.path.join(bmi_dir['lstm'], "sugar_creek_trained.pt"),
-            variables_names_map["normalization_path"] = os.path.join(bmi_dir['lstm'], "input_scaling.csv"),
-            variables_names_map["initial_state_path"] = os.path.join(bmi_dir['lstm'], "initial_states.csv"),
-            variables_names_map["useGPU"] = False
-
-            var_maps = dict()
-            var_maps['input'] = variables_names_map
-            var_maps['output'] = dict()
-            var_maps['output']['swe_out'] = ''
-            var_maps['output']['sm_out'] = ''
-
-            # module output variable for input to t-route
-            main_output_variable = "land_surface_water__runoff_depth"
 
         if 'lstm' in grp_mod:
             model_configs['lstm'] = {"name": "bmi_python",
