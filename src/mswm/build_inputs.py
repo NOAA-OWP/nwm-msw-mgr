@@ -632,7 +632,7 @@ class RealizationBuilder:
             self.grp_is_aet_rootzone[row['gage_id']] = 0
             if any(m in modules for m in ['cfes', 'cfex']):
                 if 'is_aet_rootzone' in self.reg_df.columns:
-                    self.grp_is_aet_rootzone[row['gage_id']] = row['is_aet_rootzone'] 
+                    self.grp_is_aet_rootzone[row['gage_id']] = row['is_aet_rootzone']
 
             # Store with regionalization group id
             self.grp_to_form[row['gage_id']] = modules
@@ -713,7 +713,7 @@ class RealizationBuilder:
             for cat in cats:
                 self.cat_to_grp[cat] = grp
                 # Assign aet_rootzone flags for cfe
-                self.cat_to_aet_rootzone[cat] = self.grp_is_aet_rootzone[grp]
+                self.cat_to_aet_rootzone[cat] = self.grp_is_aet_rootzone.get(grp, 0)
 
     def _map_cat_to_form(self):
         """
