@@ -383,7 +383,6 @@ class RealizationBuilder:
 
             cycle_datetime = self.forcingSec.get('cycle_datetime')
             self.cycle_hour = self.forcingSec.get('cycle_hour')
-            self.geogrid_file = self.forcingSec.get('geogrid_file')
             self.forcing_template_dir = self.forcingSec.get('forcing_template_dir')
 
             # Construct cycle date and cycle hour
@@ -913,11 +912,7 @@ class RealizationBuilder:
 
             # Set target directory for forcing config file
             self.forcing_config_dir = Path(self.input_dir) / 'forcing_config'
-            self.forcing_config_file = self.forcing_config_dir / f"{self.forecast_cycle}_config.yml"
-
-            # Construct ESMF mesh file path
-            gpkg_name = os.path.splitext(os.path.basename(self.cat_file))[0]
-            self.geogrid_file = f"/ngen-app/data/esmf_mesh/{gpkg_name}_ESMF_Mesh.nc"
+            self.forcing_config_file = self.forcing_config_dir / self.forecast_configuration_str
 
             # Set geopackage file path
             gpkg_path = self.cat_file if hasattr(self, "cat_file") and self.cat_file else self.gpkg_cats
