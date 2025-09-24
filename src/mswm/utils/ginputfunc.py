@@ -81,6 +81,7 @@ __all__ = [
     'create_fcst_times',
     'update_forcing_config',
     'update_forcing_in_realization',
+    'map_var_names_forcing_engine',
     'create_reg_realization_file',
     'create_realization_file',
     'create_calib_config_file',
@@ -2637,7 +2638,45 @@ def update_forcing_in_realization(
     # Update troute path
     real_config['routing']['t_route_config_file_with_path'].replace('valid_best', basename_opt)
 
+    # Update variable names map for forcing engine
+    real_modules = real_config['global']['formulations'][0]['params']['modules']
+
+    for mod in real_modules:
+
+        # Retrieve module name and variable names map for module
+        mod_params = mod.get('params')
+        mod_var_names = mod_params.get('variables_names_map')
+
+        # Map module variable names to new forcing engine names
+        if mod_var_names is not None:
+            mod['params']['variables_names_map'] = map_var_names_forcing_engine(mod_var_names)
+
     return real_config
+
+
+def map_var_names_forcing_engine(
+        mod_var_names: dict
+) -> Dict[str, str]:
+    """
+    Set realization variables_names_map for forcing engine based on module name
+    """
+
+    # Set variable name mapping based on forcing provider
+    name_dict = {"atmosphere_water__liquid_equivalent_precipitation_rate": "RAINRATE_ELEMENT",
+                 "atmosphere_air_water~vapor__relative_saturation": "Q2D_ELEMENT",
+                 "land_surface_air__temperature": "T2D_ELEMENT",
+                 "land_surface_wind__x_component_of_velocity": "U2D_ELEMENT",
+                 "land_surface_wind__y_component_of_velocity": "V2D_ELEMENT",
+                 "land_surface_radiation~incoming~longwave__energy_flux": "LWDOWN_ELEMENT",
+                 "land_surface_radiation~incoming~shortwave__energy_flux": "SWDOWN_ELEMENT",
+                 "land_surface_air__pressure": "PSFC_ELEMENT"}
+
+    # Update variable names to forcing provider names
+    new_mod_var_names = {
+        key: name_dict.get(value, value) for key, value in mod_var_names.items()
+    }
+
+    return new_mod_var_names
 
 
 def var_mapping(
