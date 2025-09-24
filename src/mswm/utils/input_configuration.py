@@ -181,7 +181,7 @@ class ForcingConfig(StrictBaseModel):
 
         # forecast_configuration required if forcing_provider is csv
         if self.forcing_provider == 'bmi' and self.forecast_configuration is None:
-            raise ValueError("`forecast_cycle` must be specified for a run using bmi forcing provider.")
+            raise ValueError("`forecast_configuration` must be specified for a run using bmi forcing provider.")
 
         # forcing dir required if forcing_provider is csv
         if self.forcing_provider == 'bmi' and self.forcing_template_dir is None:
