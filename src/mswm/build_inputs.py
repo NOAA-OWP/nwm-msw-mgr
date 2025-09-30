@@ -345,7 +345,7 @@ class RealizationBuilder:
         """
         # create fcst directory
         try:
-            fcst_dir0 = Path(self.valid_conf['general']['yaml_file']).parent.parent.resolve(strict=True)
+            fcst_dir0 = Path(self.valid_conf['general']['yaml_file']).parent.parent
         except KeyError as e:
             logger.critical(f"Yaml file path not found in config valid yaml file: {e}")
             raise
