@@ -2566,7 +2566,7 @@ def replace_forcing_placeholders(
         for placeholder, value in vars.items():
             obj = obj.replace(placeholder, value)
         return obj
-  
+
     else:
         return obj
 
@@ -2623,10 +2623,6 @@ def update_forcing_config(
 
     # Update forcing_template with dynamic variables
     forcing_template['RefcstBDateProc'] = cycle_str
-    # forcing_template['GeogridIn'] = geogrid_file
-    # forcing_template['Geopackage'] = gpkg_file
-
-    print(forcing_template)
 
     # Write forcing config yaml file
     with open(forcing_config_file, "w", encoding="utf-8") as file:
