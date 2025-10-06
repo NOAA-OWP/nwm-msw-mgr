@@ -376,14 +376,16 @@ class RealizationBuilder:
         self.forecast_configuration = self.forcingSec.get('forecast_configuration', None)
         self.forcing_provider = self.forcingSec.get('forcing_provider')
 
-        # Retrieve cold_start_tim
+        # Retrieve cold_start_time
         self.cold_start_datetime = self.forcingSec.get('cold_start_datetime', None)
 
         if self.forcing_provider == 'bmi' and self.forecast_configuration is not None:
 
+            # Retrieve forcing engine variables
             cycle_datetime = self.forcingSec.get('cycle_datetime')
             self.cycle_hour = self.forcingSec.get('cycle_hour')
             self.forcing_template_dir = self.forcingSec.get('forcing_template_dir')
+            self.root_dir = self.forcingSec.get('root_dir')
 
             # Construct cycle date and cycle hour
             cycle_dt = datetime.strptime(cycle_datetime, "%Y-%m-%d %H:%M:%S")
@@ -915,14 +917,11 @@ class RealizationBuilder:
             self.forcing_config_file = self.forcing_config_dir / self.forecast_configuration_str
 
             # Set geopackage file path
-            gpkg_path = self.cat_file if hasattr(self, "cat_file") and self.cat_file else self.gpkg_cats
-
-            # Construct ESMF mesh file path
-            gpkg_name = os.path.splitext(os.path.basename(gpkg_path))[0]
-            self.geogrid_file = f"/ngen-app/data/esmf_mesh/{gpkg_name}_ESMF_Mesh.nc"
+            gpkg_file = self.cat_file if hasattr(self, "cat_file") and self.cat_file else self.gpkg_cats
 
             # Update dynamic parameters in forcing engine configuration file
-            gfun.update_forcing_config(self.cycle_date, self.cycle_hour, self.forcing_template, gpkg_path, self.geogrid_file, self.forcing_config_dir, self.forcing_config_file, self.use_cold_start, self.cold_start_datetime)
+            gfun.update_forcing_config(self.cycle_date, self.cycle_hour, self.root_dir, self.forcing_template, gpkg_file, self.forcing_config_dir,
+                                       self.forcing_config_file, self.use_cold_start, self.cold_start_datetime)
 
             logger.info(f"Configured BMI forcing engine: {self.forcing_config_file}")
 

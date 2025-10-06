@@ -14,7 +14,7 @@ import logging
 import shutil
 import math
 from pathlib import Path
-from typing import List, Union, Dict, Tuple
+from typing import List, Union, Dict, Any, Tuple
 from collections import OrderedDict
 from pyproj import Transformer
 import geopandas as gpd
@@ -2546,12 +2546,37 @@ def create_fcst_times(
     return fcst_start, fcst_end
 
 
+def replace_forcing_placeholders(
+        obj: Any,
+        vars: dict[str, str]
+) -> Any:
+    """
+    Recursively replace root path or gage name in forcing engine yaml file
+    """
+    # Recurse through dictionary
+    if isinstance(obj, dict):
+        return {k: replace_forcing_placeholders(v, vars) for k, v in obj.items()}
+
+    # Recurse through list
+    if isinstance(obj, list):
+        return [replace_forcing_placeholders(i, vars) for i in obj]
+
+    # Replace placeholders if string contains format pattern
+    elif isinstance(obj, str):
+        for placeholder, value in vars.items():
+            obj = obj.replace(placeholder, value)
+        return obj
+  
+    else:
+        return obj
+
+
 def update_forcing_config(
         cycle_date: str,
         cycle_hour: str,
+        root_dir: str,
         forcing_template: dict,
         gpkg_file: str,
-        geogrid_file: str,
         forcing_config_dir: Path,
         forcing_config_file: Path,
         use_cold_start: bool,
@@ -2563,9 +2588,9 @@ def update_forcing_config(
     ----------
     cycle_date : date of forecast cycle
     cycle_hour : hour of forecast cycle (00z)
+    root_dir : root directory for forcing engine paths
     forcing_template : dictionary of forcing bmi config template file
     gpkg_file: path to geopackage file
-    geogrid_file: path to geogrid file
     forcing_config_dir: directory path for forcing config file
     forcing_config_dir: output path for forcing config file
     use_cold_start : boolean flag for using cold start period
@@ -2588,13 +2613,23 @@ def update_forcing_config(
         cold_start_dt = datetime.datetime.strptime(cold_start_datetime, "%Y-%m-%d %H:%M:%S")
         forcing_template['LookBack'] = int((cycle_dt - cold_start_dt).total_seconds() / 60)
 
+    # Set geogrid file name
+    gpkg_name = os.path.splitext(os.path.basename(gpkg_file))[0]
+
+    # Replace {root_dir} and {gage} placeholders in forcing config
+    vars = {"{root_dir}": root_dir,
+            "{gage}": gpkg_name}
+    forcing_template = replace_forcing_placeholders(forcing_template, vars)
+
     # Update forcing_template with dynamic variables
     forcing_template['RefcstBDateProc'] = cycle_str
-    forcing_template['GeogridIn'] = geogrid_file
-    forcing_template['Geopackage'] = gpkg_file
+    # forcing_template['GeogridIn'] = geogrid_file
+    # forcing_template['Geopackage'] = gpkg_file
+
+    print(forcing_template)
 
     # Write forcing config yaml file
-    with open(forcing_config_file, "w") as file:
+    with open(forcing_config_file, "w", encoding="utf-8") as file:
         yaml.dump(forcing_template, file, Dumper=ForcingDumper, sort_keys=False, default_flow_style=False)
 
 

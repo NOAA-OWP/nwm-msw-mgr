@@ -168,10 +168,10 @@ class ForcingConfig(StrictBaseModel):
     """
     forcing_provider: Literal['csv', 'bmi']
     forcing_dir: Optional[str] = None
+    forcing_template_dir: Optional[str] = None
+    root_dir: Optional[str] = None
     forecast_configuration: Optional[str] = None
     cycle_datetime: Optional[str] = None
-    forcing_template_dir: Optional[str] = None
-    use_cold_start: Optional[bool] = None
     cold_start_datetime: Optional[str] = None
 
     # Check optional fields that depend on forcing_provider
@@ -187,9 +187,21 @@ class ForcingConfig(StrictBaseModel):
             raise ValueError("Invalid value for `forecast_configuration` for bmi forcing provider. "
                              f"Valid options are: {', '.join(valid_configs)}.")
 
-        # forcing dir required if forcing_provider is csv
+        # forcing template dir required if forcing_provider is csv
         if self.forcing_provider == 'bmi' and self.forcing_template_dir is None:
             raise ValueError("`forcing_template_dir` must be specified for a run using bmi forcing provider.")
+
+        # root dir required if forcing_provider is csv
+        if self.forcing_provider == 'bmi' and self.root_dir is None:
+            raise ValueError("`root_dir` must be specified for a run using bmi forcing provider.")
+
+        # cycle_datetime required if forcing_provider is csv
+        if self.forcing_provider == 'bmi' and self.cycle_datetime is None:
+            raise ValueError("`cycle_datetime` must be specified for a run using bmi forcing provider.")
+
+        # cycle_datetime required if forcing_provider is csv
+        if self.forcing_provider == 'bmi' and self.cold_start_datetime is None:
+            raise ValueError("`cold_start_datetime` must be specified for a run using bmi forcing provider.")
 
         return self
 
