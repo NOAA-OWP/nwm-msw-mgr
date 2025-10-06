@@ -79,6 +79,7 @@ __all__ = [
     'update_troute',
     'create_troute_config',
     'create_fcst_times',
+    'replace_forcing_placeholders',
     'update_forcing_config',
     'update_forcing_in_realization',
     'map_var_names_forcing_engine',
