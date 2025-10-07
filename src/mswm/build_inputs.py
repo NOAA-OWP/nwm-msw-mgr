@@ -1147,7 +1147,7 @@ class RealizationBuilder:
                     else:
                         # If CFE BMI config files not provided and cfe not in modules, create cfe input files
                         cfe_dir = os.path.join(self.input_dir, 'cfe-s_input')
-                        gfun.create_cfe_input(self.catids, ['cfes'] + [self.modules], self.attr_file, cfe_dir, self.run_type, self.is_aet_rootzone)
+                        gfun.create_cfe_input(self.catids, ['cfes'] + [self.modules], self.attr_file, cfe_dir, self.run_type, 0)
 
                     # Create sft input
                     gfun.create_sft_smp_input(self.catids, self.modules, self.attr_parquet, cfe_dir, self.forcing_dir, sft_dir, smp_dir, self.run_type)
