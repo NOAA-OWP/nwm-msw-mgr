@@ -2624,6 +2624,7 @@ def update_forcing_config(
 
     # Update forcing_template with dynamic variables
     forcing_template['RefcstBDateProc'] = cycle_str
+    forcing_template['Geopackage'] = gpkg_file
 
     # Write forcing config yaml file
     with open(forcing_config_file, "w", encoding="utf-8") as file:
