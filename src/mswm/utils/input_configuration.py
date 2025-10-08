@@ -199,10 +199,6 @@ class ForcingConfig(StrictBaseModel):
         if self.forcing_provider == 'bmi' and self.cycle_datetime is None:
             raise ValueError("`cycle_datetime` must be specified for a run using bmi forcing provider.")
 
-        # cycle_datetime required if forcing_provider is csv
-        if self.forcing_provider == 'bmi' and self.cold_start_datetime is None:
-            raise ValueError("`cold_start_datetime` must be specified for a run using bmi forcing provider.")
-
         return self
 
 
