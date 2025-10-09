@@ -6,6 +6,7 @@ This module creates a SetupManager to manage the modification of configuration f
 
 import argparse
 from mswm.build_inputs import RealizationBuilder
+from mswm.utils.log_level import log_level_set
 
 
 def build_default(input_path: str, use_cold_start: bool = False):
@@ -41,6 +42,9 @@ def build_region(input_path: str, assign_path: str):
 
 
 def main():
+    # Initialize logging explicitly for CLI entrypoint
+    log_level_set()
+
     # Create command line parser
     parser = argparse.ArgumentParser(prog="mswm",
                                      description="Model Setup Workflow Manager command-line")

@@ -23,7 +23,6 @@ from mswm.utils.log_level import log_level_set
 from mswm.utils.input_configuration import InputConfig
 
 
-log_level_set()
 logger = logging.getLogger(__name__)
 if not logging.getLogger().hasHandlers():
     # When running outside of Django, configure basic logging to stderr
@@ -37,12 +36,16 @@ if not logging.getLogger().hasHandlers():
 class RealizationBuilder:
 
     def __init__(self, input_path: str, valid_yaml: str | None = None, use_cold_start: bool = False, assign_path: str | None = None, forcing_path: str | None = None, fcst_run_name: str | None = None):
+        # Initialize logging silently if not already set
+        log_level_set()
+
         self.input_path = Path(input_path)
         self.valid_yaml = Path(valid_yaml) if valid_yaml else None
         self.use_cold_start = use_cold_start
         self.assign_path = Path(assign_path) if assign_path else None
         self.forcing_path = Path(forcing_path) if forcing_path else None
         self.fcst_run_name = fcst_run_name if fcst_run_name else None
+
         logger.info(f"Initialized RealizationBuilder with {input_path}")
 
     def _load_config(self):

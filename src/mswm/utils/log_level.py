@@ -46,23 +46,14 @@ def create_timestamp(date_only: bool = False, iso: bool = False, append_ms: bool
 
 
 def log_level_set():
-    '''
-    Set logging level and specify logger configuration.
+    """
+    Initialize logging once. If already initialized, does nothing.
+    Prints 'Logging into:' exactly once, on first initialization.
+    """
 
-    Arguments
-    ---------
-    None
-
-    Returns
-    -------
-    None
-
-    Notes
-    -----
-    In the absense of user-specified logging level, level defaults to DEBUG
-    See also https://docs.python.org/3/library/logging.html
-
-    '''
+    # Prevent reinitializing logging if already set up
+    if getattr(log_level_set, "_initialized", False):
+        return
 
     BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -92,6 +83,10 @@ def log_level_set():
         logger.handlers.clear()
         logger.addHandler(handler)
 
+        # Only prints once because function never runs again
         print(f"Logging into: {logFilePath}")
+
+        # Mark that we've done setup once
+        log_level_set._initialized = True
     except OSError:
-        print(f"Can't Open local directory Log File: {logFilePath}", file=sys.stderr)
+        print(f"Can't open local directory Log File: {logFilePath}", file=sys.stderr)
