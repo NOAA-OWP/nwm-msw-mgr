@@ -217,7 +217,7 @@ class DataFileConfig(StrictBaseModel):
     lstm_parameter_dir: Optional[str] = None
     sac_parameter_dir: Optional[str] = None
     snow_17_parameter_dir: Optional[str] = None
-    attributes_file: str
+    attributes_file: Optional[str] = None
     ngen_exe_file: str
     sloth_lib: Optional[str] = None
     cfe_lib: Optional[str] = None
