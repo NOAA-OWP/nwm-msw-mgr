@@ -2475,11 +2475,11 @@ def create_reg_realization_file(
                     model_params = {
                         "soil_moisture_wetting_fronts(1,double,1,node)": 0.0,
                         "soil_thickness_layered(1,double,1,node)": 0.0,
-                        "soil_depth_wetting_fronts(1,double,1,node)": 0.0,
+                        "soil_depth_wetting_fronts(1,double,m,node)": 0.0,
                         "num_wetting_fronts(1,int,1,node)": 1.0,
-                        "Qb_topmodel(1,double,1,node)": 0.0,
-                        "Qv_topmodel(1,double,1,node)": 0.0,
-                        "global_deficit(1,double,1,node)": 0.0}
+                        "Qb_topmodel(1,double,m h^-1,node)": 0.0,
+                        "Qv_topmodel(1,double,m h^-1,node)": 0.0,
+                        "global_deficit(1,double,m,node)": 0.0}
             elif 'lasam' in grp_mod:
                 if 'sft' not in grp_mod:
                     model_params = {"soil_temperature_profile(1,double,K,node)": 275.15}
@@ -2487,9 +2487,9 @@ def create_reg_realization_file(
                     model_params = {
                         "sloth_soil_storage(1,double,m,node)": 1.0E-10,
                         "sloth_soil_storage_change(1,double,m,node)": 0.0,
-                        "Qb_topmodel(1,double,1,node)": 0.0,
-                        "Qv_topmodel(1,double,1,node)": 0.0,
-                        "global_deficit(1,double,1,node)": 0.0,
+                        "Qb_topmodel(1,double,m h^-1,node)": 0.0,
+                        "Qv_topmodel(1,double,m h^-1,node)": 0.0,
+                        "global_deficit(1,double,m,node)": 0.0,
                         "potential_evapotranspiration_rate(1,double,1,node)": 0.0}
 
             model_configs['sloth']['params']['model_params'] = model_params
@@ -2843,11 +2843,11 @@ def create_realization_file(
                 model_params = {
                     "soil_moisture_wetting_fronts(1,double,1,node)": 0.0,
                     "soil_thickness_layered(1,double,1,node)": 0.0,
-                    "soil_depth_wetting_fronts(1,double,1,node)": 0.0,
+                    "soil_depth_wetting_fronts(1,double,m,node)": 0.0,
                     "num_wetting_fronts(1,int,1,node)": 1.0,
-                    "Qb_topmodel(1,double,1,node)": 0.0,
-                    "Qv_topmodel(1,double,1,node)": 0.0,
-                    "global_deficit(1,double,1,node)": 0.0}
+                    "Qb_topmodel(1,double,m h^-1,node)": 0.0,
+                    "Qv_topmodel(1,double,m h^-1,node)": 0.0,
+                    "global_deficit(1,double,m,node)": 0.0}
         elif 'lasam' in modules:
             if 'sft' not in modules:
                 model_params = {"soil_temperature_profile(1,double,K,node)": 275.15}
@@ -2855,9 +2855,9 @@ def create_realization_file(
                 model_params = {
                     "sloth_soil_storage(1,double,m,node)": 1.0E-10,
                     "sloth_soil_storage_change(1,double,m,node)": 0.0,
-                    "Qb_topmodel(1,double,1,node)": 0.0,
-                    "Qv_topmodel(1,double,1,node)": 0.0,
-                    "global_deficit(1,double,1,node)": 0.0,
+                    "Qb_topmodel(1,double,m h^-1,node)": 0.0,
+                    "Qv_topmodel(1,double,m h^-1,node)": 0.0,
+                    "global_deficit(1,double,m,node)": 0.0,
                     "potential_evapotranspiration_rate(1,double,1,node)": 0.0}
 
         model_configs['sloth']['params']['model_params'] = model_params
