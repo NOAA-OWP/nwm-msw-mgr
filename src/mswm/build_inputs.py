@@ -1085,35 +1085,11 @@ class RealizationBuilder:
                 elif m1 == 'sft':
                     sft_dir = os.path.join(self.input_dir, 'sft_input')
                     smp_dir = os.path.join(self.input_dir, 'smp_input')
-
-                    # Update CFE bmi dir with correct scheme (Schaake/Xinanjiang)
-                    if ('cfes' in self.modules):
-                        # If bmi_dir not provided by input file, create from input dir
-                        if self.conf3['cfe_s_bmi_dir'] is None:
-                            cfe_dir = os.path.join(self.input_dir, 'cfe-s_input')
-                        # If bmi_dir provided by input file, use that path
-                        else:
-                            cfe_dir = self.conf3['cfe_s_bmi_dir']
-                    elif ('cfex' in self.modules):
-                        # If bmi_dir not provided by input file, create from input dir
-                        if self.conf3['cfe_x_bmi_dir'] is None:
-                            cfe_dir = os.path.join(self.input_dir, 'cfe-x_input')
-                        # If bmi_dir provided by input file, use that path
-                        else:
-                            cfe_dir = self.conf3['cfe_x_bmi_dir']
-                    else:
-                        # If CFE BMI config files not provided and cfe not in modules, create cfe input files
-                        cfe_dir = os.path.join(self.input_dir, 'cfe-s_input')
-                        gfun.create_cfe_input(self.catids, ['cfes'] + [self.modules], self.attr_file, cfe_dir, self.run_type, 0)
-
-                    # Create sft input
-                    gfun.create_sft_smp_input(self.catids, self.modules, self.attr_parquet, cfe_dir, self.forcing_dir, sft_dir, smp_dir, self.run_type)
-
+                    gfun.create_sft_smp_input(self.catids, self.modules, self.attr_file, sft_dir, smp_dir, self.run_type)
                 elif m1 == 'smp':
                     continue
                 elif m1 == 'lasam':
                     gfun.create_lasam_input(self.catids, self.modules, self.attr_file, mod_input_dir, self.conf3['lasam_parameter_dir'], self.run_type)
-
                 elif m1 == 'troute':
                     if self.run_type == 'calibration':
                         run_names = ['calib', 'valid', 'valid']
@@ -1290,40 +1266,20 @@ class RealizationBuilder:
                     for scheme in ['cfes', 'cfex', 'lasam']:
                         # Retrieve formulation groups where CFES/CFEX/LASAM co-occur with SFT
                         scheme_sft_grps = [grp for grp, mods in self.grp_to_form.items() if scheme in mods and 'sft' in mods]
-                        if scheme_sft_grps:
-                            # Update CFE bmi dir with correct scheme for formulation (Schaake/Xinanjiang)
-                            if scheme == 'cfes' or scheme == 'lasam':
-                                scheme_bmi_var = 'cfe-s'
-                            elif scheme == 'cfex':
-                                scheme_bmi_var = 'cfe-x'
-                            else:
-                                try:
-                                    raise Exception('SMP/SFT only implemented when CFE-S, CFE-X, or LASAM are selected')
-                                except Exception as e:
-                                    logger.critical(e)
-                                    raise
 
+                        if scheme_sft_grps:
                             # Retrieve catchments and formulations corresponding to scheme
                             scheme_cat = [cat for grp in scheme_sft_grps for cat in self.grp_to_cat[grp]]
                             scheme_form = [self.cat_to_form[cat] for cat in scheme_cat]
 
-                            # Form CFE input dir
-                            cfe_dir = os.path.join(self.input_dir, scheme_bmi_var + '_input')
-
-                            # If LASAM is selected, create cfe input files required for sft (assume ice_fraction_scheme is cfes)
-                            if scheme not in ('cfes', 'cfex'):
-                                scheme_form_cfes = [form + ['cfes'] for form in scheme_form]
-                                gfun.create_cfe_input(scheme_cat, scheme_form_cfes, self.attr_file, cfe_dir, self.run_type, self.cat_to_aet_rootzone)
-
                             # Create SFT/SMP inputs
-                            gfun.create_sft_smp_input(scheme_cat, scheme_form, self.attr_parquet, cfe_dir, self.forcing_dir, sft_dir, smp_dir, self.run_type)
+                            gfun.create_sft_smp_input(scheme_cat, scheme_form, self.attr_file, sft_dir, smp_dir, self.run_type)
 
                 # Skip smp, inputs created in tandem with sft
                 elif m1 == 'smp':
                     continue
                 elif m1 == 'lasam':
                     gfun.create_lasam_input(cat_mod, form_cat, self.attr_file, mod_input_dir, self.conf3['lasam_parameter_dir'], self.run_type)
-
                 elif m1 == 'troute':
                     for file_name, run_name in zip(self.run_configs, ['region']):
                         routing_config_file = os.path.join(self.work_dir + '/Input', '{}'.format(self.basin) + file_name)
@@ -1333,7 +1289,6 @@ class RealizationBuilder:
                             nts = len(pd.date_range(start=run_range[0], end=run_range[1], freq='5min')) - 1
                             gfun.create_troute_config(self.gpkg_file, routing_config_file, self.time_period['run_time_period'][run_name][0], nts)
                             logger.info(f'troute config file for {run_name1} is created at: {routing_config_file}')
-
                 if m1 != 'troute':
                     logger.info(f'{m1}: input config files created at: {mod_input_dir}')
 

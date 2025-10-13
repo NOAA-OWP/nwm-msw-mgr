@@ -743,9 +743,7 @@ def create_noah_input_template(
 def create_sft_smp_input(
         catids: List[str],
         modules: Union[List[str], List[List[str]]],
-        attr_parquet: Union[str, Path],
         dfa: gpd.GeoDataFrame,
-        forcing_dir: Union[str, Path],
         sft_dir: Union[str, Path],
         smp_dir: Union[str, Path],
         run_type: str,
@@ -769,10 +767,6 @@ def create_sft_smp_input(
 
     os.makedirs(sft_dir, exist_ok=True)
     os.makedirs(smp_dir, exist_ok=True)
-
-    # Read hydrofabric attribute file
-    df_parquet = pd.read_parquet(attr_parquet)
-    df_parquet.set_index("divide_id", inplace=True)
 
     # Ice fraction scheme
     icefscheme = 'Schaake'
