@@ -1394,7 +1394,7 @@ def create_lstm_input(
 
         area = float(df_divide.loc[catID]['areasqkm'])
         slope = float(dfa.loc[catID]['mean.slope'])
-        elev = float(dfa.loc[catID]['mean.elevation']) / 100
+        elev = float(dfa.loc[catID]['mean.elevation'])
         lat = float(dfa.loc[catID][xy_col[1]])
         lon = float(dfa.loc[catID][xy_col[0]])
 
