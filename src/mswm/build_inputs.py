@@ -648,46 +648,16 @@ class RealizationBuilder:
         for p1 in settings.modules_all['process']:
             procs = list(set(procs + p1))
 
-        for p1 in procs:
-            mods = [m1 for m1 in self.modules if p1 in settings.modules_all.loc[settings.modules_all['module'] == m1, 'process'].values[0]]
+        def validate_formulation(modules, label=None):
+            """Inner helper function to validate a single formulation or grouped formulations"""
 
-            # make sure only one module is selected for each process (except for Soil_moisture and Glacier_snow)
-            if len(mods) > 1 and p1 not in ['Soil_moisture', 'Glacier_snow']:
-                try:
-                    raise Exception(f'Only one module can be selected for {p1} process')
-                except Exception as e:
-                    logger.critical(e)
-                    raise
-
-            # one and only one module must be selected for rainfall-runoff and PET
-            if (p1 in ['Evapotranspiration', 'Rainfall_runoff']) and (len(mods) == 0):
-                try:
-                    raise Exception(f'At least one module must be selected for {p1} process')
-                except Exception as e:
-                    logger.critical(e)
-                    raise
-
-        logger.info("Module processes validated")
-
-    def _validate_reg_processes(self):
-        """
-        Check that each formulation has all required hydrological processes
-        Could be combined with _validate_processes
-        """
-        # check modules selected for each process
-        procs = []
-        for p1 in settings.modules_all['process']:
-            procs = list(set(procs + p1))
-
-        # Loop through formulation group dictionary
-        for grp, form in self.grp_to_form.items():
             for p1 in procs:
-                mods = [m1 for m1 in form if p1 in settings.modules_all.loc[settings.modules_all['module'] == m1, 'process'].values[0]]
+                mods = [m1 for m1 in modules if p1 in settings.modules_all.loc[settings.modules_all['module'] == m1, 'process'].values[0]]
 
                 # make sure only one module is selected for each process (except for Soil_moisture and Glacier_snow)
                 if len(mods) > 1 and p1 not in ['Soil_moisture', 'Glacier_snow']:
                     try:
-                        raise Exception(f'Only one module can be selected for {p1} process: {grp}')
+                        raise Exception(f'Only one module can be selected for {p1} process')
                     except Exception as e:
                         logger.critical(e)
                         raise
@@ -695,12 +665,19 @@ class RealizationBuilder:
                 # one and only one module must be selected for rainfall-runoff and PET
                 if (p1 in ['Evapotranspiration', 'Rainfall_runoff']) and (len(mods) == 0):
                     try:
-                        raise Exception(f'At least one module must be selected for {p1} process: {grp}')
+                        raise Exception(f'At least one module must be selected for {p1} process')
                     except Exception as e:
                         logger.critical(e)
                         raise
 
-            logger.info(f"Module processes validated for {grp}")
+        # Validation formulations using helper function
+        if hasattr(self, 'grp_to_form') and self.grp_to_form:
+            for grp, form in self.grp_to_form.items():
+                validate_formulation(form, label=grp)
+                logger.info(f"Module processes validated for {grp}")
+        else:
+            validate_formulation(self.modules)
+            logger.info("Module processes validated")
 
     def _map_cat_to_grp(self):
         """
@@ -1096,7 +1073,7 @@ class RealizationBuilder:
                 elif m1 == 'ueb':
                     gfun.create_ueb_input(self.catids, self.time_period, self.attr_file, self.conf3[m1 + '_parameter_dir'], mod_input_dir, '', self.run_type)
                 elif m1 == 'snow17':
-                    gfun.create_snow17_input(self.catids, self.attr_file, self.gpkg_file, self.conf3[m2.replace("-", "_") + '_parameter_dir'], mod_input_dir)
+                    gfun.create_snow17_input(self.catids, self.attr_file, self.conf3[m2.replace("-", "_") + '_parameter_dir'], mod_input_dir)
                 elif m1 == "pet":
                     gfun.create_pet_input(self.catids, self.attr_file, mod_input_dir)
                 elif m1 == "sac":
@@ -1295,7 +1272,7 @@ class RealizationBuilder:
                 elif m1 == 'ueb':
                     gfun.create_ueb_input(cat_mod, self.time_period, self.attr_file, self.conf3[m1 + '_parameter_dir'], mod_input_dir, '', self.run_type)
                 elif m1 == 'snow17':
-                    gfun.create_snow17_input(cat_mod, self.attr_file, self.gpkg_file, self.conf3[m2.replace("-", "_") + '_parameter_dir'], mod_input_dir)
+                    gfun.create_snow17_input(cat_mod, self.attr_file, self.conf3[m2.replace("-", "_") + '_parameter_dir'], mod_input_dir)
                 elif m1 == "pet":
                     gfun.create_pet_input(cat_mod, self.attr_file, mod_input_dir)
                 elif m1 == "sac":
@@ -1559,7 +1536,7 @@ class RealizationBuilder:
         self._parse_time()
         self._parse_reg_params()
         self._parse_reg_modules()
-        self._validate_reg_processes()
+        self._validate_processes()
         self._map_cat_to_grp()
         self._map_cat_to_form()
         self._map_mod_to_cat()
