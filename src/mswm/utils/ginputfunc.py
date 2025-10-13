@@ -17,7 +17,7 @@ import math
 from pathlib import Path
 from typing import List, Union, Dict
 from collections import OrderedDict
-
+from pyproj import Transformer
 import geopandas as gpd
 import pandas as pd
 import yaml
@@ -48,6 +48,7 @@ def is_probably_regex(pattern):
 
 
 __all__ = [
+    'change_hydrofab_attr',
     'create_walk_file',
     'create_cfe_input',
     'create_noah_input',
@@ -71,6 +72,162 @@ __all__ = [
     'create_calib_config_file',
     'create_partition_file',
 ]
+
+
+def change_hydrofab_attr(
+        vpu: str,
+        dfa: gpd.GeoDataFrame,
+        divides_layer: gpd.GeoDataFrame
+) -> gpd.GeoDataFrame:
+    """ Set attribute names depending on geographic region and and adjust other hydrofabric values
+
+    Parameters
+    ----------
+    vpu: VPU identifier str of gage
+    dfa: dataframe containing model parameter attributes
+    divides_layer: geodataframe containing hydrofabric divides layer
+
+    Returns
+    ----------
+    dictionary of attribute names
+    """
+
+    # Set attr names
+    if vpu == 'hi' or vpu == 'ak':
+        attr_dict = {'X': 'centroid_x',
+                     'Y': 'centroid_y',
+                     'mode.bexp_soil_layers_stag.1': 'mode.bexp_soil_layers_stag=1',
+                     'mode.bexp_soil_layers_stag.2': 'mode.bexp_soil_layers_stag=2',
+                     'mode.bexp_soil_layers_stag.3': 'mode.bexp_soil_layers_stag=3',
+                     'mode.bexp_soil_layers_stag.4': 'mode.bexp_soil_layers_stag=4',
+                     'geom_mean.dksat_soil_layers_stag.1': 'geom_mean.dksat_soil_layers_stag=1',
+                     'geom_mean.dksat_soil_layers_stag.2': 'geom_mean.dksat_soil_layers_stag=2',
+                     'geom_mean.dksat_soil_layers_stag.3': 'geom_mean.dksat_soil_layers_stag=3',
+                     'geom_mean.dksat_soil_layers_stag.4': 'geom_mean.dksat_soil_layers_stag=4',
+                     'mean.smcmax_soil_layers_stag.1': 'mean.smcmax_soil_layers_stag=1',
+                     'mean.smcmax_soil_layers_stag.2': 'mean.smcmax_soil_layers_stag=2',
+                     'mean.smcmax_soil_layers_stag.3': 'mean.smcmax_soil_layers_stag=3',
+                     'mean.smcmax_soil_layers_stag.4': 'mean.smcmax_soil_layers_stag=4',
+                     'geom_mean.psisat_soil_layers_stag.1': 'geom_mean.psisat_soil_layers_stag=1',
+                     'geom_mean.psisat_soil_layers_stag.2': 'geom_mean.psisat_soil_layers_stag=2',
+                     'geom_mean.psisat_soil_layers_stag.3': 'geom_mean.psisat_soil_layers_stag=3',
+                     'geom_mean.psisat_soil_layers_stag.4': 'geom_mean.psisat_soil_layers_stag=4',
+                     'mean.smcwlt_soil_layers_stag.1': 'mean.smcwlt_soil_layers_stag=1',
+                     'mean.smcwlt_soil_layers_stag.2': 'mean.smcwlt_soil_layers_stag=2',
+                     'mean.smcwlt_soil_layers_stag.3': 'mean.smcwlt_soil_layers_stag=3',
+                     'mean.smcwlt_soil_layers_stag.4': 'mean.smcwlt_soil_layers_stag=4'}
+
+        logger.info('Setting hydrofabric attribute names to AK/HI region')
+
+    elif vpu == 'prvi':
+        attr_dict = {'dksat_Time._soil_layers_stag.1': 'geom_mean.dksat_soil_layers_stag=1',
+                     'dksat_Time._soil_layers_stag.2': 'geom_mean.dksat_soil_layers_stag=2',
+                     'dksat_Time._soil_layers_stag.3': 'geom_mean.dksat_soil_layers_stag=3',
+                     'dksat_Time._soil_layers_stag.4': 'geom_mean.dksat_soil_layers_stag=4',
+                     'mean.cwpvt_Time.': 'mean.cwpvt',
+                     'mean.mfsno_Time.': 'mean.mfsno',
+                     'mean.mp_Time.': 'mean.mp',
+                     'mean.refkdt_Time.': 'mean.refkdt',
+                     'mean.slope_Time.': 'mean.slope_1km',
+                     'mean.smcmax_Time._soil_layers_stag.1': 'mean.smcmax_soil_layers_stag=1',
+                     'mean.smcmax_Time._soil_layers_stag.2': 'mean.smcmax_soil_layers_stag=2',
+                     'mean.smcmax_Time._soil_layers_stag.3': 'mean.smcmax_soil_layers_stag=3',
+                     'mean.smcmax_Time._soil_layers_stag.4': 'mean.smcmax_soil_layers_stag=4',
+                     'mean.smcwlt_Time._soil_layers_stag.1': 'mean.smcwlt_soil_layers_stag=1',
+                     'mean.smcwlt_Time._soil_layers_stag.2': 'mean.smcwlt_soil_layers_stag=2',
+                     'mean.smcwlt_Time._soil_layers_stag.3': 'mean.smcwlt_soil_layers_stag=3',
+                     'mean.smcwlt_Time._soil_layers_stag.4': 'mean.smcwlt_soil_layers_stag=4',
+                     'mean.vcmx25_Time.': 'mean.vcmx25',
+                     'mode.bexp_Time._soil_layers_stag.1': 'mode.bexp_soil_layers_stag=1',
+                     'mode.bexp_Time._soil_layers_stag.2': 'mode.bexp_soil_layers_stag=2',
+                     'mode.bexp_Time._soil_layers_stag.3': 'mode.bexp_soil_layers_stag=3',
+                     'mode.bexp_Time._soil_layers_stag.4': 'mode.bexp_soil_layers_stag=4',
+                     'psisat_Time._soil_layers_stag.1': 'geom_mean.psisat_soil_layers_stag=1',
+                     'psisat_Time._soil_layers_stag.2': 'geom_mean.psisat_soil_layers_stag=2',
+                     'psisat_Time._soil_layers_stag.3': 'geom_mean.psisat_soil_layers_stag=3',
+                     'psisat_Time._soil_layers_stag.4': 'geom_mean.psisat_soil_layers_stag=4'}
+
+        logger.info('Setting hydrofabric attribute names to PRVI region')
+
+    elif vpu.isdigit():
+        # Leave hydrofabric attributes names as they are
+        logger.info('Setting hydrofabric attribute names to CONUS region')
+    else:
+        try:
+            raise Exception(f"Unregnized vpu in hydrofabric attriutes: {vpu}")
+        except Exception as e:
+            logger.critical(e)
+            raise
+
+    # Rename columns in attribute dataframe
+    if vpu == 'ak' or vpu == 'hi' or vpu == 'prvi':
+        dfa = dfa.rename(columns=attr_dict, inplace=True)
+
+    # Get catchement area from divides layer and append to attributes data frame
+    area = divides_layer[['divide_id', 'areasqkm']]
+    dfa = dfa.join(area.set_index('divide_id'), on='divide_id')
+
+    # Soil and vegetation types are read from the gpkg as floats, but need to be ints
+    dfa = dfa.astype({'mode.ISLTYP': 'int'})
+    dfa = dfa.astype({'mode.IVGTYP': 'int'})
+
+    # Adjust Zmax units from mm to m (CFE expects m)
+    dfa['mean.Zmax'] = dfa['mean.Zmax'].apply(lambda x: x / 1000)
+
+    # Convert elevation from cm to m. Except for AK, which is still in m.
+    if vpu != 'ak':
+        dfa['mean.elevation'] = dfa['mean.elevation'].apply(lambda x: x / 100)
+
+    # Convert centroid_x and centroid_y (lat/lon) from the domain's CRS to WGS84 for decimal degrees for 2.2.
+    crs = divides_layer.crs
+    transformer = Transformer.from_crs(crs, 4326)
+    for index, row in dfa.iterrows():
+        y = row['centroid_y']
+        x = row['centroid_x']
+        wgs84_latlon = transformer.transform(x, y)
+        dfa.loc[index, 'centroid_y'] = wgs84_latlon[0]  # latitude
+        dfa.loc[index, 'centroid_x'] = wgs84_latlon[1]  # longitude
+
+    # If a soil divide attribute less than the min value or greater than the max value, reset to min or max.
+    soil_attr = [{"name": "mode.bexp_soil_layers_stag=1", "min": 2, "max": 15},
+                 {"name": "geom_mean.dksat_soil_layers_stag=1", "min": 0.0000000195, "max": 0.000141},
+                 {"name": "geom_mean.psisat_soil_layers_stag=1", "min": 0.036, "max": 0.955},
+                 {"name": "mean.smcmax_soil_layers_stag=1", "min": 0.16, "max": 0.9},
+                 {"name": "mean.smcwlt_soil_layers_stag=1", "min": 0.05, "max": 0.30}]
+
+    for attr in soil_attr:
+        dfa.loc[dfa[attr['name']] > attr['max'], attr['name']] = attr['max']
+        dfa.loc[dfa[attr['name']] < attr['min'], attr['name']] = attr['min']
+
+    # Lookup quartz value by soil type as recommended in the Deltares spreadsheet.
+    # Quartz value by soil type source:  https://doi.org/10.1175/1520-0469(1998)055%3C1209:TEOSTC%3E2.0.CO;2
+    # Dictionary maps soil type (ISLTYP) to quartz value.
+    # Add a new column in the dataframe for quartz.
+    quartz_map = {1: 0.92,  # Sand
+                  2: 0.82,  # Loamy Sand
+                  3: 0.6,   # Sandy Loam
+                  4: 0.25,  # Silt Loam
+                  5: 0.1,  # Silt
+                  6: 0.4,  # Loam
+                  7: 0.6,  # Sandy Clay Loam
+                  8: 0.1,  # Silty Clay Loam
+                  9: 0.35,  # Clay Loam
+                  10: 0.52,  # Sandy Clay
+                  11: 0.1,  # Silty Clay
+                  12: 0.25,  # Clay
+                  13: 0,  # Organic Material,
+                  14: 0,  # Water
+                  15: 0,  # Bedrock
+                  16: 0,  # Other
+                  17: 0,  # Playa
+                  18: 0,  # Lava
+                  19: 0,  # White Sand
+                  }
+
+    dfa['quartz'] = dfa['mode.ISLTYP'].map(quartz_map)
+
+    # Return updated attributes
+    return dfa
 
 
 def create_walk_file(
@@ -186,7 +343,7 @@ def create_walk_file(
 def create_cfe_input(
         catids: List[str],
         modules: Union[List[str], List[List[str]]],
-        dfa: Union[str, Path],
+        dfa: pd.DataFrame,
         cfe_input_dir: Union[str, Path],
         run_type: str,
         is_aet_rootzone: Union[int, dict]
@@ -364,7 +521,7 @@ def change_cfe_input(
 def create_noah_input(
         catids: List[str],
         time_period: dict,
-        dfa: Union[str, Path],
+        dfa: pd.DataFrame,
         param_dir_source: Union[str, Path],
         noah_input_dir: Union[str, Path],
         run_type: str
@@ -684,7 +841,7 @@ def create_sft_smp_input(
 
 def create_snow17_input(
         catids: List[str],
-        dfa: Union[str, Path],
+        dfa: pd.DataFrame,
         gpkg_file: Union[str, Path],
         param_dir_source: Union[str, Path],
         snow17_input_dir: str
@@ -788,7 +945,7 @@ def create_snow17_input(
 def create_ueb_input(
         catids: List[str],
         time_period: dict,
-        dfa: Union[str, Path],
+        dfa: pd.DataFrame,
         param_dir_source: Union[str, Path],
         ueb_input_dir: str,
         bmi_dir: Union[str, Path],
@@ -1224,7 +1381,7 @@ def change_lstm_input(
 
 def create_lstm_input(
         catids: List[str],
-        dfa: Union[str, Path],
+        dfa: pd.DataFrame,
         gpkg_file: Union[str, Path],
         param_dir_source: Union[str, Path],
         lstm_input_dir: Union[str, Path],
@@ -1383,7 +1540,7 @@ def change_sac_snow17_input(
 
 def create_pet_input(
         catids: List[str],
-        dfa: Union[str, Path],
+        dfa: pd.DataFrame,
         pet_input_dir: str
 ) -> None:
     """ Create BMI configuration file for pet
@@ -1436,7 +1593,7 @@ def create_pet_input(
 def create_lasam_input(
         catids: List[str],
         modules: Union[List[str], List[List[str]]],
-        dfa: Union[str, Path],
+        dfa: pd.DataFrame,
         input_dir: Union[str, Path],
         param_dir: Union[str, Path],
         run_type: str
@@ -1899,7 +2056,7 @@ def change_topmodel_input(
 
 def create_topmodel_input(
         catids: List[str],
-        dfa: Union[str, Path],
+        dfa: pd.DataFrame,
         gpkg_file: Union[str, Path],
         inputDir: Union[str, Path],
 ) -> None:

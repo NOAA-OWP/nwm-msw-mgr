@@ -853,42 +853,22 @@ class RealizationBuilder:
 
         # Read catchment parameter values from geopackage divide-attributes
         try:
-            attr_input = gpd.read_file(self.gpkg_file, layer='divide-attributes')
-            attr_input.set_index("divide_id", inplace=True)
+            self.attr_file = gpd.read_file(self.gpkg_file, layer='divide-attributes')
+            self.attr_file.set_index("divide_id", inplace=True)
         except Exception as e:
             logger.critical(f"Error while reading geopackage file: {e}")
             raise
 
-        # Adapt to x,y column name in geopackage
-        x_cols = ["centroid_x", "X"]
-        y_cols = ["centroid_y", "Y"]
-        x_col = next((c for c in x_cols if c in attr_input.columns), None)
-        y_col = next((c for c in y_cols if c in attr_input.columns), None)
-        self.xy_col = [x_col, y_col]
-
-        if not x_col or y_col:
-            try:
-                Exception("Could not find coordinate columns in geopackage `divide-attributes`")
-            except Exception as e:
-                logger.critical(f"Error while reading geopackage file: {e}")
-                raise
-
-        # Reproject to WGS84 for X,Y coordinates
-        self.attr_file = gpd.GeoDataFrame(attr_input,
-                                          geometry=gpd.points_from_xy(attr_input[x_col], attr_input[y_col]),
-                                          crs="EPSG:5070")
-        self.attr_file = self.attr_file.to_crs("EPSG:4326")
-
-        # Update coordinates with reprojected values
-        self.attr_file[x_col] = self.attr_file.geometry.x
-        self.attr_file[y_col] = self.attr_file.geometry.y
-
-        # Read catchment ids from geopackage
+        # Read catchment divide layer from hydrofabric
         try:
-            self.catids = gpd.read_file(self.gpkg_file, layer='divides')['divide_id'].tolist()
+            self.divides_layer = gpd.read_file(self.gpkg_file, layer='divides')
+            self.catids = self.divides_layer['divide_id'].tolist()
         except Exception as e:
             logger.critical(f"Error while reading geopackage file: {e}")
             raise
+
+        # Update hydrofabic attribute names based on region and minor parameter value fixes
+        self.attr_file = gfun.change_hydrofab_attr(self.attr_file, self.divides_layer)
 
         logger.info(f"Attribute file loaded from: {self.gpkg_file}")
 
