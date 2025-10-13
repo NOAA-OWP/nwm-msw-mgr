@@ -6,7 +6,6 @@ This module contains a variety of functions to create different input files.
 
 import copy
 import datetime
-import fnmatch
 import glob
 import json
 import os
@@ -343,7 +342,7 @@ def create_walk_file(
 def create_cfe_input(
         catids: List[str],
         modules: Union[List[str], List[List[str]]],
-        dfa: pd.DataFrame,
+        dfa: gpd.GeoDataFrame,
         cfe_input_dir: Union[str, Path],
         run_type: str,
         is_aet_rootzone: Union[int, dict]
@@ -521,7 +520,7 @@ def change_cfe_input(
 def create_noah_input(
         catids: List[str],
         time_period: dict,
-        dfa: pd.DataFrame,
+        dfa: gpd.GeoDataFrame,
         param_dir_source: Union[str, Path],
         noah_input_dir: Union[str, Path],
         run_type: str
@@ -745,7 +744,7 @@ def create_sft_smp_input(
         catids: List[str],
         modules: Union[List[str], List[List[str]]],
         attr_parquet: Union[str, Path],
-        cfe_dir: Union[str, Path],
+        dfa: gpd.GeoDataFrame,
         forcing_dir: Union[str, Path],
         sft_dir: Union[str, Path],
         smp_dir: Union[str, Path],
@@ -757,9 +756,7 @@ def create_sft_smp_input(
     ----------
     catids : catchment IDs in the basin
     modules: list of modules in the formulation
-    attr_parquet: parquet file containing model attributes
-    cfe_dir : directory containing cfe bmi configuration files
-    forcing_dir : directory containing forcing files
+    dfa: dataframe containing model parameter attributes
     sft_dir : directory for writing sft bmi configuration files
     smp_dir : directory for writing smp bmi configuration files
     run_type: type of run (calib, regionalization, or default)
@@ -789,51 +786,50 @@ def create_sft_smp_input(
 
         catID = catids[i]
 
-        # Check if catID is in parquet file (some catchments are missing). This will eventually be replaced when parquet file is not needed for quartz values
-        # Set soil_params.quartz value
-        if catID in df_parquet.index:
-            quartz_val = str(df_parquet.loc[catID][[x for x in df_parquet.columns.to_list() if 'quartz' in x]].mean()) + '[]'  # soil_params.quartz not available in divide-attributes
-        else:
-            quartz_val = '0[]'
-
         # Set module list for each catchment during regionalization
         if run_type == 'regionalization':
             mods = modules[i]
             if ('cfex' in mods):
                 icefscheme = 'Xinanjiang'
 
-        # Read cfe BMI files
-        cfe_bmi_file = os.path.join(cfe_dir, fnmatch.filter(os.listdir(cfe_dir), '*' + catID + '*.txt')[0])
-        df = pd.read_table(cfe_bmi_file, delimiter='=', names=["Params", "Values"], index_col=0)
-
         # Obtain annual mean surface temperature as proxy for initial soil temperature
-        fdf = pd.read_table(os.path.join(forcing_dir, catID + '.csv'), delimiter=',')
-        mtemp = round(fdf['T2D'].mean(), 2)
+        # This value is just a reasonable estimate per new direction (Edwin)
+        mtemp = (45 - 32) * 5 / 9 + 273.15  # this is avg soil temp of 45 degrees F converted to Kelvin
 
         # Create sft list
-        sft_lst = ['verbosity=none', 'soil_moisture_bmi=1', 'end_time=1.[d]', 'dt=1.0[h]',
-                   'soil_params.smcmax=' + df.loc['soil_params.smcmax'].iloc[0],
-                   'soil_params.b=' + df.loc['soil_params.b'].iloc[0],
-                   'soil_params.satpsi=' + df.loc['soil_params.satpsi'].iloc[0],
-                   'soil_params.quartz=' + quartz_val,
+        sft_lst = ['verbosity=none',
+                   'soil_moisture_bmi=1',
+                   'end_time=1.[d]',
+                   'dt=1.0[h]',
+                   'soil_params.smcmax=' + dfa.loc[catID]['mean.smcmax_soil_layers_stag=1'],
+                   'soil_params.b=' + dfa.loc[catID]['mode.bexp_soil_layers_stag=1'],
+                   'soil_params.satpsi=' + dfa.loc[catID]['geom_mean.psisat_soil_layers_stag=1'],
+                   'soil_params.quartz=' + dfa.loc[catID]['quartz'],
                    'ice_fraction_scheme=' + icefscheme,
                    'soil_z=0.1,0.3,1.0,2.0[m]',
                    'soil_temperature=' + ','.join([str(mtemp)] * 4) + '[K]'
                    ]
+
+        # Write sft config to file
         sft_bmi_file = os.path.join(sft_dir, catID + '_bmi_config_sft.txt')
         with open(sft_bmi_file, "w") as f:
             f.writelines('\n'.join(sft_lst))
 
         # Create smp list
         smp_lst = ['verbosity=none',
-                   'soil_params.smcmax=' + df.loc['soil_params.smcmax'].iloc[0],
-                   'soil_params.b=' + df.loc['soil_params.b'].iloc[0],
-                   'soil_params.satpsi=' + df.loc['soil_params.satpsi'].iloc[0],
+                   'soil_params.smcmax=' + dfa.loc[catID]['mean.smcmax_soil_layers_stag=1'],
+                   'soil_params.b=' + dfa.loc[catID]['mode.bexp_soil_layers_stag=1'],
+                   'soil_params.satpsi=' + dfa.loc[catID]['geom_mean.psisat_soil_layers_stag=1'],
                    'soil_z=0.1,0.3,1.0,2.0[m]']
+
         if 'cfes' in mods or 'cfex' in mods:
             smp_lst += ['soil_storage_model=conceptual', 'soil_storage_depth=2.0']
+        elif 'topmodel' in mods:
+            smp_lst += ['soil_storage_model=TopModel', 'water_table_based_method=flux-based']
         elif 'lasam' in mods:
             smp_lst += ['soil_storage_model=layered', 'soil_moisture_profile_option=constant', 'soil_depth_layers=2.0', 'water_table_depth=10[m]']
+
+        # Write smp to to file
         smp_bmi_file = os.path.join(smp_dir, catID + '_bmi_config_smp.txt')
         with open(smp_bmi_file, "w") as f:
             f.writelines('\n'.join(smp_lst))
@@ -841,8 +837,7 @@ def create_sft_smp_input(
 
 def create_snow17_input(
         catids: List[str],
-        dfa: pd.DataFrame,
-        gpkg_file: Union[str, Path],
+        dfa: gpd.GeoDataFrame,
         param_dir_source: Union[str, Path],
         snow17_input_dir: str
 ) -> None:
@@ -863,10 +858,6 @@ def create_snow17_input(
    """
     os.makedirs(snow17_input_dir, exist_ok=True)
 
-    # Read geopackage divides
-    df_divide = gpd.read_file(gpkg_file, layer="divides")
-    df_divide.set_index('divide_id', inplace=True)
-
     # Read snow17 parameter file
     param_filename = f'{param_dir_source}/snow17_params_2.2.csv'
     params_df = pd.read_csv(param_filename)
@@ -876,7 +867,7 @@ def create_snow17_input(
 
         # Set catchment-specific snow17 config parameters
         param_list = ['hru_id ' + catID,
-                      'hru_area ' + str(df_divide.loc[catID]['areasqkm']),
+                      'hru_area ' + str(dfa.loc[catID]['areasqkm']),
                       'latitude ' + str(dfa.loc[catID].geometry.y),
                       'elev ' + str(dfa.loc[catID]['mean.elevation']),
                       'scf 1.100',
@@ -945,7 +936,7 @@ def create_snow17_input(
 def create_ueb_input(
         catids: List[str],
         time_period: dict,
-        dfa: pd.DataFrame,
+        dfa: gpd.GeoDataFrame,
         param_dir_source: Union[str, Path],
         ueb_input_dir: str,
         bmi_dir: Union[str, Path],
@@ -1381,7 +1372,7 @@ def change_lstm_input(
 
 def create_lstm_input(
         catids: List[str],
-        dfa: pd.DataFrame,
+        dfa: gpd.GeoDataFrame,
         gpkg_file: Union[str, Path],
         param_dir_source: Union[str, Path],
         lstm_input_dir: Union[str, Path],
@@ -1540,7 +1531,7 @@ def change_sac_snow17_input(
 
 def create_pet_input(
         catids: List[str],
-        dfa: pd.DataFrame,
+        dfa: gpd.GeoDataFrame,
         pet_input_dir: str
 ) -> None:
     """ Create BMI configuration file for pet
@@ -1593,7 +1584,7 @@ def create_pet_input(
 def create_lasam_input(
         catids: List[str],
         modules: Union[List[str], List[List[str]]],
-        dfa: pd.DataFrame,
+        dfa: gpd.GeoDataFrame,
         input_dir: Union[str, Path],
         param_dir: Union[str, Path],
         run_type: str
@@ -2056,7 +2047,7 @@ def change_topmodel_input(
 
 def create_topmodel_input(
         catids: List[str],
-        dfa: pd.DataFrame,
+        dfa: gpd.GeoDataFrame,
         gpkg_file: Union[str, Path],
         inputDir: Union[str, Path],
 ) -> None:
