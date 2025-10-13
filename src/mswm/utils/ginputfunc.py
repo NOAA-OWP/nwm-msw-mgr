@@ -785,10 +785,10 @@ def create_sft_smp_input(
                    'soil_moisture_bmi=1',
                    'end_time=1.[d]',
                    'dt=1.0[h]',
-                   'soil_params.smcmax=' + dfa.loc[catID]['mean.smcmax_soil_layers_stag=1'],
-                   'soil_params.b=' + dfa.loc[catID]['mode.bexp_soil_layers_stag=1'],
-                   'soil_params.satpsi=' + dfa.loc[catID]['geom_mean.psisat_soil_layers_stag=1'],
-                   'soil_params.quartz=' + dfa.loc[catID]['quartz'],
+                   'soil_params.smcmax=' + str(dfa.loc[catID]['mean.smcmax_soil_layers_stag=1']),
+                   'soil_params.b=' + str(dfa.loc[catID]['mode.bexp_soil_layers_stag=1']),
+                   'soil_params.satpsi=' + str(dfa.loc[catID]['geom_mean.psisat_soil_layers_stag=1']),
+                   'soil_params.quartz=' + str(dfa.loc[catID]['quartz']),
                    'ice_fraction_scheme=' + icefscheme,
                    'soil_z=0.1,0.3,1.0,2.0[m]',
                    'soil_temperature=' + ','.join([str(mtemp)] * 4) + '[K]'
@@ -801,9 +801,9 @@ def create_sft_smp_input(
 
         # Create smp list
         smp_lst = ['verbosity=none',
-                   'soil_params.smcmax=' + dfa.loc[catID]['mean.smcmax_soil_layers_stag=1'],
-                   'soil_params.b=' + dfa.loc[catID]['mode.bexp_soil_layers_stag=1'],
-                   'soil_params.satpsi=' + dfa.loc[catID]['geom_mean.psisat_soil_layers_stag=1'],
+                   'soil_params.smcmax=' + str(dfa.loc[catID]['mean.smcmax_soil_layers_stag=1']),
+                   'soil_params.b=' + str(dfa.loc[catID]['mode.bexp_soil_layers_stag=1']),
+                   'soil_params.satpsi=' + str(dfa.loc[catID]['geom_mean.psisat_soil_layers_stag=1']),
                    'soil_z=0.1,0.3,1.0,2.0[m]']
 
         if 'cfes' in mods or 'cfex' in mods:
@@ -1051,7 +1051,7 @@ def create_ueb_input(
 
 def create_sac_input(
         catids: List[str],
-        gpkg_file: Union[str, Path],
+        dfa: gpd.GeoDataFrame,
         param_dir_source: Union[str, Path],
         sac_input_dir: str
 ) -> None:
@@ -1060,7 +1060,7 @@ def create_sac_input(
     Parameters
     ----------
     catids : catchment IDs in the basin
-    gpkg_file: GeoPackage hydrofabric file
+    dfa: dataframe containing model parameter attributes
     param_dir_source : directory for sac parameter file
     sac_input_dir : directory for the sac bmi configuration file
 
@@ -1071,10 +1071,6 @@ def create_sac_input(
     """
     os.makedirs(sac_input_dir, exist_ok=True)
 
-    # Read geopackage divides
-    df_divide = gpd.read_file(gpkg_file, layer="divides")
-    df_divide.set_index('divide_id', inplace=True)
-
     # Read sac-sma parameter file
     param_filename = f'{param_dir_source}/sac_sma_params_2.2.csv'
     params_df = pd.read_csv(param_filename)
@@ -1084,7 +1080,7 @@ def create_sac_input(
 
         # Set catchment-specific sac-sma config parameters
         param_list = ['hru_id ' + catID,
-                      'hru_area ' + str(df_divide.loc[catID]['areasqkm']),
+                      'hru_area ' + str(dfa.loc[catID]['areasqkm']),
                       'uztwm ' + str(params_df.loc[catID]['UZTWM']),
                       'uzfwm ' + str(params_df.loc[catID]['UZFWM']),
                       'lztwm ' + str(params_df.loc[catID]['LZTWM']),
@@ -1357,10 +1353,8 @@ def change_lstm_input(
 def create_lstm_input(
         catids: List[str],
         dfa: gpd.GeoDataFrame,
-        gpkg_file: Union[str, Path],
         param_dir_source: Union[str, Path],
         lstm_input_dir: Union[str, Path],
-        xy_col: List[str]
 ) -> None:
 
     """
@@ -1369,10 +1363,9 @@ def create_lstm_input(
     ----------
     catids: catchment IDs in the basin
     dfa: dataframe containing model parameter attributes
-    gpkg_file: GeoPackage hydrofabric file
+    divides_layer: geodataframe containing hydrofabric divides layer
     param_dir_source: direcetory for static lstm files
     lstm_input_dir: target directory for bmi configuration file output (lstm_input)
-    xy_col: list of centroid column names in divivde-attributes file
 
     Returns
     ----------
@@ -1382,21 +1375,17 @@ def create_lstm_input(
     # Create input directory
     os.makedirs(lstm_input_dir, exist_ok=True)
 
-    # Read geopackage divides
-    df_divide = gpd.read_file(gpkg_file, layer="divides")
-    df_divide.set_index('divide_id', inplace=True)
-
     # Create static LSTM config yaml files
     create_lstm_config(param_dir_source, lstm_input_dir)
 
     # Create catchment specific LSTM bmi config files from scratch
     for catID in catids:
 
-        area = float(df_divide.loc[catID]['areasqkm'])
+        area = float(dfa.loc[catID]['areasqkm'])
         slope = float(dfa.loc[catID]['mean.slope'])
         elev = float(dfa.loc[catID]['mean.elevation'])
-        lat = float(dfa.loc[catID][xy_col[1]])
-        lon = float(dfa.loc[catID][xy_col[0]])
+        lat = float(dfa.loc[catID]['centroid_y'])
+        lon = float(dfa.loc[catID]['centroid_x'])
 
         namelist = {'area_sqkm': area,
                     'basin_id': catID,
