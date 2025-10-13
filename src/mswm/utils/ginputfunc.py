@@ -74,7 +74,6 @@ __all__ = [
 
 
 def change_hydrofab_attr(
-        vpu: str,
         dfa: gpd.GeoDataFrame,
         divides_layer: gpd.GeoDataFrame
 ) -> gpd.GeoDataFrame:
@@ -82,7 +81,6 @@ def change_hydrofab_attr(
 
     Parameters
     ----------
-    vpu: VPU identifier str of gage
     dfa: dataframe containing model parameter attributes
     divides_layer: geodataframe containing hydrofabric divides layer
 
@@ -90,6 +88,9 @@ def change_hydrofab_attr(
     ----------
     dictionary of attribute names
     """
+
+    # Retrieve vpu id from dfa
+    vpu = dfa['vpuid'].mode()[0]
 
     # Set attr names
     if vpu == 'hi' or vpu == 'ak':
