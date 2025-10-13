@@ -398,15 +398,6 @@ def create_cfe_input(
         else:
             sft_coupled = '0'
 
-        # # TODO Temporary fix: set bexp value to very small value if it equals 0. Otherwise SMP raises an error
-        bexp_val = dfa.loc[catID]['mode.bexp_soil_layers_stag=1']
-        if bexp_val <= 0:
-            bexp_val = 0.001
-
-        satpsi_val = dfa.loc[catID]['geom_mean.psisat_soil_layers_stag=1']
-        if satpsi_val <= 0:
-            satpsi_val = 0.001
-
         cfe_bmi_file = os.path.join(cfe_input_dir, catID + "_bmi_config_cfe.txt")
         f = open(cfe_bmi_file, "w")
         f.write("%s" % ("forcing_file=BMI\n"))
@@ -428,14 +419,12 @@ def create_cfe_input(
         f.write("%s" % ("max_gw_storage=" + str(dfa.loc[catID]['mean.Zmax'] / 1000.) + "[m]\n"))
         f.write("%s" % ("nash_storage=0.0,0.0[]\n"))
         f.write("%s" % ("refkdt=" + str(dfa.loc[catID]['mean.refkdt']) + "[]\n"))
-        # f.write("%s" % ("soil_params.b=" + str(dfa.loc[catID]['mode.bexp_soil_layers_stag=1']) + "[]\n"))
-        f.write("%s" % ("soil_params.b=" + str(bexp_val) + "[]\n"))
+        f.write("%s" % ("soil_params.b=" + str(dfa.loc[catID]['mode.bexp_soil_layers_stag=1']) + "[]\n"))
         f.write("%s" % ("soil_params.depth=2.0[m]\n"))
         f.write("%s" % ("soil_params.expon=1[]\n"))
         f.write("%s" % ("soil_params.expon_secondary=1[]\n"))
         f.write("%s" % ("soil_params.satdk=" + str(dfa.loc[catID]['geom_mean.dksat_soil_layers_stag=1']) + "[m/s]\n"))
-        # f.write("%s" % ("soil_params.satpsi=" + str(dfa.loc[catID]['geom_mean.psisat_soil_layers_stag=1']) + "[m]\n"))
-        f.write("%s" % ("soil_params.satpsi=" + str(satpsi_val) + "[m]\n"))
+        f.write("%s" % ("soil_params.satpsi=" + str(dfa.loc[catID]['geom_mean.psisat_soil_layers_stag=1']) + "[m]\n"))
         f.write("%s" % ("soil_params.slop=" + str(dfa.loc[catID]['mean.slope_1km']) + "[m/m]\n"))
         f.write("%s" % ("soil_params.smcmax=" + str(dfa.loc[catID]['mean.smcmax_soil_layers_stag=1']) + "[m/m]\n"))
         f.write("%s" % ("soil_params.wltsmc=" + str(dfa.loc[catID]['mean.smcwlt_soil_layers_stag=1']) + "[m/m]\n"))
@@ -2042,7 +2031,7 @@ def change_topmodel_input(
 def create_topmodel_input(
         catids: List[str],
         dfa: gpd.GeoDataFrame,
-        gpkg_file: Union[str, Path],
+        divides_layer: gpd.GeoDataFrame,
         inputDir: Union[str, Path],
 ) -> None:
     """ Create BMI configuration file for Topmodel
@@ -2051,7 +2040,7 @@ def create_topmodel_input(
     ----------
     catids : catchment IDs in the basin
     dfa: dataframe containing model parameter attributes
-    gpkg_file: GeoPackage hydrofabric file
+    divides_layer: geodataframe containing hydrofabric divides layer
     inputDir: directory for writing topmodel bmi configuration files
 
     Returns
@@ -2062,12 +2051,8 @@ def create_topmodel_input(
 
     os.makedirs(inputDir, exist_ok=True)
 
-    # Read geopackage divides file
-    df_divide = gpd.read_file(gpkg_file, layer="divides")
-    df_divide.set_index('divide_id', inplace=True)
-
     # Fill Nan lengthkm (coastal divides) with 0
-    df_divide['lengthkm'] = df_divide['lengthkm'].fillna(0)
+    divides_layer['lengthkm'] = divides_layer['lengthkm'].fillna(0)
 
     # Calculate median twi quartiles to fill missing values
     # Extract quartile twi values from divide-attributes
@@ -2108,7 +2093,7 @@ def create_topmodel_input(
 
         num_channels = 1
         cum_dist_area_with_dist = 1.0
-        dist_from_outlet = round(df_divide.loc[catID]['lengthkm'] * 1000)  # convert km to m
+        dist_from_outlet = round(divides_layer.loc[catID]['lengthkm'] * 1000)  # convert km to m
 
         # Format parameters for output
         subcat_line1 = f"{num_sub_catchments} {imap} {yes_print_output} \n"

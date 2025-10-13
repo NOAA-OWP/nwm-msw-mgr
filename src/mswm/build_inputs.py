@@ -1066,7 +1066,7 @@ class RealizationBuilder:
                 if m1 in ['cfes', 'cfex']:
                     gfun.create_cfe_input(self.catids, self.modules, self.attr_file, mod_input_dir, self.run_type, self.is_aet_rootzone)
                 elif m1 == 'topmodel':
-                    gfun.create_topmodel_input(self.catids, self.attr_file, self.gpkg_file, mod_input_dir)
+                    gfun.create_topmodel_input(self.catids, self.attr_file, self.divides_layer, mod_input_dir)
                 elif m1 == 'ueb':
                     gfun.create_ueb_input(self.catids, self.time_period, self.attr_file, self.conf3[m1 + '_parameter_dir'], mod_input_dir, '', self.run_type)
                 elif m1 == 'snow17':
@@ -1241,7 +1241,7 @@ class RealizationBuilder:
                 if m1 in ['cfes', 'cfex']:
                     gfun.create_cfe_input(cat_mod, form_cat, self.attr_file, mod_input_dir, self.run_type, self.cat_to_aet_rootzone)
                 elif m1 == 'topmodel':
-                    gfun.create_topmodel_input(cat_mod, self.attr_file, self.gpkg_file, mod_input_dir)
+                    gfun.create_topmodel_input(cat_mod, self.attr_file, self.divides_layer, mod_input_dir)
                 elif m1 == 'ueb':
                     gfun.create_ueb_input(cat_mod, self.time_period, self.attr_file, self.conf3[m1 + '_parameter_dir'], mod_input_dir, '', self.run_type)
                 elif m1 == 'snow17':
