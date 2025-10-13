@@ -571,8 +571,8 @@ def create_noah_input(
             for catID in catids:
                 tslp = dfa.loc[catID]['mean.slope']
                 azimuth = dfa.loc[catID]['circ_mean.aspect']
-                lat = dfa.loc[catID].geometry.y
-                lon = dfa.loc[catID].geometry.x
+                lat = dfa.loc[catID]['centroid_y']
+                lon = dfa.loc[catID]['centroid_x']
                 isltype = int(dfa.loc[catID]["mode.ISLTYP"])
                 vegtype = int(dfa.loc[catID]["mode.IVGTYP"])
                 sfctype = 2 if vegtype == 16 else 1
@@ -862,7 +862,7 @@ def create_snow17_input(
         # Set catchment-specific snow17 config parameters
         param_list = ['hru_id ' + catID,
                       'hru_area ' + str(dfa.loc[catID]['areasqkm']),
-                      'latitude ' + str(dfa.loc[catID].geometry.y),
+                      'latitude ' + str(dfa.loc[catID]['centroid_y']),
                       'elev ' + str(dfa.loc[catID]['mean.elevation']),
                       'scf 1.100',
                       'mfmax ' + str(params_df.loc[catID]['MFMAX']),
@@ -1006,8 +1006,8 @@ def create_ueb_input(
             # retrieve slope, aspect, lat and lon from precomputed attributes file
             tslp = dfa.loc[catID]['mean.slope']
             azimuth = dfa.loc[catID]['circ_mean.aspect']
-            lat = dfa.loc[catID].geometry.y
-            lon = dfa.loc[catID].geometry.x
+            lat = dfa.loc[catID]['centroid_y']
+            lon = dfa.loc[catID]['centroid_x']
 
             temp_file = Path(param_dir_source, 'ueb_sitevars.dat').resolve(strict=True)
             with open(temp_file) as f:
@@ -1561,8 +1561,8 @@ def create_pet_input(
                     'surface_longwave_emissivity=1.0',
                     'surface_shortwave_albedo=0.22',
                     'cloud_base_height_known=FALSE',
-                    'latitude_degrees=' + str(dfa.loc[catID].geometry.y),
-                    'longitude_degrees=' + str(dfa.loc[catID].geometry.x),
+                    'latitude_degrees=' + str(dfa.loc[catID]['centroid_y']),
+                    'longitude_degrees=' + str(dfa.loc[catID]['centroid_x']),
                     'site_elevation_m=' + str(dfa.loc[catID]['mean.elevation']),
                     'time_step_size_s=3600',
                     'num_timesteps=720',  # This needs to be set from the input files, possibly for calib and valid
