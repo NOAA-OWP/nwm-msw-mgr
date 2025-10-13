@@ -360,9 +360,6 @@ class RealizationBuilder:
         if not self.parallelSec or self.parallelSec.get("nprocs", 0) < 2:
             self.parallelSec = None
 
-        # Parse attribute file
-        self.attr_parquet = self.conf3['attributes_file'] if self.conf1 else None
-
         logger.info('Input.config sections parsed')
 
     def _parse_forcing_engine(self):
