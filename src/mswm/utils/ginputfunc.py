@@ -163,9 +163,12 @@ def change_hydrofab_attr(
     if vpu == 'ak' or vpu == 'hi' or vpu == 'prvi':
         dfa = dfa.rename(columns=attr_dict, inplace=True)
 
-    # Get catchement area from divides layer and append to attributes data frame
-    area = divides_layer[['divide_id', 'areasqkm']]
-    dfa = dfa.join(area.set_index('divide_id'), on='divide_id')
+    # Get catchment area from divides layer and append to attributes data frame
+    divide_vals = divides_layer[['divide_id', 'lengthkm', 'areasqkm']]
+    dfa = dfa.join(divide_vals.set_index('divide_id'), on='divide_id')
+
+    # Fill Nan lengthkm (coastal divides) with 0
+    dfa['lengthkm'] = dfa['lengthkm'].fillna(0)
 
     # Soil and vegetation types are read from the gpkg as floats, but need to be ints
     dfa = dfa.astype({'mode.ISLTYP': 'int'})
@@ -2021,7 +2024,6 @@ def change_topmodel_input(
 def create_topmodel_input(
         catids: List[str],
         dfa: gpd.GeoDataFrame,
-        divides_layer: gpd.GeoDataFrame,
         inputDir: Union[str, Path],
 ) -> None:
     """ Create BMI configuration file for Topmodel
@@ -2030,7 +2032,6 @@ def create_topmodel_input(
     ----------
     catids : catchment IDs in the basin
     dfa: dataframe containing model parameter attributes
-    divides_layer: geodataframe containing hydrofabric divides layer
     inputDir: directory for writing topmodel bmi configuration files
 
     Returns
@@ -2040,9 +2041,6 @@ def create_topmodel_input(
     """
 
     os.makedirs(inputDir, exist_ok=True)
-
-    # Fill Nan lengthkm (coastal divides) with 0
-    divides_layer['lengthkm'] = divides_layer['lengthkm'].fillna(0)
 
     # Calculate median twi quartiles to fill missing values
     # Extract quartile twi values from divide-attributes
@@ -2083,7 +2081,7 @@ def create_topmodel_input(
 
         num_channels = 1
         cum_dist_area_with_dist = 1.0
-        dist_from_outlet = round(divides_layer.loc[catID]['lengthkm'] * 1000)  # convert km to m
+        dist_from_outlet = round(dfa.loc[catID]['lengthkm'] * 1000)  # convert km to m
 
         # Format parameters for output
         subcat_line1 = f"{num_sub_catchments} {imap} {yes_print_output} \n"
