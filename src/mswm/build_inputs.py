@@ -360,9 +360,6 @@ class RealizationBuilder:
         if not self.parallelSec or self.parallelSec.get("nprocs", 0) < 2:
             self.parallelSec = None
 
-        # Parse attribute file
-        self.attr_parquet = self.conf3['attributes_file'] if self.conf1 else None
-
         logger.info('Input.config sections parsed')
 
     def _parse_forcing_engine(self):
@@ -648,46 +645,16 @@ class RealizationBuilder:
         for p1 in settings.modules_all['process']:
             procs = list(set(procs + p1))
 
-        for p1 in procs:
-            mods = [m1 for m1 in self.modules if p1 in settings.modules_all.loc[settings.modules_all['module'] == m1, 'process'].values[0]]
+        def validate_formulation(modules, label=None):
+            """Inner helper function to validate a single formulation or grouped formulations"""
 
-            # make sure only one module is selected for each process (except for Soil_moisture and Glacier_snow)
-            if len(mods) > 1 and p1 not in ['Soil_moisture', 'Glacier_snow']:
-                try:
-                    raise Exception(f'Only one module can be selected for {p1} process')
-                except Exception as e:
-                    logger.critical(e)
-                    raise
-
-            # one and only one module must be selected for rainfall-runoff and PET
-            if (p1 in ['Evapotranspiration', 'Rainfall_runoff']) and (len(mods) == 0):
-                try:
-                    raise Exception(f'At least one module must be selected for {p1} process')
-                except Exception as e:
-                    logger.critical(e)
-                    raise
-
-        logger.info("Module processes validated")
-
-    def _validate_reg_processes(self):
-        """
-        Check that each formulation has all required hydrological processes
-        Could be combined with _validate_processes
-        """
-        # check modules selected for each process
-        procs = []
-        for p1 in settings.modules_all['process']:
-            procs = list(set(procs + p1))
-
-        # Loop through formulation group dictionary
-        for grp, form in self.grp_to_form.items():
             for p1 in procs:
-                mods = [m1 for m1 in form if p1 in settings.modules_all.loc[settings.modules_all['module'] == m1, 'process'].values[0]]
+                mods = [m1 for m1 in modules if p1 in settings.modules_all.loc[settings.modules_all['module'] == m1, 'process'].values[0]]
 
                 # make sure only one module is selected for each process (except for Soil_moisture and Glacier_snow)
                 if len(mods) > 1 and p1 not in ['Soil_moisture', 'Glacier_snow']:
                     try:
-                        raise Exception(f'Only one module can be selected for {p1} process: {grp}')
+                        raise Exception(f'Only one module can be selected for {p1} process')
                     except Exception as e:
                         logger.critical(e)
                         raise
@@ -695,12 +662,19 @@ class RealizationBuilder:
                 # one and only one module must be selected for rainfall-runoff and PET
                 if (p1 in ['Evapotranspiration', 'Rainfall_runoff']) and (len(mods) == 0):
                     try:
-                        raise Exception(f'At least one module must be selected for {p1} process: {grp}')
+                        raise Exception(f'At least one module must be selected for {p1} process')
                     except Exception as e:
                         logger.critical(e)
                         raise
 
-            logger.info(f"Module processes validated for {grp}")
+        # Validation formulations using helper function
+        if hasattr(self, 'grp_to_form') and self.grp_to_form:
+            for grp, form in self.grp_to_form.items():
+                validate_formulation(form, label=grp)
+                logger.info(f"Module processes validated for {grp}")
+        else:
+            validate_formulation(self.modules)
+            logger.info("Module processes validated")
 
     def _map_cat_to_grp(self):
         """
@@ -853,42 +827,22 @@ class RealizationBuilder:
 
         # Read catchment parameter values from geopackage divide-attributes
         try:
-            attr_input = gpd.read_file(self.gpkg_file, layer='divide-attributes')
-            attr_input.set_index("divide_id", inplace=True)
+            self.attr_file = gpd.read_file(self.gpkg_file, layer='divide-attributes')
+            self.attr_file.set_index("divide_id", inplace=True)
         except Exception as e:
             logger.critical(f"Error while reading geopackage file: {e}")
             raise
 
-        # Adapt to x,y column name in geopackage
-        x_cols = ["centroid_x", "X"]
-        y_cols = ["centroid_y", "Y"]
-        x_col = next((c for c in x_cols if c in attr_input.columns), None)
-        y_col = next((c for c in y_cols if c in attr_input.columns), None)
-        self.xy_col = [x_col, y_col]
-
-        if not x_col or y_col:
-            try:
-                Exception("Could not find coordinate columns in geopackage `divide-attributes`")
-            except Exception as e:
-                logger.critical(f"Error while reading geopackage file: {e}")
-                raise
-
-        # Reproject to WGS84 for X,Y coordinates
-        self.attr_file = gpd.GeoDataFrame(attr_input,
-                                          geometry=gpd.points_from_xy(attr_input[x_col], attr_input[y_col]),
-                                          crs="EPSG:5070")
-        self.attr_file = self.attr_file.to_crs("EPSG:4326")
-
-        # Update coordinates with reprojected values
-        self.attr_file[x_col] = self.attr_file.geometry.x
-        self.attr_file[y_col] = self.attr_file.geometry.y
-
-        # Read catchment ids from geopackage
+        # Read catchment divide layer from hydrofabric
         try:
-            self.catids = gpd.read_file(self.gpkg_file, layer='divides')['divide_id'].tolist()
+            self.divides_layer = gpd.read_file(self.gpkg_file, layer='divides')
+            self.catids = self.divides_layer['divide_id'].tolist()
         except Exception as e:
             logger.critical(f"Error while reading geopackage file: {e}")
             raise
+
+        # Update hydrofabic attribute names based on region and minor parameter value fixes
+        self.attr_file = gfun.change_hydrofab_attr(self.attr_file, self.divides_layer)
 
         logger.info(f"Attribute file loaded from: {self.gpkg_file}")
 
@@ -1112,51 +1066,27 @@ class RealizationBuilder:
                 if m1 in ['cfes', 'cfex']:
                     gfun.create_cfe_input(self.catids, self.modules, self.attr_file, mod_input_dir, self.run_type, self.is_aet_rootzone)
                 elif m1 == 'topmodel':
-                    gfun.create_topmodel_input(self.catids, self.attr_file, self.gpkg_file, mod_input_dir)
+                    gfun.create_topmodel_input(self.catids, self.attr_file, mod_input_dir)
                 elif m1 == 'ueb':
                     gfun.create_ueb_input(self.catids, self.time_period, self.attr_file, self.conf3[m1 + '_parameter_dir'], mod_input_dir, '', self.run_type)
                 elif m1 == 'snow17':
-                    gfun.create_snow17_input(self.catids, self.attr_file, self.gpkg_file, self.conf3[m2.replace("-", "_") + '_parameter_dir'], mod_input_dir)
+                    gfun.create_snow17_input(self.catids, self.attr_file, self.conf3[m2.replace("-", "_") + '_parameter_dir'], mod_input_dir)
                 elif m1 == "pet":
                     gfun.create_pet_input(self.catids, self.attr_file, mod_input_dir)
                 elif m1 == "sac":
-                    gfun.create_sac_input(self.catids, self.gpkg_file, self.conf3[m1 + '_parameter_dir'], mod_input_dir)
+                    gfun.create_sac_input(self.catids, self.attr_file, self.conf3[m1 + '_parameter_dir'], mod_input_dir)
                 elif m1 == 'noah':
                     gfun.create_noah_input(self.catids, self.time_period, self.attr_file, self.conf3[m1 + '_parameter_dir'], mod_input_dir, self.run_type)
                 elif m1 == 'lstm':
-                    gfun.create_lstm_input(self.catids, self.attr_file, self.gpkg_file, self.conf3['lstm_parameter_dir'], mod_input_dir, self.xy_col)
+                    gfun.create_lstm_input(self.catids, self.attr_file, self.conf3['lstm_parameter_dir'], mod_input_dir)
                 elif m1 == 'sft':
                     sft_dir = os.path.join(self.input_dir, 'sft_input')
                     smp_dir = os.path.join(self.input_dir, 'smp_input')
-
-                    # Update CFE bmi dir with correct scheme (Schaake/Xinanjiang)
-                    if ('cfes' in self.modules):
-                        # If bmi_dir not provided by input file, create from input dir
-                        if self.conf3['cfe_s_bmi_dir'] is None:
-                            cfe_dir = os.path.join(self.input_dir, 'cfe-s_input')
-                        # If bmi_dir provided by input file, use that path
-                        else:
-                            cfe_dir = self.conf3['cfe_s_bmi_dir']
-                    elif ('cfex' in self.modules):
-                        # If bmi_dir not provided by input file, create from input dir
-                        if self.conf3['cfe_x_bmi_dir'] is None:
-                            cfe_dir = os.path.join(self.input_dir, 'cfe-x_input')
-                        # If bmi_dir provided by input file, use that path
-                        else:
-                            cfe_dir = self.conf3['cfe_x_bmi_dir']
-                    else:
-                        # If CFE BMI config files not provided and cfe not in modules, create cfe input files
-                        cfe_dir = os.path.join(self.input_dir, 'cfe-s_input')
-                        gfun.create_cfe_input(self.catids, ['cfes'] + [self.modules], self.attr_file, cfe_dir, self.run_type, 0)
-
-                    # Create sft input
-                    gfun.create_sft_smp_input(self.catids, self.modules, self.attr_parquet, cfe_dir, self.forcing_dir, sft_dir, smp_dir, self.run_type)
-
+                    gfun.create_sft_smp_input(self.catids, self.modules, self.attr_file, sft_dir, smp_dir, self.run_type)
                 elif m1 == 'smp':
                     continue
                 elif m1 == 'lasam':
                     gfun.create_lasam_input(self.catids, self.modules, self.attr_file, mod_input_dir, self.conf3['lasam_parameter_dir'], self.run_type)
-
                 elif m1 == 'troute':
                     if self.run_type == 'calibration':
                         run_names = ['calib', 'valid', 'valid']
@@ -1311,19 +1241,19 @@ class RealizationBuilder:
                 if m1 in ['cfes', 'cfex']:
                     gfun.create_cfe_input(cat_mod, form_cat, self.attr_file, mod_input_dir, self.run_type, self.cat_to_aet_rootzone)
                 elif m1 == 'topmodel':
-                    gfun.create_topmodel_input(cat_mod, self.attr_file, self.gpkg_file, mod_input_dir)
+                    gfun.create_topmodel_input(cat_mod, self.attr_file, mod_input_dir)
                 elif m1 == 'ueb':
                     gfun.create_ueb_input(cat_mod, self.time_period, self.attr_file, self.conf3[m1 + '_parameter_dir'], mod_input_dir, '', self.run_type)
                 elif m1 == 'snow17':
-                    gfun.create_snow17_input(cat_mod, self.attr_file, self.gpkg_file, self.conf3[m2.replace("-", "_") + '_parameter_dir'], mod_input_dir)
+                    gfun.create_snow17_input(cat_mod, self.attr_file, self.conf3[m2.replace("-", "_") + '_parameter_dir'], mod_input_dir)
                 elif m1 == "pet":
                     gfun.create_pet_input(cat_mod, self.attr_file, mod_input_dir)
                 elif m1 == "sac":
-                    gfun.create_sac_input(cat_mod, self.gpkg_file, self.conf3[m1 + '_parameter_dir'], mod_input_dir)
+                    gfun.create_sac_input(cat_mod, self.attr_file, self.conf3[m1 + '_parameter_dir'], mod_input_dir)
                 elif m1 == 'noah':
                     gfun.create_noah_input(cat_mod, self.time_period, self.attr_file, self.conf3[m1 + '_parameter_dir'], mod_input_dir, self.run_type)
                 elif m1 == 'lstm':
-                    gfun.create_lstm_input(cat_mod, self.attr_file, self.gpkg_file, self.conf3['lstm_parameter_dir'], mod_input_dir, self.xy_col)
+                    gfun.create_lstm_input(cat_mod, self.attr_file, self.conf3['lstm_parameter_dir'], mod_input_dir)
                 elif m1 == 'sft':
                     sft_dir = os.path.join(self.input_dir, 'sft_input')
                     smp_dir = os.path.join(self.input_dir, 'smp_input')
@@ -1333,40 +1263,20 @@ class RealizationBuilder:
                     for scheme in ['cfes', 'cfex', 'lasam']:
                         # Retrieve formulation groups where CFES/CFEX/LASAM co-occur with SFT
                         scheme_sft_grps = [grp for grp, mods in self.grp_to_form.items() if scheme in mods and 'sft' in mods]
-                        if scheme_sft_grps:
-                            # Update CFE bmi dir with correct scheme for formulation (Schaake/Xinanjiang)
-                            if scheme == 'cfes' or scheme == 'lasam':
-                                scheme_bmi_var = 'cfe-s'
-                            elif scheme == 'cfex':
-                                scheme_bmi_var = 'cfe-x'
-                            else:
-                                try:
-                                    raise Exception('SMP/SFT only implemented when CFE-S, CFE-X, or LASAM are selected')
-                                except Exception as e:
-                                    logger.critical(e)
-                                    raise
 
+                        if scheme_sft_grps:
                             # Retrieve catchments and formulations corresponding to scheme
                             scheme_cat = [cat for grp in scheme_sft_grps for cat in self.grp_to_cat[grp]]
                             scheme_form = [self.cat_to_form[cat] for cat in scheme_cat]
 
-                            # Form CFE input dir
-                            cfe_dir = os.path.join(self.input_dir, scheme_bmi_var + '_input')
-
-                            # If LASAM is selected, create cfe input files required for sft (assume ice_fraction_scheme is cfes)
-                            if scheme not in ('cfes', 'cfex'):
-                                scheme_form_cfes = [form + ['cfes'] for form in scheme_form]
-                                gfun.create_cfe_input(scheme_cat, scheme_form_cfes, self.attr_file, cfe_dir, self.run_type, self.cat_to_aet_rootzone)
-
                             # Create SFT/SMP inputs
-                            gfun.create_sft_smp_input(scheme_cat, scheme_form, self.attr_parquet, cfe_dir, self.forcing_dir, sft_dir, smp_dir, self.run_type)
+                            gfun.create_sft_smp_input(scheme_cat, scheme_form, self.attr_file, sft_dir, smp_dir, self.run_type)
 
                 # Skip smp, inputs created in tandem with sft
                 elif m1 == 'smp':
                     continue
                 elif m1 == 'lasam':
                     gfun.create_lasam_input(cat_mod, form_cat, self.attr_file, mod_input_dir, self.conf3['lasam_parameter_dir'], self.run_type)
-
                 elif m1 == 'troute':
                     for file_name, run_name in zip(self.run_configs, ['region']):
                         routing_config_file = os.path.join(self.work_dir + '/Input', '{}'.format(self.basin) + file_name)
@@ -1376,7 +1286,6 @@ class RealizationBuilder:
                             nts = len(pd.date_range(start=run_range[0], end=run_range[1], freq='5min')) - 1
                             gfun.create_troute_config(self.gpkg_file, routing_config_file, self.time_period['run_time_period'][run_name][0], nts)
                             logger.info(f'troute config file for {run_name1} is created at: {routing_config_file}')
-
                 if m1 != 'troute':
                     logger.info(f'{m1}: input config files created at: {mod_input_dir}')
 
@@ -1579,7 +1488,7 @@ class RealizationBuilder:
         self._parse_time()
         self._parse_reg_params()
         self._parse_reg_modules()
-        self._validate_reg_processes()
+        self._validate_processes()
         self._map_cat_to_grp()
         self._map_cat_to_form()
         self._map_mod_to_cat()
