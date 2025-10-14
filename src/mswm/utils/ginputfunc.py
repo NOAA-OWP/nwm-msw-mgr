@@ -793,7 +793,7 @@ def create_sft_smp_input(
                    'soil_params.satpsi=' + str(dfa.loc[catID]['geom_mean.psisat_soil_layers_stag=1']),
                    'soil_params.quartz=' + str(dfa.loc[catID]['quartz']),
                    'ice_fraction_scheme=' + icefscheme,
-                   'soil_z=0.1,0.3hyd,1.0,2.0[m]',
+                   'soil_z=0.1,0.3,1.0,2.0[m]',
                    'soil_temperature=' + ','.join([str(mtemp)] * 4) + '[K]'
                    ]
 
@@ -807,7 +807,8 @@ def create_sft_smp_input(
                    'soil_params.smcmax=' + str(dfa.loc[catID]['mean.smcmax_soil_layers_stag=1']),
                    'soil_params.b=' + str(dfa.loc[catID]['mode.bexp_soil_layers_stag=1']),
                    'soil_params.satpsi=' + str(dfa.loc[catID]['geom_mean.psisat_soil_layers_stag=1']),
-                   'soil_z=0.1,0.3,1.0,2.0[m]']
+                   'soil_z=0.1,0.3,1.0,2.0[m]',
+                   'soil_moisture_fraction_depth=0.4[m]']
 
         if 'cfes' in mods or 'cfex' in mods:
             smp_lst += ['soil_storage_model=conceptual', 'soil_storage_depth=2.0']
