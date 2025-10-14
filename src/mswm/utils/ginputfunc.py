@@ -793,7 +793,7 @@ def create_sft_smp_input(
                    'soil_params.satpsi=' + str(dfa.loc[catID]['geom_mean.psisat_soil_layers_stag=1']),
                    'soil_params.quartz=' + str(dfa.loc[catID]['quartz']),
                    'ice_fraction_scheme=' + icefscheme,
-                   'soil_z=0.1,0.3,1.0,2.0[m]',
+                   'soil_z=0.1,0.3hyd,1.0,2.0[m]',
                    'soil_temperature=' + ','.join([str(mtemp)] * 4) + '[K]'
                    ]
 
@@ -1621,13 +1621,14 @@ def create_lasam_input(
                  'ponded_depth_max=1.1[cm]',
                  'use_closed_form_G=false',
                  'layer_soil_type=',
-                 'max_soil_types=18',
+                 'max_soil_types=15',
                  'wilting_point_psi=15495.0[cm]',
-                 'giuh_ordinates=0.55,0.25,0.2',  # Where should this be supplied from?
-                 'sft_coupled=',
-                 'soil_z=10,30,100.0,200.0[cm]',
-                 'calib_params=true',
                  'field_capacity_psi=340.9[cm]',
+                 'giuh_ordinates=0.06,0.51,0.28,0.12,0.03',
+                 'calib_params=true',
+                 'adaptive_timestep=true',
+                 'sft_coupled=',
+                 'soil_z=10,30,100.0,200.0[cm]'
                  ]
 
     # Set module list for non-regionalization run
@@ -1648,9 +1649,8 @@ def create_lasam_input(
 
         # Check if sft is in use
         sft_coupled_str = 'true' if 'sft' in mods else 'false'
-        lasam_lst_catID[13] = 'sft_coupled=' + sft_coupled_str
+        lasam_lst_catID[16] += sft_coupled_str
 
-        # lasam_lst_catID[12] = lasam_lst_catID[12] + df.loc['giuh_ordinates'][0]
         lasam_bmi_file = os.path.join(input_dir, catID + '_bmi_config_lasam.txt')
 
         with open(lasam_bmi_file, "w") as f:
