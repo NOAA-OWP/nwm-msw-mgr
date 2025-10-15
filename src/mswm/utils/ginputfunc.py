@@ -2722,32 +2722,49 @@ def update_hist_forcing_config(
     os.makedirs(forcing_config_dir, exist_ok=True)
 
     # Retrieve start and end times
+    start_times = []
+    end_times = []
     if run_type == 'regionalization':
-        start_time = datetime.datetime.strptime(time_period['run_time_period']['region'][0], '%Y-%m-%d %H:%M:%S')
-        end_time = datetime.datetime.strptime(time_period['run_time_period']['region'][1], '%Y-%m-%d %H:%M:%S')
-
-    # Determine length of run inminutes
-    diff_time = int((end_time - start_time).total_seconds() / 60)
-
-    # Format start time for config file
-    start_str = start_time.strftime('%Y%m%d%H%M')
+        start_times.append(datetime.datetime.strptime(time_period['run_time_period']['region'][0], '%Y-%m-%d %H:%M:%S'))
+        end_times.append(datetime.datetime.strptime(time_period['run_time_period']['region'][1], '%Y-%m-%d %H:%M:%S'))
+    elif run_type == 'default':
+        start_times.append(datetime.datetime.strptime(time_period['run_time_period']['default'][0], '%Y-%m-%d %H:%M:%S'))
+        end_times.append(datetime.datetime.strptime(time_period['run_time_period']['default'][1], '%Y-%m-%d %H:%M:%S'))
+    elif run_type == 'calibration':
+        start_times.append(datetime.datetime.strptime(time_period['run_time_period']['calib'][0], '%Y-%m-%d %H:%M:%S'))
+        start_times.append(datetime.datetime.strptime(time_period['run_time_period']['valid'][0], '%Y-%m-%d %H:%M:%S'))
+        end_times.append(datetime.datetime.strptime(time_period['run_time_period']['calib'][1], '%Y-%m-%d %H:%M:%S'))
+        end_times.append(datetime.datetime.strptime(time_period['run_time_period']['valid'][1], '%Y-%m-%d %H:%M:%S'))
+        file_suffix = ['','valid']
 
     # Set geogrid file name
     gpkg_name = os.path.splitext(os.path.basename(gpkg_file))[0]
 
     # Replace {root_dir} and {gage} placeholders in forcing config
-    vars = {"{root_dir}": root_dir,
-            "{gage}": gpkg_name}
+    vars = {'{root_dir}': root_dir,
+            '{gage}': gpkg_name}
     forcing_template = replace_forcing_placeholders(forcing_template, vars)
-
-    # Update forcing_template with dynamic variables
-    forcing_template['RefcstBDateProc'] = start_str
-    forcing_template['ForecastInputHorizons'] = [diff_time]
     forcing_template['Geopackage'] = gpkg_file
 
-    # Write forcing config yaml file
-    with open(forcing_config_file, "w", encoding="utf-8") as file:
-        yaml.dump(forcing_template, file, Dumper=ForcingDumper, sort_keys=False, default_flow_style=False)
+    for i in range(len(start_times)):
+
+        # Determine length of run in minutes
+        diff_time = int((end_times[i] - start_times[i]).total_seconds() / 60)
+
+        # Format start time for config file
+        start_str = start_times[i].strftime('%Y%m%d%H%M')
+
+        # Update forcing_template with dynamic variables
+        forcing_template['RefcstBDateProc'] = start_str
+        forcing_template['ForecastInputHorizons'] = [diff_time]
+
+        # If creating validation run forcing engine config, append file suffix for valid
+        if file_suffix[i] == 'valid':
+            forcing_config_file = forcing_config_file.with_name(forcing_config_file.stem + '_' + file_suffix[i] + forcing_config_file.suffix)
+
+        # Write forcing config yaml file
+        with open(forcing_config_file, "w", encoding="utf-8") as file:
+            yaml.dump(forcing_template, file, Dumper=ForcingDumper, sort_keys=False, default_flow_style=False)
 
 
 def update_forcing_in_realization(

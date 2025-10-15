@@ -459,10 +459,7 @@ class RealizationBuilder:
             self.time_period = {"run_time_period": {"region": [self.conf1['start_period'], self.conf1['end_period']]}}
         # Retrieve time period for default
         elif self.run_type == 'default':
-            if self.forcing_provider == 'csv':
-                self.time_period = {"run_time_period": {"default": [self.conf1['start_period'], self.conf1['end_period']]}}
-            elif self.forcing_provider == 'bmi':
-                self.time_period = {"run_time_period": {"default": [self.fcst_start, self.fcst_end]}}
+            self.time_period = {"run_time_period": {"default": [self.conf1['start_period'], self.conf1['end_period']]}}
 
         # Confirm times are properly formatted and in correct order
         errors = []

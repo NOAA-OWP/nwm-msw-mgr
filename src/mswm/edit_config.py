@@ -22,7 +22,6 @@ logger = logging.getLogger(__name__)
 def create_valid_config_file(yaml_file: Path, valid_run_path: Path, valid_config_file: Path, valid_run_name: str) -> None:
     """
     Create configuration yaml file for valiation control and best runs.
-    Moved from model.py
 
     Parameters:
     ----------
@@ -48,7 +47,6 @@ def create_valid_config_file(yaml_file: Path, valid_run_path: Path, valid_config
 def create_valid_realization_file(agent: 'Agent', eval_params: 'EvaluationOptions', params: 'pd.DataFrame', valid_run_name: str) -> None:
     """
     Create model realization file for valiation control and best runs.
-    Moved from model.py
 
     Parameters:
     ----------
@@ -84,6 +82,11 @@ def create_valid_realization_file(agent: 'Agent', eval_params: 'EvaluationOption
     print(eval_params._valid_range)
     config_valid['time']['start_time'] = datetime.strftime(eval_params._valid_range[0], '%Y-%m-%d %H:%M:%S')
     config_valid['time']['end_time'] = datetime.strftime(eval_params._valid_range[1], '%Y-%m-%d %H:%M:%S')
+
+    # Replace forcing engine config file path with validation path
+    if config_valid['forcing']['ForcingsEngineLumpedDataProvider']['provider'] == 'ForcingsEngineLumpedDataProvider':
+        fe_config = Path(config_valid['forcing']['ForcingsEngineLumpedDataProvider']['params']['init_config'])
+        config_valid['forcing']['ForcingsEngineLumpedDataProvider']['params']['init_config'] = fe_config.with_name(fe_config.stem + '_valid' + fe_config.suffix)
 
     # correct path for init_config for validation runs for modules with time periods info in these files
     # (currently Noah-OWP-Modular and UEB)
