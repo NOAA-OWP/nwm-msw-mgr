@@ -14,7 +14,7 @@ import logging
 import shutil
 import math
 from pathlib import Path
-from typing import List, Union, Dict
+from typing import List, Union, Dict, Any, Tuple
 from collections import OrderedDict
 from pyproj import Transformer
 import geopandas as gpd
@@ -35,10 +35,19 @@ class UnquotedDumper(yaml.SafeDumper):
     pass
 
 
+class ForcingDumper(yaml.SafeDumper):
+    pass
+
+
 def quoted_str_presenter(dumper, data):
     return dumper.represent_scalar('tag:yaml.org,2002:str', data, style="'")
 
 
+def inline_list_presenter(dumper, data):
+    return dumper.represent_sequence('tag:yaml.org,2002:seq', data, flow_style=True)
+
+
+ForcingDumper.add_representer(list, inline_list_presenter)
 QuotedDumper.add_representer(str, quoted_str_presenter)
 
 
@@ -48,6 +57,7 @@ def is_probably_regex(pattern):
 
 __all__ = [
     'change_hydrofab_attr',
+    'create_fcst_times',
     'create_walk_file',
     'create_cfe_input',
     'create_noah_input',
@@ -65,7 +75,14 @@ __all__ = [
     'change_sft_input',
     'change_topmodel_input',
     'create_topmodel_input',
+    'update_noah_ueb_times',
+    'update_troute',
     'create_troute_config',
+    'create_fcst_times',
+    'replace_forcing_placeholders',
+    'update_forcing_config',
+    'update_forcing_in_realization',
+    'map_var_names_forcing_engine',
     'create_reg_realization_file',
     'create_realization_file',
     'create_calib_config_file',
@@ -2156,6 +2173,173 @@ def create_topmodel_input(
             outfile.write(out_hyd_fptr)
 
 
+def update_noah_ueb_times(
+        real_config: dict,
+        input_dir: Path,
+) -> dict:
+    """
+    For noah-owp-modular & UEB, create new BMI config files with adjusted start/end times, and then
+        update path to BMI config files in realization file accordingly
+
+    Arguments
+    ---------
+    real_config: dictionary containing the realization configuration
+    input_dir: folder for the new BMI config files
+
+    Returns
+    -------
+    dictionary containing adjusted realization config
+
+    """
+    try:
+        module_config = real_config['global']['formulations'][0]['params']['modules']
+        start_time = real_config['time']['start_time']
+        end_time = real_config['time']['end_time']
+    except Exception as e:
+        logger.critical(f"Yaml config calib file is missing fields: {e}")
+        raise
+
+    try:
+        startdate = pd.to_datetime(start_time, format="%Y-%m-%d %H:%M:%S").strftime("%Y%m%d%H%M")
+        enddate = pd.to_datetime(end_time, format="%Y-%m-%d %H:%M:%S").strftime("%Y%m%d%H%M")
+    except Exception as e:
+        logger.critical(f"Error converting yaml config times: {real_config['time']}\n{e}")
+        raise
+
+    mod_dict = {'NoahOWP': 'noah-owp-modular', 'UEB': 'ueb'}
+
+    for i1, m1 in enumerate(module_config):
+        if m1['params']['model_type_name'] in ['NoahOWP', 'UEB']:
+
+            # read the BMI config files from the source directory in the realization file
+            src0 = m1['params']['init_config']
+            src = Path(src0.replace('{{id}}', '*'))
+            dst = Path(input_dir, mod_dict[m1['params']['model_type_name']] + '_input')
+
+            try:
+                dst.mkdir(parents=True, exist_ok=True)
+            except OSError as e:
+                logger.critical(f"Failed to create directory: {dst}\n{e}")
+
+            for f1 in glob.glob(f'{src}'):
+                with open(f1) as f:
+                    lines = f.readlines()
+
+                # update start/end times
+                for i2, l1 in enumerate(lines):
+                    if m1['params']['model_type_name'] == 'NoahOWP':
+                        if 'startdate' in l1:
+                            lines[i2] = "  " + "startdate".ljust(19) + "= " + "'" + startdate + "'" + "               ! UTC time start of simulation (YYYYMMDDhhmm)\n"
+                        elif 'enddate' in l1:
+                            lines[i2] = "  " + "enddate".ljust(19) + "= " + "'" + enddate + "'" + "               ! UTC time end of simulation (YYYYMMDDhhmm)\n"
+                    elif m1['params']['model_type_name'] == 'UEB':
+                        lines[8] = f'{startdate[:4]} {startdate[4:6]} {startdate[6:8]} {startdate[8:10]}.0\n'
+                        lines[9] = f'{enddate[:4]} {enddate[4:6]} {enddate[6:8]} {enddate[8:10]}.0\n'
+
+                        # write to new BMI config files
+                try:
+                    with open(Path(dst, os.path.basename(f1)), 'w') as outfile:
+                        outfile.writelines(lines)
+                except FileNotFoundError as e:
+                    logger.critical(f"File not found error when writing to {dst}\n{e}")
+                    raise
+                except PermissionError as e:
+                    logger.critical(f"Permission denied when writing to {dst}\n{e}")
+                    raise
+                except OSError as e:
+                    logger.critical(f"OS error when writing to {dst}\n{e}")
+                    raise
+
+            # replace path to BMI config file in realization file
+            module_config[i1]['params']['init_config'] = str(Path(dst, os.path.basename(src0)))
+            real_config['global']['formulations'][0]['params']['modules'] = module_config
+
+    return real_config
+
+
+def update_troute(
+        real_config: dict,
+        input_dir: Path,
+        basename_opt: str
+) -> dict:
+    """
+    For t-route, create new BMI config file with adjusted start/end times, and then
+        update path to BMI config files in realization file accordingly
+
+    Arguments
+    ---------
+    real_config: dictionary containing the realization configuration
+    input_dir: folder for the new BMI config files
+    basename_opt: new file basename for forecast or cold start
+
+    Returns
+    -------
+    dictionary containing adjusted realization config
+
+    """
+
+    # make sure the source t-route config exists
+    src = Path(real_config['routing']['t_route_config_file_with_path']).absolute()
+    if not src.exists():
+        try:
+            raise FileNotFoundError(src)
+        except FileNotFoundError as e:
+            logger.critical(e)
+            raise
+
+    try:
+        with open(src) as fp1:
+            rt_config = yaml.safe_load(fp1)
+    except FileNotFoundError as e:
+        logger.critical(f'Config file does not exist: {src}\n{e}')
+        raise
+    except yaml.YAMLError as e:
+        logger.critical(f"YAML parsing error in config file: {src}\n{e}")
+        raise
+    except Exception as e:
+        logger.critical(f"Unexpected error loading config at: {src}\n{e}")
+        raise
+
+    # compute number of time steps and max_loop_size
+    try:
+        start_time = pd.to_datetime(real_config['time']['start_time'], format="%Y-%m-%d %H:%M:%S")
+        end_time = pd.to_datetime(real_config['time']['end_time'], format="%Y-%m-%d %H:%M:%S")
+        nts = len(pd.date_range(start=start_time, end=end_time, freq='5min')) - 1
+    except Exception as e:
+        logger.critical(f"Error converting yaml config times: {real_config['time']}\n{e}")
+        raise
+
+    max_loop_size = divmod(nts * 300, 3600)[0] + 1
+    stream_output_time = divmod(nts * 300, 3600)[0] + 1
+
+    # update t-route config
+    rt_config['compute_parameters']['restart_parameters']['start_datetime'] = str(start_time)
+    rt_config['compute_parameters']['forcing_parameters']['nts'] = nts
+    rt_config['compute_parameters']['forcing_parameters']['max_loop_size'] = max_loop_size
+    rt_config['output_parameters']['stream_output']['stream_output_time'] = stream_output_time
+
+    # write to new t-route config file
+    new_basename = os.path.basename(src).replace("valid_best", basename_opt)
+
+    try:
+        new_file = Path(input_dir, new_basename)
+        with open(new_file, 'w') as file:
+            yaml.dump(rt_config, file, sort_keys=False, default_flow_style=False, indent=4)
+    except yaml.YAMLError as e:
+        logger.critical(f"YAML serialization error: {new_file}\n{e}")
+        raise
+    except TypeError as e:
+        logger.critical(f"Non-serializable object pased to yaml.dump: {new_file}\n{e}")
+        raise
+    except OSError as e:
+        logger.critical(f"Unexpected error while writing YAML file: {new_file}\n{e}")
+
+    # update path to new t-route config in realization
+    real_config['routing']['t_route_config_file_with_path'] = str(new_file)
+
+    return real_config
+
+
 def create_troute_config(
         gpkg_file: Union[str, Path],
         rt_cfg_file: Union[str, Path],
@@ -2305,6 +2489,229 @@ def create_troute_config(
         yaml.dump(config, file, sort_keys=False, default_flow_style=False, indent=4)
 
 
+def create_fcst_times(
+        forcing_template: dict,
+        cycle_date: str,
+        cycle_hour: str,
+        use_cold_start: bool,
+        cold_start_datetime: str = None
+) -> Tuple[str, str]:
+    """ Compute forecast start and end time based on selected forecast cycle, date, and hour
+
+    Parameters
+    ----------
+    forecast_template: dictionary of forecast config file template
+    cycle_date : date of forecast cycle
+    cycle_hour : hour of forecast cycle (00z)
+    use_cold_start : boolean flag for using cold start period
+    cold_start_datetime : datetime str of beginning of cold start period
+
+    Returns
+    ----------
+    fcst_start: datetime of ngen start time for forecast
+    fcst_end: datetime of ngen end time for forecast
+
+    """
+
+    # Convert cycle date and hour to datetime
+    cycle_dt = datetime.datetime.strptime(cycle_date, "%Y-%m-%d").replace(hour=int(cycle_hour.replace("z", "")))
+
+    # Retrieve AnAFlag
+    ana_flag = forcing_template['AnAFlag']
+
+    # Construct start and end times for cold start period
+    if use_cold_start is True:
+
+        fcst_start = cold_start_datetime
+        fcst_end = datetime.datetime.strftime(cycle_dt + datetime.timedelta(hours=1), "%Y-%m-%d %H:%M:%S")
+
+    # Construct start and end times based on forecast cycle
+    elif ana_flag == 0:
+
+        # Retrieve forecast input horizon from config file
+        forcing_horizon = int(forcing_template['ForecastInputHorizons'][0] / 60)
+        start_delta = 1
+
+        fcst_start = datetime.datetime.strftime(cycle_dt + datetime.timedelta(hours=start_delta), "%Y-%m-%d %H:%M:%S")
+        fcst_end = datetime.datetime.strftime(cycle_dt + datetime.timedelta(hours=forcing_horizon), "%Y-%m-%d %H:%M:%S")
+
+    # Construct start and end times based on analysis cycle
+    elif ana_flag == 1:
+
+        # Retrieve analysis lookback from config file
+        forcing_lookback = int(forcing_template['LookBack'] / 60)
+
+        fcst_start = datetime.datetime.strftime(cycle_dt - datetime.timedelta(hours=forcing_lookback), "%Y-%m-%d %H:%M:%S")
+        fcst_end = datetime.datetime.strftime(cycle_dt, "%Y-%m-%d %H:%M:%S")
+
+    return fcst_start, fcst_end
+
+
+def replace_forcing_placeholders(
+        obj: Any,
+        vars: dict[str, str]
+) -> Any:
+    """
+    Recursively replace root path or gage name in forcing engine yaml file
+    """
+    # Recurse through dictionary
+    if isinstance(obj, dict):
+        return {k: replace_forcing_placeholders(v, vars) for k, v in obj.items()}
+
+    # Recurse through list
+    if isinstance(obj, list):
+        return [replace_forcing_placeholders(i, vars) for i in obj]
+
+    # Replace placeholders if string contains format pattern
+    elif isinstance(obj, str):
+        for placeholder, value in vars.items():
+            obj = obj.replace(placeholder, value)
+        return obj
+
+    else:
+        return obj
+
+
+def update_forcing_config(
+        cycle_date: str,
+        cycle_hour: str,
+        root_dir: str,
+        forcing_template: dict,
+        gpkg_file: str,
+        forcing_config_dir: Path,
+        forcing_config_file: Path,
+        use_cold_start: bool,
+        cold_start_datetime: str = None
+) -> None:
+    """ update bmi forcing engine config yaml file
+
+    Parameters
+    ----------
+    cycle_date : date of forecast cycle
+    cycle_hour : hour of forecast cycle (00z)
+    root_dir : root directory for forcing engine paths
+    forcing_template : dictionary of forcing bmi config template file
+    gpkg_file: path to geopackage file
+    forcing_config_dir: directory path for forcing config file
+    forcing_config_dir: output path for forcing config file
+    use_cold_start : boolean flag for using cold start period
+    cold_start_datetime : datetime str of beginning of cold start period
+
+    Returns
+    ----------
+    None
+    """
+
+    # Create directory for storing config file
+    os.makedirs(forcing_config_dir, exist_ok=True)
+
+    # Format cycle_date and hour for config file
+    cycle_dt = datetime.datetime.strptime(cycle_date, "%Y-%m-%d").replace(hour=int(cycle_hour.replace("z", "")))
+    cycle_str = cycle_dt.strftime('%Y%m%d%H%M')
+
+    # Set lookback minutes for cold start period
+    if use_cold_start is True:
+        cold_start_dt = datetime.datetime.strptime(cold_start_datetime, "%Y-%m-%d %H:%M:%S")
+        forcing_template['LookBack'] = int((cycle_dt - cold_start_dt).total_seconds() / 60)
+
+    # Set geogrid file name
+    gpkg_name = os.path.splitext(os.path.basename(gpkg_file))[0]
+
+    # Replace {root_dir} and {gage} placeholders in forcing config
+    vars = {"{root_dir}": root_dir,
+            "{gage}": gpkg_name}
+    forcing_template = replace_forcing_placeholders(forcing_template, vars)
+
+    # Update forcing_template with dynamic variables
+    forcing_template['RefcstBDateProc'] = cycle_str
+    forcing_template['Geopackage'] = gpkg_file
+
+    # Write forcing config yaml file
+    with open(forcing_config_file, "w", encoding="utf-8") as file:
+        yaml.dump(forcing_template, file, Dumper=ForcingDumper, sort_keys=False, default_flow_style=False)
+
+
+def update_forcing_in_realization(
+        real_config: dict,
+        forcing_path: Path,
+        forcing_config_file: Path,
+        fcst_start: str,
+        fcst_end: str,
+        basename_opt: str
+) -> dict:
+    """
+    Adjust the realization configuration with forecast or cold start information accordingly:
+        1) update forcing information
+        2) update start and end times
+
+    Arguments
+    ---------
+    real_config: dictionary containing the realization configuration
+    forcing_path: path to run /forcing/ folder
+    forcing_config_file: path to forcing engine configuration yaml file
+    fcst_start: cold_start or fcst ngen start time
+    fcst_end: cold_start or fcst ngen end time
+    basename_opt: new file basename for forecast or cold start
+
+    Returns
+    -------
+    dictionary containing the adjusted realization config
+
+    """
+
+    # Update realization file for forcing
+    real_config['global']['forcing'] = {"path": str(forcing_path),
+                                        "provider": "ForcingsEngineLumpedDataProvider",
+                                        "params": {"init_config": str(forcing_config_file)}}
+
+    # Update time period in realization file
+    real_config['time']['start_time'] = fcst_start
+    real_config['time']['end_time'] = fcst_end
+
+    # Update troute path
+    real_config['routing']['t_route_config_file_with_path'].replace('valid_best', basename_opt)
+
+    # Update variable names map for forcing engine
+    real_modules = real_config['global']['formulations'][0]['params']['modules']
+
+    for mod in real_modules:
+
+        # Retrieve module name and variable names map for module
+        mod_params = mod.get('params')
+        mod_var_names = mod_params.get('variables_names_map')
+
+        # Map module variable names to new forcing engine names
+        if mod_var_names is not None:
+            mod['params']['variables_names_map'] = map_var_names_forcing_engine(mod_var_names)
+
+    return real_config
+
+
+def map_var_names_forcing_engine(
+        mod_var_names: dict
+) -> Dict[str, str]:
+    """
+    Set realization variables_names_map for forcing engine based on module name
+    """
+
+    # Set variable name mapping based on forcing provider
+    name_dict = {"atmosphere_water__liquid_equivalent_precipitation_rate": "RAINRATE_ELEMENT",
+                 "atmosphere_air_water~vapor__relative_saturation": "Q2D_ELEMENT",
+                 "land_surface_air__temperature": "T2D_ELEMENT",
+                 "land_surface_wind__x_component_of_velocity": "U2D_ELEMENT",
+                 "land_surface_wind__y_component_of_velocity": "V2D_ELEMENT",
+                 "land_surface_radiation~incoming~longwave__energy_flux": "LWDOWN_ELEMENT",
+                 "land_surface_radiation~incoming~shortwave__energy_flux": "SWDOWN_ELEMENT",
+                 "land_surface_air__pressure": "PSFC_ELEMENT"}
+
+    # Update variable names to forcing provider names
+    new_mod_var_names = {
+        key: name_dict.get(value, value) for key, value in mod_var_names.items()
+    }
+
+    return new_mod_var_names
+
+
 def var_mapping(
         modules: List[str],
         pet_in: str,
@@ -2386,7 +2793,9 @@ def create_reg_realization_file(
         workdir: Union[str, Path],
         lib_file: dict,
         bmi_dir: dict,
+        forcing_provider: str,
         forcing_dir: Union[str, Path],
+        forcing_config_file: Union[str, Path],
         realization_file: Union[str, Path],
         time_period: dict,
         rt_dict: dict,
@@ -2402,7 +2811,9 @@ def create_reg_realization_file(
     workdir : basin directory for storing all the files
     lib_file : library files for different modules
     bmi_dir : directory for different model or module to store BMI files
-    forcing_dir : directory to store foricng files
+    forcing_provider: forcing provider option (csv or bmi)
+    forcing_dir : directory to store forcing files
+    forcing_config_file: path to forcing engine configuration file
     realization_file : model realization configuration file
     time_period : simulation and evaluation time period
     rt_dict : routing model source file directory and configuration file
@@ -2428,6 +2839,31 @@ def create_reg_realization_file(
     grp_main = {}
     grps = list(grp_to_form.keys())
 
+    # Set variable name mapping based on forcing provider
+    name_prcp = {"csv": "atmosphere_water__liquid_equivalent_precipitation_rate",
+                 "bmi": "RAINRATE_ELEMENT"}
+
+    name_Q2 = {"csv": "atmosphere_air_water~vapor__relative_saturation",
+               "bmi": "Q2D_ELEMENT"}
+
+    name_temp = {"csv": "land_surface_air__temperature",
+                 "bmi": "T2D_ELEMENT"}
+
+    name_xwind = {"csv": "land_surface_wind__x_component_of_velocity",
+                  "bmi": "U2D_ELEMENT"}
+
+    name_ywind = {"csv": "land_surface_wind__y_component_of_velocity",
+                  "bmi": "V2D_ELEMENT"}
+
+    name_lw = {"csv": "land_surface_radiation~incoming~longwave__energy_flux",
+               "bmi": "LWDOWN_ELEMENT"}
+
+    name_sw = {"csv": "land_surface_radiation~incoming~shortwave__energy_flux",
+               "bmi": "SWDOWN_ELEMENT"}
+
+    name_pressure = {"csv": "land_surface_air__pressure",
+                     "bmi": "PSFC_ELEMENT"}
+
     for grp in grps:
 
         model_configs = {}
@@ -2444,15 +2880,15 @@ def create_reg_realization_file(
                                                 "library_file": lib_mod['noah'],
                                                 "init_config": os.path.join(bmi_dir['noah'], '{{id}}_region.input'),
                                                 "allow_exceed_end_time": True, "fixed_time_step": False, "uses_forcing_file": False,
-                                                "variables_names_map": {
-                                                    "PRCPNONC": "atmosphere_water__liquid_equivalent_precipitation_rate",
-                                                    "Q2": "atmosphere_air_water~vapor__relative_saturation",
-                                                    "SFCTMP": "land_surface_air__temperature",
-                                                    "UU": "land_surface_wind__x_component_of_velocity",
-                                                    "VV": "land_surface_wind__y_component_of_velocity",
-                                                    "LWDN": "land_surface_radiation~incoming~longwave__energy_flux",
-                                                    "SOLDN": "land_surface_radiation~incoming~shortwave__energy_flux",
-                                                    "SFCPRS": "land_surface_air__pressure"}}}
+                                                "variables_names_map": {"PRCPNONC": name_prcp.get(forcing_provider),
+                                                                        "Q2": name_Q2.get(forcing_provider),
+                                                                        "SFCTMP": name_temp.get(forcing_provider),
+                                                                        "UU": name_xwind.get(forcing_provider),
+                                                                        "VV": name_ywind.get(forcing_provider),
+                                                                        "LWDN": name_lw.get(forcing_provider),
+                                                                        "SOLDN": name_sw.get(forcing_provider),
+                                                                        "SFCPRS": name_pressure.get(forcing_provider)},
+                                                "model_params": grp_params['noah'][grp]}}
             if grp_params.get('noah', {}).get(grp):
                 model_configs['noah']['params']['model_params'] = grp_params['noah'][grp]
 
@@ -2472,7 +2908,7 @@ def create_reg_realization_file(
 
             # variable name mapping section
             pet_in = "water_potential_evaporation_flux"
-            pcp_in = "atmosphere_water__liquid_equivalent_precipitation_rate"
+            pcp_in = name_prcp.get(forcing_provider)
             var_maps = var_mapping(grp_mod, pet_in, pcp_in, output_dict)
 
             # module output variable for input to t-route
@@ -2493,7 +2929,7 @@ def create_reg_realization_file(
 
             # variable name mapping section
             pet_in = "water_potential_evaporation_flux"
-            pcp_in = "atmosphere_water__liquid_equivalent_precipitation_rate"
+            pcp_in = name_prcp.get(forcing_provider)
             var_maps = var_mapping(grp_mod, pet_in, pcp_in, output_dict)
 
             # module output variable for input to t-route
@@ -2515,7 +2951,7 @@ def create_reg_realization_file(
             pet_in = "pet"
             pcp_in = "precip"
             var_maps = var_mapping(grp_mod, pet_in, pcp_in, output_dict)
-            var_maps['input']['tair'] = "land_surface_air__temperature"
+            var_maps['input']['tair'] = name_temp.get(forcing_provider)
 
             # module output variable for input to t-route
             main_output_variable = "tci"
@@ -2530,8 +2966,8 @@ def create_reg_realization_file(
                                            "allow_exceed_end_time": True, "fixed_time_step": False, "uses_forcing_file": False,
                                            "main_output_variable": "raim",
                                            "variables_names_map": {
-                                               "precip": "atmosphere_water__liquid_equivalent_precipitation_rate",
-                                               "tair": "land_surface_air__temperature"}}}
+                                               "precip": name_prcp.get(forcing_provider),
+                                               "tair": name_temp.get(forcing_provider)}}}
             if grp_params.get('snow17', {}).get(grp):
                 model_configs['snow17']['params']['model_params'] = grp_params['snow17'][grp]
 
@@ -2546,14 +2982,14 @@ def create_reg_realization_file(
                                         "allow_exceed_end_time": True, "fixed_time_step": False, "uses_forcing_file": False,
                                         "main_output_variable": "SWIT",
                                         "variables_names_map": {
-                                            "Prec": "atmosphere_water__liquid_equivalent_precipitation_rate",
-                                            "Ta": "land_surface_air__temperature",
-                                            "qair": "atmosphere_air_water~vapor__relative_saturation",
-                                            "uebu2d": "land_surface_wind__x_component_of_velocity",
-                                            "uebv2d": "land_surface_wind__y_component_of_velocity",
-                                            "Qli": "land_surface_radiation~incoming~longwave__energy_flux",
-                                            "Qsi": "land_surface_radiation~incoming~shortwave__energy_flux",
-                                            "AP": "land_surface_air__pressure"}}}
+                                            "Prec": name_prcp.get(forcing_provider),
+                                            "Ta": name_temp.get(forcing_provider),
+                                            "qair": name_Q2.get(forcing_provider),
+                                            "uebu2d": name_xwind.get(forcing_provider),
+                                            "uebv2d": name_ywind.get(forcing_provider),
+                                            "Qli": name_lw.get(forcing_provider),
+                                            "Qsi": name_sw.get(forcing_provider),
+                                            "AP": name_pressure.get(forcing_provider)}}}
             if grp_params.get('ueb', {}).get(grp):
                 model_configs['ueb']['params']['model_params'] = grp_params['ueb'][grp]
 
@@ -2738,7 +3174,7 @@ def create_reg_realization_file(
         grp_configs["params"]["modules"] = [model_configs[m1] for m1 in grp_mod if m1 != 'troute']
         grp_main[grp] = [grp_configs]
 
-    # Set global
+    # Initialize global dictionary
     g = {}
 
     # time object
@@ -2753,7 +3189,11 @@ def create_reg_realization_file(
     g.update({"formulation_groups": grp_main})
 
     # Set forcing group
-    force_main = {"forcing_grp1": {"file_pattern": ".*{{id}}.*.csv", "path": forcing_dir, "provider": "CsvPerFeature"}}
+    forcing_map = {
+        "csv": {"file_pattern": ".*{{id}}.*.csv", "path": forcing_dir, "provider": "CsvPerFeature"},
+        "bmi": {"path": forcing_dir, "provider": "ForcingsEngineLumpedDataProvider", "params": {"init_config": str(forcing_config_file)}}
+    }
+    force_main = {"forcing_grp1": forcing_map[forcing_provider]}
     g.update({"forcing_groups": force_main})
 
     # Catchment groups
@@ -2771,7 +3211,9 @@ def create_realization_file(
         workdir: Union[str, Path],
         lib_file: dict,
         bmi_dir: dict,
+        forcing_provider: str,
         forcing_dir: Union[str, Path],
+        forcing_config_file: Union[str, Path],
         realization_file: Union[str, Path],
         modules: List[str],
         time_period: dict,
@@ -2787,7 +3229,9 @@ def create_realization_file(
     workdir : basin directory for storing all the files
     lib_file : library files for different modules
     bmi_dir : directory for different model or module to store BMI files
-    forcing_dir : directory to store foricng files
+    forcing_provider: forcing provider option (csv or bmi)
+    forcing_dir : directory to store forcing files
+    forcing_config_file: path to forcing engine configuration file
     realization_file : model realization configuration file
     model: model and module combination
     time_period : simulation and evaluation time period
@@ -2814,6 +3258,31 @@ def create_realization_file(
     if run_type == 'calibration':
         run_type = 'calib'
 
+    # Set variable name mapping based on forcing provider
+    name_prcp = {"csv": "atmosphere_water__liquid_equivalent_precipitation_rate",
+                 "bmi": "RAINRATE_ELEMENT"}
+
+    name_Q2 = {"csv": "atmosphere_air_water~vapor__relative_saturation",
+               "bmi": "Q2D_ELEMENT"}
+
+    name_temp = {"csv": "land_surface_air__temperature",
+                 "bmi": "T2D_ELEMENT"}
+
+    name_xwind = {"csv": "land_surface_wind__x_component_of_velocity",
+                  "bmi": "U2D_ELEMENT"}
+
+    name_ywind = {"csv": "land_surface_wind__y_component_of_velocity",
+                  "bmi": "V2D_ELEMENT"}
+
+    name_lw = {"csv": "land_surface_radiation~incoming~longwave__energy_flux",
+               "bmi": "LWDOWN_ELEMENT"}
+
+    name_sw = {"csv": "land_surface_radiation~incoming~shortwave__energy_flux",
+               "bmi": "SWDOWN_ELEMENT"}
+
+    name_pressure = {"csv": "land_surface_air__pressure",
+                     "bmi": "PSFC_ELEMENT"}
+
     # noah
     if 'noah' in modules:
         model_configs['noah'] = {"name": "bmi_fortran",
@@ -2823,15 +3292,14 @@ def create_realization_file(
                                             "library_file": lib_mod['noah'],
                                             "init_config": os.path.join(bmi_dir['noah'], '{{id}}_' + run_type + '.input'),
                                             "allow_exceed_end_time": True, "fixed_time_step": False, "uses_forcing_file": False,
-                                            "variables_names_map": {
-                                                "PRCPNONC": "atmosphere_water__liquid_equivalent_precipitation_rate",
-                                                "Q2": "atmosphere_air_water~vapor__relative_saturation",
-                                                "SFCTMP": "land_surface_air__temperature",
-                                                "UU": "land_surface_wind__x_component_of_velocity",
-                                                "VV": "land_surface_wind__y_component_of_velocity",
-                                                "LWDN": "land_surface_radiation~incoming~longwave__energy_flux",
-                                                "SOLDN": "land_surface_radiation~incoming~shortwave__energy_flux",
-                                                "SFCPRS": "land_surface_air__pressure"}}}
+                                            "variables_names_map": {"PRCPNONC": name_prcp.get(forcing_provider),
+                                                                    "Q2": name_Q2.get(forcing_provider),
+                                                                    "SFCTMP": name_temp.get(forcing_provider),
+                                                                    "UU": name_xwind.get(forcing_provider),
+                                                                    "VV": name_ywind.get(forcing_provider),
+                                                                    "LWDN": name_lw.get(forcing_provider),
+                                                                    "SOLDN": name_sw.get(forcing_provider),
+                                                                    "SFCPRS": name_pressure.get(forcing_provider)}}}
 
     # cfe or cfex
     if 'cfes' in modules or 'cfex' in modules:
@@ -2847,7 +3315,7 @@ def create_realization_file(
 
         # variable name mapping section
         pet_in = "water_potential_evaporation_flux"
-        pcp_in = "atmosphere_water__liquid_equivalent_precipitation_rate"
+        pcp_in = name_prcp.get(forcing_provider)
         var_maps = var_mapping(modules, pet_in, pcp_in, output_dict)
 
         # module output variable for input to t-route
@@ -2865,7 +3333,7 @@ def create_realization_file(
                                                 "registration_function": "register_bmi_topmodel"}}
         # variable name mapping section
         pet_in = "water_potential_evaporation_flux"
-        pcp_in = "atmosphere_water__liquid_equivalent_precipitation_rate"
+        pcp_in = name_prcp.get(forcing_provider)
         var_maps = var_mapping(modules, pet_in, pcp_in, output_dict)
 
         # module output variable for input to t-route
@@ -2886,7 +3354,7 @@ def create_realization_file(
         pet_in = "pet"
         pcp_in = "precip"
         var_maps = var_mapping(modules, pet_in, pcp_in, output_dict)
-        var_maps['input']['tair'] = "land_surface_air__temperature"
+        var_maps['input']['tair'] = name_temp.get(forcing_provider)
 
         # module output variable for input to t-route
         main_output_variable = "tci"
@@ -2901,8 +3369,8 @@ def create_realization_file(
                                        "allow_exceed_end_time": True, "fixed_time_step": False, "uses_forcing_file": False,
                                        "main_output_variable": "raim",
                                        "variables_names_map": {
-                                           "precip": "atmosphere_water__liquid_equivalent_precipitation_rate",
-                                           "tair": "land_surface_air__temperature"
+                                           "precip": name_prcp.get(forcing_provider),
+                                           "tair": name_temp.get(forcing_provider)
                                        }}}
 
     # ueb
@@ -2916,14 +3384,14 @@ def create_realization_file(
                                     "allow_exceed_end_time": True, "fixed_time_step": False, "uses_forcing_file": False,
                                     "main_output_variable": "SWIT",
                                     "variables_names_map": {
-                                        "Prec": "atmosphere_water__liquid_equivalent_precipitation_rate",
-                                        "Ta": "land_surface_air__temperature",
-                                        "qair": "atmosphere_air_water~vapor__relative_saturation",
-                                        "uebu2d": "land_surface_wind__x_component_of_velocity",
-                                        "uebv2d": "land_surface_wind__y_component_of_velocity",
-                                        "Qli": "land_surface_radiation~incoming~longwave__energy_flux",
-                                        "Qsi": "land_surface_radiation~incoming~shortwave__energy_flux",
-                                        "AP": "land_surface_air__pressure"}}}
+                                        "Prec": name_prcp.get(forcing_provider),
+                                        "Ta": name_temp.get(forcing_provider),
+                                        "qair": name_Q2.get(forcing_provider),
+                                        "uebu2d": name_xwind.get(forcing_provider),
+                                        "uebv2d": name_ywind.get(forcing_provider),
+                                        "Qli": name_lw.get(forcing_provider),
+                                        "Qsi": name_sw.get(forcing_provider),
+                                        "AP": name_pressure.get(forcing_provider)}}}
 
     # pet
     if 'pet' in modules:
@@ -3103,7 +3571,15 @@ def create_realization_file(
 
     # global configuration
     g = {"global": {"formulations": [gbmain],
-                    "forcing": {"file_pattern": ".*{{id}}.*.csv", "path": forcing_dir, "provider": "CsvPerFeature"}}}
+                    "forcing": {}}}
+
+    # Set forcing configuration
+    forcing_map = {
+        "csv": {"file_pattern": ".*{{id}}.*.csv", "path": forcing_dir, "provider": "CsvPerFeature"},
+        "bmi": {"path": forcing_dir, "provider": "ForcingsEngineLumpedDataProvider", "params": {"init_config": str(forcing_config_file)}}
+    }
+
+    g["global"]["forcing"] = forcing_map[forcing_provider]
 
     # time object
     t = {"time": {"start_time": time_period['run_time_period'][run_type][0],

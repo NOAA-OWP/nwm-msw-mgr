@@ -20,12 +20,9 @@ from pydantic import ValidationError
 from mswm.utils import ginputfunc as gfun
 from mswm.utils import settings
 from mswm.utils.log_level import log_level_set
-from mswm.utils.process_forcing import update_forcing_in_realization
-from mswm.utils.update_bmi_config import update_noah_ueb, update_troute
 from mswm.utils.input_configuration import InputConfig
 
 
-log_level_set()
 logger = logging.getLogger(__name__)
 if not logging.getLogger().hasHandlers():
     # When running outside of Django, configure basic logging to stderr
@@ -37,10 +34,18 @@ if not logging.getLogger().hasHandlers():
 
 
 class RealizationBuilder:
-    def __init__(self, input_path: str, forcing_path: str | None = None, output_folder: str | None = None):
+
+    def __init__(self, input_path: str, valid_yaml: str | None = None, use_cold_start: bool = False, assign_path: str | None = None, forcing_path: str | None = None, fcst_run_name: str | None = None):
+        # Initialize logging silently if not already set
+        log_level_set()
+
         self.input_path = Path(input_path)
+        self.valid_yaml = Path(valid_yaml) if valid_yaml else None
+        self.use_cold_start = use_cold_start
+        self.assign_path = Path(assign_path) if assign_path else None
         self.forcing_path = Path(forcing_path) if forcing_path else None
-        self.output_folder = output_folder if output_folder else None
+        self.fcst_run_name = fcst_run_name if fcst_run_name else None
+
         logger.info(f"Initialized RealizationBuilder with {input_path}")
 
     def _load_config(self):
@@ -96,7 +101,7 @@ class RealizationBuilder:
 
         # Validate input.config structure and variables using Pydantic
         try:
-            self.input_configs = InputConfig(**configs).dict()
+            self.input_configs = InputConfig(**configs).model_dump()
         except ValidationError as e:
             logger.critical(f"Input.config Pydantic validation failed: {self.input_path}{e}")
             raise
@@ -104,33 +109,32 @@ class RealizationBuilder:
 
     def _load_yaml(self):
         """
-        Read yaml-based configuration file from previous ngen-cal run
+        Read yaml-based configuration file from previous ngen calibration run
         """
-        import yaml
         # Confirm config yaml file exists
-        self.config_yaml = Path(self.input_path).absolute()
-        if not self.config_yaml.exists():
+        self.valid_yaml = Path(self.valid_yaml).absolute()
+        if not self.valid_yaml.exists():
             try:
-                raise FileNotFoundError(f'Config file does not exist: {self.config_yaml}')
+                raise FileNotFoundError(f'Config valid yaml file does not exist: {self.valid_yaml}')
             except FileNotFoundError as e:
                 logger.critical(e)
                 raise
 
         # Read the yaml-based configuration file
         try:
-            with open(self.config_yaml) as file:
-                self.conf = yaml.safe_load(file)
+            with open(self.valid_yaml) as file:
+                self.valid_conf = yaml.safe_load(file)
         except FileNotFoundError as e:
-            logger.critical(f'Config file does not exist: {self.config_yaml}\n{e}')
+            logger.critical(f'Config valid yaml file does not exist: {self.valid_yaml}\n{e}')
             raise
         except yaml.YAMLError as e:
-            logger.critical(f"YAML parsing error in config file: {self.input_path}\n{e}")
+            logger.critical(f"YAML parsing error in valid config yaml file: {self.valid_yaml}\n{e}")
             raise
         except Exception as e:
-            logger.critical(f"Unexpected error loading config at: {self.input_path}\n{e}")
+            logger.critical(f"Unexpected error loading valid config yaml file at: {self.valid_yaml}\n{e}")
             raise
 
-        logger.info(f"Configuration yaml file loaded:  {self.config_yaml}")
+        logger.info(f"Configuration yaml file loaded:  {self.valid_yaml}")
 
     def _load_reg_formulation(self):
         """
@@ -276,16 +280,16 @@ class RealizationBuilder:
         """
         # Set realization file path
         try:
-            self.real_input_file = Path(self.conf['model']['realization']).absolute()
+            self.real_input_file = Path(self.valid_conf['model']['realization']).absolute()
 
             # Get hydrofabric gpkg paths
-            self.gpkg_cats = self.conf['model']['catchments']
-            self.gpkg_nexus = self.conf['model']['nexus']
+            self.gpkg_cats = self.valid_conf['model']['catchments']
+            self.gpkg_nexus = self.valid_conf['model']['nexus']
 
             # Get ngen executable path
-            self.ngen_exe = self.conf['model']['binary']
+            self.ngen_exe = self.valid_conf['model']['binary']
         except Exception as e:
-            logger.critical(f"Yaml config calib file is missing fields: {self.input_path}\n{e}")
+            logger.critical(f"Yaml config valid file is missing fields: {self.valid_yaml}\n{e}")
             raise
 
         logger.info("Yaml file parsed")
@@ -315,30 +319,6 @@ class RealizationBuilder:
         except Exception as e:
             logger.critical(f"Unexpected error reading realization file: {self.real_input_file}\n{e}")
 
-    def _create_fcst_output_dir(self):
-        """
-        Create output directory for forecast run
-        """
-        # create output directory
-        try:
-            out_dir0 = Path(self.conf['general']['yaml_file']).parent.parent.resolve(strict=True)
-        except KeyError as e:
-            logger.critical(f"Yaml file path not found in config calib yaml file: {e}")
-            raise
-        except FileNotFoundError as e:
-            logger.critical(f"Invalid yaml file path: {self.conf['general']['yaml_file']} - {e}")
-            raise
-
-        self.out_dir = Path(out_dir0, 'Forecast_Run', self.output_folder)
-
-        try:
-            self.out_dir.mkdir(parents=True, exist_ok=True)
-        except Exception as e:
-            logger.critical(f"Invalid yaml file path: {self.out_dir} - {e}")
-            raise
-
-        logger.info(f'New run directory created at: {self.out_dir}')
-
     def _parse_config(self):
         """
         Parse sections from input.config file
@@ -362,6 +342,35 @@ class RealizationBuilder:
 
         logger.info('Input.config sections parsed')
 
+    def _create_fcst_dir(self):
+        """
+        Create directory for forecast run
+        """
+        # create fcst directory
+        try:
+            fcst_dir0 = Path(self.valid_conf['general']['yaml_file']).parent.parent
+        except KeyError as e:
+            logger.critical(f"Yaml file path not found in config valid yaml file: {e}")
+            raise
+        except FileNotFoundError as e:
+            logger.critical(f"Invalid yaml file path: {self.valid_conf['general']['yaml_file']} - {e}")
+            raise
+
+        # Create forecast run directory or cold start run directory
+        fcst_dir_name = 'Cold_Start_Run' if self.use_cold_start else 'Forecast_Run'
+        self.input_dir = Path(fcst_dir0, fcst_dir_name, self.fcst_run_name)
+
+        # Set file basename for forecast or cold start
+        self.basename_opt = "fcst" if not self.use_cold_start else "cold_start"
+
+        try:
+            self.input_dir.mkdir(parents=True, exist_ok=True)
+        except Exception as e:
+            logger.critical(f"Invalid yaml file path: {self.input_dir} - {e}")
+            raise
+
+        logger.info(f'New run directory created at: {self.input_dir}')
+
     def _parse_forcing_engine(self):
         """
         Extract forcing engine parameters from input.config
@@ -370,24 +379,31 @@ class RealizationBuilder:
         self.forecast_configuration = self.forcingSec.get('forecast_configuration', None)
         self.forcing_provider = self.forcingSec.get('forcing_provider')
 
-        # Retrieve cold_start_tim
+        # Retrieve cold_start_time
         self.cold_start_datetime = self.forcingSec.get('cold_start_datetime', None)
 
         if self.forcing_provider == 'bmi' and self.forecast_configuration is not None:
 
+            # Retrieve forcing engine variables
             cycle_datetime = self.forcingSec.get('cycle_datetime')
             self.cycle_hour = self.forcingSec.get('cycle_hour')
-            self.geogrid_file = self.forcingSec.get('geogrid_file')
             self.forcing_template_dir = self.forcingSec.get('forcing_template_dir')
+            self.root_dir = self.forcingSec.get('root_dir')
 
             # Construct cycle date and cycle hour
             cycle_dt = datetime.strptime(cycle_datetime, "%Y-%m-%d %H:%M:%S")
             self.cycle_date = cycle_dt.strftime("%Y-%m-%d")
             self.cycle_hour = cycle_dt.strftime("%H") + "z"
 
+            # Construct forecing template file name
+            if self.use_cold_start:
+                forcing_region = next((f"_{reg}" for reg in ["alaska", "hawaii", "puertorico"] if reg in self.forecast_configuration), "")
+                self.forecast_configuration_str = f"cold_start{forcing_region}_config.yml"
+            else:
+                self.forecast_configuration_str = f"{self.forecast_configuration}_config.yml"
+
             # Ensure forcing template file exists
-            forecast_configuration_str = 'cold_start' if self.use_cold_start else self.forecast_configuration
-            self.forcing_template_file = (Path(self.forcing_template_dir) / f"{forecast_configuration_str}_config.yml").absolute()
+            self.forcing_template_file = (Path(self.forcing_template_dir) / self.forecast_configuration_str).absolute()
             if not self.forcing_template_file.exists():
                 try:
                     raise FileNotFoundError(f'Forcing template file does not exist: {self.forcing_template_file}')
@@ -430,7 +446,10 @@ class RealizationBuilder:
             self.time_period = {"run_time_period": {"region": [self.conf1['start_period'], self.conf1['end_period']]}}
         # Retrieve time period for default
         elif self.run_type == 'default':
-            self.time_period = {"run_time_period": {"default": [self.conf1['start_period'], self.conf1['end_period']]}}
+            if self.forcing_provider == 'csv':
+                self.time_period = {"run_time_period": {"default": [self.conf1['start_period'], self.conf1['end_period']]}}
+            elif self.forcing_provider == 'bmi':
+                self.time_period = {"run_time_period": {"default": [self.fcst_start, self.fcst_end]}}
 
         # Confirm times are properly formatted and in correct order
         errors = []
@@ -850,6 +869,7 @@ class RealizationBuilder:
         """
         Extract forcing files and symlink to input directory
         """
+
         # Create forcing directory
         self.forcing_path = os.path.join(self.input_dir, 'forcing')
 
@@ -897,18 +917,14 @@ class RealizationBuilder:
 
             # Set target directory for forcing config file
             self.forcing_config_dir = Path(self.input_dir) / 'forcing_config'
+            self.forcing_config_file = self.forcing_config_dir / self.forecast_configuration_str
 
-            if self.use_cold_start is True:
-                self.forcing_config_file = self.forcing_config_dir / "cold_start_config.yml"
-            else:
-                self.forcing_config_file = self.forcing_config_dir / f"{self.forecast_configuration}_config.yml"
-
-            # Construct ESMF mesh file path
-            gpkg_name = os.path.splitext(os.path.basename(self.cat_file))[0]
-            self.geogrid_file = f"/ngen-app/data/esmf_mesh/{gpkg_name}_ESMF_Mesh.nc"
+            # Set geopackage file path
+            gpkg_file = self.cat_file if hasattr(self, "cat_file") and self.cat_file else self.gpkg_cats
 
             # Update dynamic parameters in forcing engine configuration file
-            gfun.update_forcing_config(self.cycle_date, self.cycle_hour, self.forcing_template, self.cat_file, self.geogrid_file, self.forcing_config_dir, self.forcing_config_file, self.use_cold_start, self.cold_start_datetime)
+            gfun.update_forcing_config(self.cycle_date, self.cycle_hour, self.root_dir, self.forcing_template, gpkg_file, self.forcing_config_dir,
+                                       self.forcing_config_file, self.use_cold_start, self.cold_start_datetime)
 
             logger.info(f"Configured BMI forcing engine: {self.forcing_config_file}")
 
@@ -962,7 +978,7 @@ class RealizationBuilder:
         """
         Update forcing and time related info in realization file
         """
-        self.real_config = update_forcing_in_realization(Path(self.forcing_path), self.real_config, self.gpkg_cats)
+        self.real_config = gfun.update_forcing_in_realization(self.real_config, self.forcing_path, self.forcing_config_file, self.fcst_start, self.fcst_end, self.basename_opt)
         logger.info("Updated forecast realization file")
 
     def _update_fcst_noah_ueb(self):
@@ -970,14 +986,14 @@ class RealizationBuilder:
         For UEB and Noah-OWP-Modular, create new BMI config files with new time info, and
         update path to BMI configs in realization file accordingly
         """
-        self.real_config = update_noah_ueb(self.real_config, self.out_dir)
+        self.real_config = gfun.update_noah_ueb_times(self.real_config, self.input_dir)
         logger.info("Updated noah and ueb config files for forecast if used")
 
     def _update_fcst_troute(self):
         """
         Update BMI config files for t-route for forecast period
         """
-        self.real_config = update_troute(self.real_config, self.out_dir)
+        self.real_config = gfun.update_troute(self.real_config, self.input_dir, self.basename_opt)
         logger.info("Updated noah and ueb config files for forecast")
 
     def _create_bmi_configs(self):
@@ -1099,7 +1115,7 @@ class RealizationBuilder:
                         if len(self.time_period['run_time_period'][run_name][0]) != 0 & len(self.time_period['run_time_period'][run_name][0]):
                             run_range = pd.to_datetime(self.time_period['run_time_period'][run_name])
                             nts = len(pd.date_range(start=run_range[0], end=run_range[1], freq='5min')) - 1
-                            gfun.create_troute_config(self.gpkg_file, routing_config_file, self.time_period['run_time_period'][run_name][0], nts)
+                            gfun.create_troute_config(self.cat_file, routing_config_file, self.time_period['run_time_period'][run_name][0], nts)
                             logger.info(f'troute config file for {run_name1} is created at: {routing_config_file}')
 
                 if m1 != 'troute':
@@ -1311,7 +1327,7 @@ class RealizationBuilder:
         rt_dict = {"routing": {"t_route_config_file_with_path": routing_config_file}}
 
         # Write realization file
-        gfun.create_realization_file(self.work_dir, self.lib_file, bmi_dir, self.forcing_path, self.realization_file,
+        gfun.create_realization_file(self.work_dir, self.lib_file, bmi_dir, self.forcing_provider, self.forcing_path, self.forcing_config_file, self.realization_file,
                                      self.modules, self.time_period, rt_dict, self.output_dict, self.run_type)
 
     def _write_region_realization(self):
@@ -1330,15 +1346,18 @@ class RealizationBuilder:
         rt_dict = {"routing": {"t_route_config_file_with_path": routing_config_file}}
 
         # Write realization file
-        gfun.create_reg_realization_file(self.work_dir, self.lib_file, bmi_dir, self.forcing_path, self.realization_file,
+        gfun.create_reg_realization_file(self.work_dir, self.lib_file, bmi_dir, self.forcing_provider, self.forcing_path, self.forcing_config_file, self.realization_file,
                                          self.time_period, rt_dict, self.output_dict, self.cat_to_grp, self.grp_to_form, self.grp_params)
 
     def _write_fcst_realization(self):
         """
         Write updated forecast realization file
         """
+        # Update realization file basename
+        new_basename = os.path.basename(self.real_input_file).replace("valid_best", self.basename_opt)
+
         # save the new realization file
-        self.realization_file = Path(self.out_dir, os.path.basename(self.real_input_file))
+        self.realization_file = Path(self.input_dir, new_basename)
         try:
             with open(self.realization_file, 'w') as outfile:
                 json.dump(self.real_config, outfile, indent=4, separators=(", ", ": "), sort_keys=False)

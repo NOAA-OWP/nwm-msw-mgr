@@ -62,9 +62,9 @@ class GeneralConfig(StrictBaseModel):
         if self.run_type != "regionalization" and not self.models:
             raise ValueError("`models` must be specified for a default and calibration runs.")
 
-        # Start_period and end_period required unless run_type is calibration
-        if self.run_type != "calibration" and (not self.start_period or not self.end_period):
-            raise ValueError("`start_period` and `end_period` must be specified for default and regionalization runs.")
+        # Start_period and end_period required unless run_type is calibration or default
+        if self.run_type == "regionalization" and (not self.start_period or not self.end_period):
+            raise ValueError("`start_period` and `end_period` must be specified for regionalization runs.")
 
         return self
 
@@ -156,19 +156,22 @@ class CalibConfig(StrictBaseModel):
         return self
 
 
+valid_configs = ['standard_ana', 'aorc', 'extended_ana', 'long_range_mem1', 'long_range_mem2', 'long_range_mem3', 'long_range_mem4',
+                 'medium_range_blend', 'nwm', 'short_range', 'short_range_alaska', 'medium_range_blend_alaska', 'short_range_extended_alaska',
+                 'short_range_hawaii', 'short_range_puertorico', 'extended_ana_alaska', 'standard_ana_alaska', 'standard_ana_hawaii',
+                 'standard_ana_puertorico']
+
+
 class ForcingConfig(StrictBaseModel):
     """
     Input.config Forcing section requirement
     """
     forcing_provider: Literal['csv', 'bmi']
     forcing_dir: Optional[str] = None
-    forecast_configuration: Optional[Literal['ana', 'standard_ana', 'aorc', 'extended_ana', 'long_range_mem1', 'long_range_mem2', 'long_range_mem3', 'long_range_mem4',
-                                             'medium_range_blend', 'nwm', 'short_range', 'short_range_alaska', 'medium_range_blend_alaska', 'short_range_extended_alaska',
-                                             'short_range_hawaii', 'short_range_puertorico', 'extended_ana_alaska', 'standard_ana_alaska', 'standard_ana_hawaii',
-                                             'standard_ana_puertorico']] = None
-    cycle_datetime: Optional[str] = None
     forcing_template_dir: Optional[str] = None
-    use_cold_start: Optional[bool] = None
+    root_dir: Optional[str] = None
+    forecast_configuration: Optional[str] = None
+    cycle_datetime: Optional[str] = None
     cold_start_datetime: Optional[str] = None
 
     # Check optional fields that depend on forcing_provider
@@ -180,19 +183,32 @@ class ForcingConfig(StrictBaseModel):
             raise ValueError("`forcing_dir` must be specified for a run using csv forcing provider.")
 
         # forecast_configuration required if forcing_provider is csv
-        if self.forcing_provider == 'bmi' and self.forecast_configuration is None:
-            raise ValueError("`forecast_cycle` must be specified for a run using bmi forcing provider.")
+        if self.forcing_provider == 'bmi':
+            if self.forecast_configuration is None:
+                raise ValueError("`forcecast_configuration` must be specified for a run using bmi forcing provider.")
+            else:
+                if self.forecast_configuration not in valid_configs:
+                    raise ValueError(f"Invalid `forecast_configuration` value: '{self.forecast_configuration}'."
+                                    f"Valid options are: {', '.join(valid_configs)}.")
 
-        # forcing dir required if forcing_provider is csv
+        # forcing template dir required if forcing_provider is csv
         if self.forcing_provider == 'bmi' and self.forcing_template_dir is None:
             raise ValueError("`forcing_template_dir` must be specified for a run using bmi forcing provider.")
+
+        # root dir required if forcing_provider is csv
+        if self.forcing_provider == 'bmi' and self.root_dir is None:
+            raise ValueError("`root_dir` must be specified for a run using bmi forcing provider.")
+
+        # cycle_datetime required if forcing_provider is csv
+        if self.forcing_provider == 'bmi' and self.cycle_datetime is None:
+            raise ValueError("`cycle_datetime` must be specified for a run using bmi forcing provider.")
 
         return self
 
 
 class DataFileConfig(StrictBaseModel):
     """
-    Input.config DataFile section requirement
+    Input.config Forcing section requirement
     """
     obs_dir: Optional[str] = None
     nwmretro_file: Optional[str] = None
@@ -236,9 +252,9 @@ class ParallelConfig(StrictBaseModel):
     """
     Input.config Parallel section requirement
     """
-    parallel_ngen_exe: str
-    partition_generator_exe: str
-    nprocs: int
+    parallel_ngen_exe: Optional[str] = None
+    partition_generator_exe: Optional[str] = None
+    nprocs: Optional[int] = None
 
 
 class InputConfig(StrictBaseModel):
@@ -253,17 +269,20 @@ class InputConfig(StrictBaseModel):
     Parallel: Optional[ParallelConfig] = None
 
     # Check optional sections are present
-    # Root_validator skips if another value fails
+    # only validate sections that are required for run type
     @model_validator(mode="after")
-    def check_required_sections(self):
-        run_type = self.General.run_type
+    def check_calibration(self):
+        if self.General is not None and self.General.run_type == "calibration":
+            if self.Calibration is None:
+                raise ValueError("Calibration section is required for calibration run.")
+            if isinstance(self.Calibration, dict):
+                self.Calibration = CalibConfig(**self.Calibration)
+        return self
 
-        # Regionalization section required for regionalization run
-        if run_type == "regionalization" and self.Regionalization is None:
-            raise ValueError("Regionalization section is required for regionalization runs.")
-
-        # Calibration section required for calibration run
-        if run_type == "calibration" and self.Calibration is None:
-            raise ValueError("Calibration section is required for calibration runs.")
-
+    def check_regionalization(self):
+        if self.General is not None and self.General.run_type == "regionalization":
+            if self.Regionalization is None:
+                raise ValueError("Regionalization section is required for regionalization run.")
+            if isinstance(self.Regionalization, dict):
+                self.Regionalization = RegionConfig(**self.Regionalization)
         return self
