@@ -183,9 +183,13 @@ class ForcingConfig(StrictBaseModel):
             raise ValueError("`forcing_dir` must be specified for a run using csv forcing provider.")
 
         # forecast_configuration required if forcing_provider is csv
-        if self.forcing_provider == 'bmi' and self.forecast_configuration is None:
-            raise ValueError("Invalid value for `forecast_configuration` for bmi forcing provider. "
-                             f"Valid options are: {', '.join(valid_configs)}.")
+        if self.forcing_provider == 'bmi':
+            if self.forecast_configuration is None:
+                raise ValueError("`forcecast_configuration` must be specified for a run using bmi forcing provider.")
+            else:
+                if self.forecast_configuration not in valid_configs:
+                    raise ValueError(f"Invalid `forecast_configuration` value: '{self.forecast_configuration}'."
+                                    f"Valid options are: {', '.join(valid_configs)}.")
 
         # forcing template dir required if forcing_provider is csv
         if self.forcing_provider == 'bmi' and self.forcing_template_dir is None:
