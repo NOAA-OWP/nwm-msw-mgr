@@ -377,34 +377,41 @@ class RealizationBuilder:
         Extract forcing engine parameters from input.config
         """
         # Retrieve forcing engine variables
-        self.forecast_configuration = self.forcingSec.get('forecast_configuration', None)
-        self.forcing_provider = self.forcingSec.get('forcing_provider')
+        self.forcing_provider = self.forcingSec.get('forcing_provider', None)
+        self.forcing_configuration = self.forcingSec.get('forcing_configuration', None)
+        self.forcing_template_dir = self.forcingSec.get('forcing_template_dir', None)
+        self.root_dir = self.forcingSec.get('root_dir', None)
 
         # Retrieve cold_start_time
         self.cold_start_datetime = self.forcingSec.get('cold_start_datetime', None)
 
-        if self.forcing_provider == 'bmi' and self.forecast_configuration is not None:
+        if self.forcing_provider == 'bmi' and self.forcing_configuration is not None:
 
-            # Retrieve forcing engine variables
-            cycle_datetime = self.forcingSec.get('cycle_datetime')
-            self.cycle_hour = self.forcingSec.get('cycle_hour')
-            self.forcing_template_dir = self.forcingSec.get('forcing_template_dir')
-            self.root_dir = self.forcingSec.get('root_dir')
+            # Set forcing engine variables for forecast
+            if self.forcing_configuration not in ['nwm', 'aorc']:
 
-            # Construct cycle date and cycle hour
-            cycle_dt = datetime.strptime(cycle_datetime, "%Y-%m-%d %H:%M:%S")
-            self.cycle_date = cycle_dt.strftime("%Y-%m-%d")
-            self.cycle_hour = cycle_dt.strftime("%H") + "z"
+                # Retrieve forcing engine variables
+                cycle_datetime = self.forcingSec.get('cycle_datetime')
+                self.cycle_hour = self.forcingSec.get('cycle_hour')
 
-            # Construct forecing template file name
-            if self.use_cold_start:
-                forcing_region = next((f"_{reg}" for reg in ["alaska", "hawaii", "puertorico"] if reg in self.forecast_configuration), "")
-                self.forecast_configuration_str = f"cold_start{forcing_region}_config.yml"
+                # Construct cycle date and cycle hour
+                cycle_dt = datetime.strptime(cycle_datetime, "%Y-%m-%d %H:%M:%S")
+                self.cycle_date = cycle_dt.strftime("%Y-%m-%d")
+                self.cycle_hour = cycle_dt.strftime("%H") + "z"
+
+                # Construct forcing template file name
+                if self.use_cold_start:
+                    forcing_region = next((f"_{reg}" for reg in ["alaska", "hawaii", "puertorico"] if reg in self.forcing_configuration), "")
+                    self.forcing_configuration_str = f"cold_start{forcing_region}_config.yml"
+                else:
+                    self.forcing_configuration_str = f"{self.forcing_configuration}_config.yml"
+
+            # Set forcing engine variables for historical forcing
             else:
-                self.forecast_configuration_str = f"{self.forecast_configuration}_config.yml"
+                self.forcing_configuration_str = f"{self.forcing_configuration}_config.yml"
 
             # Ensure forcing template file exists
-            self.forcing_template_file = (Path(self.forcing_template_dir) / self.forecast_configuration_str).absolute()
+            self.forcing_template_file = (Path(self.forcing_template_dir) / self.forcing_configuration_str).absolute()
             if not self.forcing_template_file.exists():
                 try:
                     raise FileNotFoundError(f'Forcing template file does not exist: {self.forcing_template_file}')
@@ -426,8 +433,13 @@ class RealizationBuilder:
                 logger.critical(f"Unexpected error loading config at: {self.forcing_template_file}\n{e}")
                 raise
 
-            # Retrieve ngen start and end time based on forecast cycle date, hour and configuration
-            self.fcst_start, self.fcst_end = gfun.create_fcst_times(self.forcing_template, self.cycle_date, self.cycle_hour, self.use_cold_start, self.cold_start_datetime)
+            if self.forcing_configuration not in ['nwm', 'aorc']:
+                # Retrieve ngen start and end time based on forecast cycle date, hour and configuration
+                self.fcst_start, self.fcst_end = gfun.create_fcst_times(self.forcing_template, self.cycle_date, self.cycle_hour, self.use_cold_start, self.cold_start_datetime)
+            else:
+                # Set default fcst_start/fcst_end values
+                self.fcst_start = None
+                self.fcst_end = None
 
             logger.info('Ngen start and end time set from forcing cycle')
 
@@ -884,17 +896,17 @@ class RealizationBuilder:
         Extract forcing files and symlink to input directory
         """
 
-        # Create forcing directory
-        self.forcing_path = os.path.join(self.input_dir, 'forcing')
-
-        try:
-            os.makedirs(self.forcing_path, exist_ok=True)
-        except Exception as e:
-            logger.critical(f"Invalid forcing directory: {e}. Check `main_dir` variable")
-            raise
-
         # For csv provider
         if self.forcing_provider == 'csv':
+
+            # Create forcing directory
+            self.forcing_path = os.path.join(self.input_dir, 'forcing')
+
+            try:
+                os.makedirs(self.forcing_path, exist_ok=True)
+            except Exception as e:
+                logger.critical(f"Invalid forcing directory: {e}. Check `main_dir` variable")
+                raise
 
             # Retrieve forcing_provider and forcing_dir
             self.forcing_dir = (self.forcingSec.get('forcing_dir', "") or None)
@@ -944,14 +956,18 @@ class RealizationBuilder:
 
             # Set target directory for forcing config file
             self.forcing_config_dir = Path(self.input_dir) / 'forcing_config'
-            self.forcing_config_file = self.forcing_config_dir / self.forecast_configuration_str
+            self.forcing_config_file = self.forcing_config_dir / self.forcing_configuration_str
 
             # Set geopackage file path
             gpkg_file = self.cat_file if hasattr(self, "cat_file") and self.cat_file else self.gpkg_cats
 
-            # Update dynamic parameters in forcing engine configuration file
-            gfun.update_forcing_config(self.cycle_date, self.cycle_hour, self.root_dir, self.forcing_template, gpkg_file, self.forcing_config_dir,
-                                       self.forcing_config_file, self.use_cold_start, self.cold_start_datetime)
+            if self.forcing_configuration not in ['nwm', 'aorc']:
+                # Update forecast dynamic parameters in forcing engine configuration file
+                gfun.update_fcst_forcing_config(self.cycle_date, self.cycle_hour, self.root_dir, self.forcing_template, gpkg_file, self.forcing_config_dir,
+                                                self.forcing_config_file, self.use_cold_start, self.cold_start_datetime)
+            else:
+                # Update historical dynamic parameters in forcing engine configuration file
+                gfun.update_hist_forcing_config(self.time_period, self.root_dir, self.forcing_template, gpkg_file, self.forcing_config_dir, self.forcing_config_file, self.run_type)
 
             logger.info(f"Configured BMI forcing engine: {self.forcing_config_file}")
 

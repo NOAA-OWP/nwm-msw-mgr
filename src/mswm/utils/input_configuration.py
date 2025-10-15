@@ -159,7 +159,7 @@ class CalibConfig(StrictBaseModel):
 valid_configs = ['standard_ana', 'aorc', 'extended_ana', 'long_range_mem1', 'long_range_mem2', 'long_range_mem3', 'long_range_mem4',
                  'medium_range_blend', 'nwm', 'short_range', 'short_range_alaska', 'medium_range_blend_alaska', 'short_range_extended_alaska',
                  'short_range_hawaii', 'short_range_puertorico', 'extended_ana_alaska', 'standard_ana_alaska', 'standard_ana_hawaii',
-                 'standard_ana_puertorico']
+                 'standard_ana_puertorico', ]
 
 
 class ForcingConfig(StrictBaseModel):
@@ -170,7 +170,7 @@ class ForcingConfig(StrictBaseModel):
     forcing_dir: Optional[str] = None
     forcing_template_dir: Optional[str] = None
     root_dir: Optional[str] = None
-    forecast_configuration: Optional[str] = None
+    forcing_configuration: Optional[str] = None
     cycle_datetime: Optional[str] = None
     cold_start_datetime: Optional[str] = None
 
@@ -182,13 +182,13 @@ class ForcingConfig(StrictBaseModel):
         if self.forcing_provider == 'csv' and self.forcing_dir is None:
             raise ValueError("`forcing_dir` must be specified for a run using csv forcing provider.")
 
-        # forecast_configuration required if forcing_provider is csv
+        # forcing_configuration required if forcing_provider is csv
         if self.forcing_provider == 'bmi':
-            if self.forecast_configuration is None:
-                raise ValueError("`forcecast_configuration` must be specified for a run using bmi forcing provider.")
+            if self.forcing_configuration is None:
+                raise ValueError("`forcing_configuration` must be specified for a run using bmi forcing provider.")
             else:
-                if self.forecast_configuration not in valid_configs:
-                    raise ValueError(f"Invalid `forecast_configuration` value: '{self.forecast_configuration}'."
+                if self.forcing_configuration not in valid_configs:
+                    raise ValueError(f"Invalid `forcing_configuration` value: '{self.forcing_configuration}'."
                                     f"Valid options are: {', '.join(valid_configs)}.")
 
         # forcing template dir required if forcing_provider is csv
@@ -198,10 +198,6 @@ class ForcingConfig(StrictBaseModel):
         # root dir required if forcing_provider is csv
         if self.forcing_provider == 'bmi' and self.root_dir is None:
             raise ValueError("`root_dir` must be specified for a run using bmi forcing provider.")
-
-        # cycle_datetime required if forcing_provider is csv
-        if self.forcing_provider == 'bmi' and self.cycle_datetime is None:
-            raise ValueError("`cycle_datetime` must be specified for a run using bmi forcing provider.")
 
         return self
 

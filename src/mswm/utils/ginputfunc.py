@@ -80,7 +80,7 @@ __all__ = [
     'create_troute_config',
     'create_fcst_times',
     'replace_forcing_placeholders',
-    'update_forcing_config',
+    'update_fcst_forcing_config',
     'update_forcing_in_realization',
     'map_var_names_forcing_engine',
     'create_reg_realization_file',
@@ -2629,7 +2629,7 @@ def replace_forcing_placeholders(
         return obj
 
 
-def update_forcing_config(
+def update_fcst_forcing_config(
         cycle_date: str,
         cycle_hour: str,
         root_dir: str,
@@ -2640,7 +2640,7 @@ def update_forcing_config(
         use_cold_start: bool,
         cold_start_datetime: str = None
 ) -> None:
-    """ update bmi forcing engine config yaml file
+    """ update bmi forcing engine config yaml file for forecast forcing
 
     Parameters
     ----------
@@ -2686,6 +2686,63 @@ def update_forcing_config(
         forcing_template['RefcstBDateProc'] = (cycle_dt - datetime.timedelta(hours=1)).strftime('%Y%m%d%H%M')
     else:
         forcing_template['RefcstBDateProc'] = cycle_str
+    forcing_template['Geopackage'] = gpkg_file
+
+    # Write forcing config yaml file
+    with open(forcing_config_file, "w", encoding="utf-8") as file:
+        yaml.dump(forcing_template, file, Dumper=ForcingDumper, sort_keys=False, default_flow_style=False)
+
+def update_hist_forcing_config(
+        time_period: dict,
+        root_dir: str,
+        forcing_template: dict,
+        gpkg_file: str,
+        forcing_config_dir: Path,
+        forcing_config_file: Path,
+        run_type: str
+) -> None:
+    """ update bmi forcing engine config yaml file for historical forcing
+
+    Parameters
+    ----------
+    time_period: dictionary of run start and end time
+    root_dir : root directory for forcing engine paths
+    forcing_template : dictionary of forcing bmi config template file
+    gpkg_file: path to geopackage file
+    forcing_config_dir: directory path for forcing config file
+    forcing_config_dir: output path for forcing config file
+    run_type: type of run (calib, regionalization, or default)
+
+    Returns
+    ----------
+    None
+    """
+
+    # Create directory for storing config file
+    os.makedirs(forcing_config_dir, exist_ok=True)
+
+    # Retrieve start and end times
+    if run_type == 'regionalization':
+        start_time = datetime.datetime.strptime(time_period['run_time_period']['region'][0], '%Y-%m-%d %H:%M:%S')
+        end_time = datetime.datetime.strptime(time_period['run_time_period']['region'][1], '%Y-%m-%d %H:%M:%S')
+
+    # Determine length of run inminutes
+    diff_time = int((end_time - start_time).total_seconds() / 60)
+
+    # Format start time for config file
+    start_str = start_time.strftime('%Y%m%d%H%M')
+
+    # Set geogrid file name
+    gpkg_name = os.path.splitext(os.path.basename(gpkg_file))[0]
+
+    # Replace {root_dir} and {gage} placeholders in forcing config
+    vars = {"{root_dir}": root_dir,
+            "{gage}": gpkg_name}
+    forcing_template = replace_forcing_placeholders(forcing_template, vars)
+
+    # Update forcing_template with dynamic variables
+    forcing_template['RefcstBDateProc'] = start_str
+    forcing_template['ForecastInputHorizons'] = [diff_time]
     forcing_template['Geopackage'] = gpkg_file
 
     # Write forcing config yaml file
