@@ -893,17 +893,17 @@ class RealizationBuilder:
         Extract forcing files and symlink to input directory
         """
 
+        # Create forcing directory
+        self.forcing_path = os.path.join(self.input_dir, 'forcing')
+
+        try:
+            os.makedirs(self.forcing_path, exist_ok=True)
+        except Exception as e:
+            logger.critical(f"Invalid forcing directory: {e}. Check `main_dir` variable")
+            raise
+
         # For csv provider
         if self.forcing_provider == 'csv':
-
-            # Create forcing directory
-            self.forcing_path = os.path.join(self.input_dir, 'forcing')
-
-            try:
-                os.makedirs(self.forcing_path, exist_ok=True)
-            except Exception as e:
-                logger.critical(f"Invalid forcing directory: {e}. Check `main_dir` variable")
-                raise
 
             # Retrieve forcing_provider and forcing_dir
             self.forcing_dir = (self.forcingSec.get('forcing_dir', "") or None)
