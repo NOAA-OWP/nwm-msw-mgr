@@ -73,8 +73,8 @@ class RegionConfig(StrictBaseModel):
     """
     Input.config regionalization section requirement
     """
-    form_assign_file: str
-    cat_grp_file: str
+    form_assign_file: Optional[str] = None
+    cat_grp_file: Optional[str] = None
 
 
 class CalibConfig(StrictBaseModel):
