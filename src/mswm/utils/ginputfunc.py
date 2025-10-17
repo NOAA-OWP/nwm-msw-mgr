@@ -830,7 +830,7 @@ def create_sft_smp_input(
         if 'cfes' in mods or 'cfex' in mods:
             smp_lst += ['soil_storage_model=conceptual', 'soil_storage_depth=2.0']
         elif 'topmodel' in mods:
-            smp_lst += ['soil_storage_model=TopModel', 'water_table_based_method=flux-based']
+            smp_lst += ['soil_storage_model=TopModel', 'water_table_based_method=flux_based']
         elif 'lasam' in mods:
             smp_lst += ['soil_storage_model=layered', 'soil_moisture_profile_option=constant', 'soil_depth_layers=2.0', 'water_table_depth=10[m]']
 
@@ -1898,7 +1898,7 @@ def change_smp_input(
             elif ('topmodel' in mods):
                 lines1.extend([
                     'soil_storage_model=TopModel\n',
-                    'water_table_based_method=flux-based'
+                    'water_table_based_method=flux_based'
                 ])
             elif ('lasam' in mods):
                 lines1.extend([
@@ -1907,6 +1907,9 @@ def change_smp_input(
                     'soil_depth_layers=2.0\n',
                     'water_table_depth=10[m]\n'
                 ])
+
+        # Replace any instances of flux-based/deficit-based with underscores
+        lines1 = [line.replace('flux-based', 'flux_based').replace('deficit-based', 'deficit_based') for line in lines1]
 
         # Save to new config file
         if os.path.exists(config_file) and catID == catids[0]:
