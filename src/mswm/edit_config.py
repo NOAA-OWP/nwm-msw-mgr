@@ -84,9 +84,9 @@ def create_valid_realization_file(agent: 'Agent', eval_params: 'EvaluationOption
     config_valid['time']['end_time'] = datetime.strftime(eval_params._valid_range[1], '%Y-%m-%d %H:%M:%S')
 
     # Replace forcing engine config file path with validation path
-    if config_valid['forcing']['ForcingsEngineLumpedDataProvider']['provider'] == 'ForcingsEngineLumpedDataProvider':
-        fe_config = Path(config_valid['forcing']['ForcingsEngineLumpedDataProvider']['params']['init_config'])
-        config_valid['forcing']['ForcingsEngineLumpedDataProvider']['params']['init_config'] = fe_config.with_name(fe_config.stem + '_valid' + fe_config.suffix)
+    if config_valid['global']['forcing']['ForcingsEngineLumpedDataProvider']['provider'] == 'ForcingsEngineLumpedDataProvider':
+        fe_config = Path(config_valid['global']['forcing']['ForcingsEngineLumpedDataProvider']['params']['init_config'])
+        config_valid['global']['forcing']['ForcingsEngineLumpedDataProvider']['params']['init_config'] = fe_config.with_name(fe_config.stem + '_valid' + fe_config.suffix)
 
     # correct path for init_config for validation runs for modules with time periods info in these files
     # (currently Noah-OWP-Modular and UEB)
