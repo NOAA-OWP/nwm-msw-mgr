@@ -1889,18 +1889,24 @@ def change_smp_input(
         lines1[idx[0]] = f'soil_z={list_depth}[m]\n'
 
         # Add soil_storage_model if missing from BMI config file
-        if ('cfes' in mods or 'cfex' in mods) and not any('soil_storage_model' in line for line in lines1):
-            lines1.extend([
-                'soil_storage_model=conceptual\n',
-                'soil_storage_depth=2.0\n'
-            ])
-        elif ('lasam' in mods) and not any('soil_storage_model' in line for line in lines1):
-            lines1.extend([
-                'soil_storage_model=layered\n',
-                'soil_moisture_profile_option=constant\n',
-                'soil_depth_layers=2.0\n',
-                'water_table_depth=10[m]\n'
-            ])
+        if not any('soil_storage_model' in line for line in lines1):
+            if ('cfes' in mods or 'cfex' in mods):
+                lines1.extend([
+                    'soil_storage_model=conceptual\n',
+                    'soil_storage_depth=2.0\n'
+                ])
+            elif ('topmodel' in mods):
+                lines1.extend([
+                    'soil_storage_model=TopModel\n',
+                    'water_table_based_method=flux-based'
+                ])
+            elif ('lasam' in mods):
+                lines1.extend([
+                    'soil_storage_model=layered\n',
+                    'soil_moisture_profile_option=constant\n',
+                    'soil_depth_layers=2.0\n',
+                    'water_table_depth=10[m]\n'
+                ])
 
         # Save to new config file
         if os.path.exists(config_file) and catID == catids[0]:
