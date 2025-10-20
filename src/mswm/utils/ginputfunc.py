@@ -166,15 +166,9 @@ def change_hydrofab_attr(
 
         logger.info('Setting hydrofabric attribute names to PRVI region')
 
-    elif vpu.isdigit():
+    else:
         # Leave hydrofabric attributes names as they are
         logger.info('Setting hydrofabric attribute names to CONUS region')
-    else:
-        try:
-            raise Exception(f"Unregnized vpu in hydrofabric attriutes: {vpu}")
-        except Exception as e:
-            logger.critical(e)
-            raise
 
     # Rename columns in attribute dataframe
     if vpu == 'ak' or vpu == 'hi' or vpu == 'prvi':
