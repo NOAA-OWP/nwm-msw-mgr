@@ -2778,6 +2778,11 @@ def var_mapping(
             var_maps['output']['swe_out_header'] = 'SWE_mm'
         else:
             var_maps['output']['swe_out'] = ''
+    elif 'topmodel' in modules:
+        if output_dict['output_swe']:
+            var_maps['output']['swe_out'] = 'soil_water_table'
+        else:
+            var_maps['output']['swe_out'] = ''
     else:
         var_maps['output']['swe_out'] = ''
 
@@ -3339,7 +3344,17 @@ def create_realization_file(
                                                 "library_file": lib_mod['topmodel'],
                                                 "init_config": os.path.join(bmi_dir['topmodel'], '{{id}}_topmodel.run'),
                                                 "allow_exceed_end_time": True, "fixed_time_step": False, "uses_forcing_file": False,
-                                                "registration_function": "register_bmi_topmodel"}}
+                                                "registration_function": "register_bmi_topmodel",
+                                                "variables_names_map": {"water_potential_evaporation_flux" : "water_potential_evaporation_flux",
+					                                                    "atmosphere_water__liquid_equivalent_precipitation_rate" : "atmosphere_water__liquid_equivalent_precipitation_rate" ,
+					                                                    "atmosphere_air_water~vapor__relative_saturation" : "atmosphere_air_water~vapor__relative_saturation" ,
+					                                                    "land_surface_air__temperature" : "land_surface_air__temperature",
+					                                                    "land_surface_wind__x_component_of_velocity" : "land_surface_wind__x_component_of_velocity" ,
+					                                                    "land_surface_wind__y_component_of_velocity" : "land_surface_wind__y_component_of_velocity",
+					                                                    "land_surface_radiation~incoming~longwave__energy_flux" : "land_surface_radiation~incoming~longwave__energy_flux",
+					                                                    "land_surface_radiation~incoming~shortwave__energy_flux" : "land_surface_radiation~incoming~shortwave__energy_flux" ,
+					                                                    "land_surface_air__pressure" : "land_surface_air__pressure"}}}
+
         # variable name mapping section
         pet_in = "water_potential_evaporation_flux"
         pcp_in = name_prcp.get(forcing_provider)
@@ -3441,6 +3456,20 @@ def create_realization_file(
                     "Qb_topmodel(1,double,m h^-1,node)": 0.0,
                     "Qv_topmodel(1,double,m h^-1,node)": 0.0,
                     "global_deficit(1,double,m,node)": 0.0}
+        elif 'topmodel' in modules:
+            if 'sft' not in modules:
+                model_params = {
+                    "sloth_ice_fraction_schaake(1,double,1,node)": 0.0,
+                    "sloth_ice_fraction_xinanjiang(1,double,1,node)": 0.0,
+                    "sloth_smp(1,double,1,node)": 0.0}
+            else:
+                model_params = {
+                    "sloth_SOIL_STORAGE(1,double,m,node)": 1.0E-10,
+                    "sloth_SOIL_STORAGE_CHANGE(1,double,m,node)": 0.0,
+                    "soil_moisture_wetting_fronts(1,double,1,node)": 0.0,
+                    "soil_depth_wetting_fronts(1,double,1,node)": 0.0,
+					"num_wetting_fronts(1,int,1,node)": 1}
+                main_output_variable = "soil_storage"
         elif 'lasam' in modules:
             if 'sft' not in modules:
                 model_params = {"soil_temperature_profile(1,double,K,node)": 275.15}
@@ -3472,7 +3501,7 @@ def create_realization_file(
         model_configs['smp'] = {"name": "bmi_c++",
                                 "params": {"name": "bmi_c++",
                                            "model_type_name": get_model_type_name('smp'),
-                                           "main_output_variable": "soil_water_table",
+                                           "main_output_variable": "soil_storage",
                                            "library_file": lib_mod['smp'],
                                            "init_config": os.path.join(bmi_dir['smp'], '{{id}}_bmi_config_smp.txt'),
                                            "allow_exceed_end_time": True,
@@ -3487,6 +3516,13 @@ def create_realization_file(
                 "soil_moisture_wetting_fronts": "soil_moisture_wetting_fronts",
                 "soil_depth_wetting_fronts": "soil_depth_wetting_fronts",
                 "num_wetting_fronts": "soil_num_wetting_fronts"}
+        elif 'topmodel' in modules:
+            model_configs['smp']['params']["variables_names_map"] = {
+                "soil_storage" : "sloth_SOIL_STORAGE",
+				"soil_storage_change" : "sloth_SOIL_STORAGE_CHANGE",
+				"Qb_topmodel" : "land_surface_water__baseflow_volume_flux",
+				"Qv_topmodel" : "soil_water_root-zone_unsat-zone_top__recharge_volume_flux",
+				"global_deficit" : "soil_water__domain_volume_deficit"}
 
     # lasam
     if 'lasam' in modules:
