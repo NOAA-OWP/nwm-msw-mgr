@@ -531,7 +531,7 @@ class RealizationBuilder:
 
         # add sloth if CFE, LASAM, Topmodel is selected
         if (any(x in self.modules for x in ['cfes', 'cfex', 'lasam'])) or ('topmodel' in self.modules and 'smp' in self.modules) and 'sloth' not in self.modules:
-            logger.info("CFE or LASAM is used in the formulation. SLOTH added to module list")
+            logger.info("CFE, LASAM, or SMP/Topmodel is used in the formulation. SLOTH added to module list")
             self.modules = ['sloth'] + self.modules
 
         # make sure SMP and SFT are always selected together
@@ -605,10 +605,9 @@ class RealizationBuilder:
                     logger.critical(e)
                     raise
 
-            # add sloth if CFE or LASAM is selected
-            module_found = [x for x in ['cfes', 'cfex', 'lasam'] if x in modules]
-            if len(module_found) == 1 and 'sloth' not in modules:
-                logger.info(f"CFE or LASAM is used in the formulation. SLOTH added to module list: {row['gage_id']}")
+            # add sloth if CFE, LASAM, Topmodel is selected
+            if (any(x in modules for x in ['cfes', 'cfex', 'lasam'])) or ('topmodel' in modules and 'smp' in modules) and 'sloth' not in modules:
+                logger.info(f"CFE, LASAM, or SMP/Topmodel is used in the formulation. SLOTH added to module list: {row['gage_id']}")
                 modules = ['sloth'] + modules
 
             # make sure SMP and SFT are always selected together
@@ -1204,38 +1203,8 @@ class RealizationBuilder:
                                                                                      self.output_dict['sm_frac_depth'], self.output_dict['sm_profile_depth'])
                     # Modify existing SFT inputs to match rainfall runoff model
                     elif m1 == "sft":
-                        # Loop through schemes that could be paired with SFT (CFES/CFEX/LASAM)
-                        # SFT could be paired with CFES/CFEX/LASAM simulatenously in different formulations, so configs must be generated separately
-                        for scheme in ['cfes', 'cfex', 'lasam']:
-                            # Retrieve formulation groups where CFES/CFEX/LASAM co-occur with SFT
-                            scheme_sft_grps = [grp for grp, mods in self.grp_to_form.items() if scheme in mods and 'sft' in mods]
-                            if scheme_sft_grps:
-                                # Update CFE bmi dir with correct scheme for formulation (Schaake/Xinanjiang)
-                                if scheme == 'cfes' or scheme == 'lasam':
-                                    scheme_bmi_var = 'cfe-s'
-                                elif scheme == 'cfex':
-                                    scheme_bmi_var = 'cfe-x'
-                                else:
-                                    try:
-                                        raise Exception('SMP/SFT only implemented when CFE-S, CFE-X, or LASAM are selected')
-                                    except Exception as e:
-                                        logger.critical(e)
-                                        raise
-
-                                # Retrieve catchments and formulations corresponding to scheme
-                                scheme_cat = [cat for grp in scheme_sft_grps for cat in self.grp_to_cat[grp]]
-                                scheme_form = [self.cat_to_form[cat] for cat in scheme_cat]
-
-                                # Form CFE input dir
-                                cfe_dir = os.path.join(self.input_dir, scheme_bmi_var + '_input')
-
-                                # If LASAM is selected, create cfe input files required for sft (assume ice_fraction_scheme is cfes)
-                                if scheme not in ('cfes', 'cfex'):
-                                    scheme_form_cfes = [form + ['cfes'] for form in scheme_form]
-                                    gfun.create_cfe_input(scheme_cat, scheme_form_cfes, self.attr_file, cfe_dir, self.run_type, self.cat_to_aet_rootzone)
-
-                                # Create SFT inputs
-                                gfun.change_sft_input(scheme_cat, scheme_form, mod_input_dir, bmi_dir, self.run_type)
+                        # Create SFT inputs
+                        gfun.change_sft_input(scheme_cat, scheme_form, mod_input_dir, bmi_dir, self.run_type)
 
                     else:
                         # Create symbolic link to catchments with formulation
@@ -1275,7 +1244,7 @@ class RealizationBuilder:
 
                     # Loop through schemes that could be paired with SFT (CFES/CFEX/LASAM)
                     # SFT could be paired with CFES/CFEX/LASAM simulatenously in different formulations, so configs must be generated separately
-                    for scheme in ['cfes', 'cfex', 'lasam']:
+                    for scheme in ['cfes', 'cfex', 'lasam', 'topmodel']:
                         # Retrieve formulation groups where CFES/CFEX/LASAM co-occur with SFT
                         scheme_sft_grps = [grp for grp, mods in self.grp_to_form.items() if scheme in mods and 'sft' in mods]
 

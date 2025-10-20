@@ -2947,7 +2947,7 @@ def create_reg_realization_file(
             var_maps = var_mapping(grp_mod, pet_in, pcp_in, output_dict)
 
             # module output variable for input to t-route
-            main_output_variable = "Qout"
+            main_output_variable = "Qout" if 'smp' not in grp_mod else "sloth_soil_storage"
 
         # sac-sma
         if 'sac' in grp_mod:
@@ -3046,20 +3046,13 @@ def create_reg_realization_file(
                         "Qb_topmodel(1,double,m h^-1,node)": 0.0,
                         "Qv_topmodel(1,double,m h^-1,node)": 0.0,
                         "global_deficit(1,double,m,node)": 0.0}
-            elif 'topmodel' in grp_mod:
-                if 'sft' not in grp_mod:
-                    model_params = {
-                        "sloth_ice_fraction_schaake(1,double,1,node)": 0.0,
-                        "sloth_ice_fraction_xinanjiang(1,double,1,node)": 0.0,
-                        "sloth_smp(1,double,1,node)": 0.0}
-                else:
-                    model_params = {
-                        "sloth_soil_storage(1,double,m,node)": 1.0E-10,
-                        "sloth_soil_storage_change(1,double,m,node)": 0.0,
-                        "soil_moisture_wetting_fronts(1,double,1,node)": 0.0,
-                        "soil_depth_wetting_fronts(1,double,1,node)": 0.0,
-                        "num_wetting_fronts(1,int,1,node)": 1}
-                    main_output_variable = "sloth_soil_storage"
+            elif 'topmodel' and 'smp' in grp_mod:
+                model_params = {
+                    "sloth_soil_storage(1,double,m,node)": 1.0E-10,
+                    "sloth_soil_storage_change(1,double,m,node)": 0.0,
+                    "soil_moisture_wetting_fronts(1,double,1,node)": 0.0,
+                    "soil_depth_wetting_fronts(1,double,1,node)": 0.0,
+                    "num_wetting_fronts(1,int,1,node)": 1}
             elif 'lasam' in grp_mod:
                 if 'sft' not in grp_mod:
                     model_params = {"soil_temperature_profile(1,double,K,node)": 275.15}
@@ -3106,6 +3099,14 @@ def create_reg_realization_file(
                     "soil_moisture_wetting_fronts": "soil_moisture_wetting_fronts",
                     "soil_depth_wetting_fronts": "soil_depth_wetting_fronts",
                     "num_wetting_fronts": "soil_num_wetting_fronts"}
+            elif 'topmodel' in grp_mod:
+                model_configs['smp']['params']["variables_names_map"] = {
+                    "soil_storage" : "sloth_soil_storage",
+                    "soil_storage_change" : "sloth_soil_storage_change",
+                    "Qb_topmodel" : "land_surface_water__baseflow_volume_flux",
+                    "Qv_topmodel" : "soil_water_root-zone_unsat-zone_top__recharge_volume_flux",
+                    "global_deficit" : "soil_water__domain_volume_deficit"}
+
 
         # lasam
         if 'lasam' in grp_mod:
