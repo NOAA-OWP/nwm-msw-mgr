@@ -529,9 +529,8 @@ class RealizationBuilder:
                 logger.critical(e)
                 raise
 
-        # add sloth if CFE or LASAM is selected
-        module_found = [x for x in ['cfes', 'cfex', 'lasam', 'topmodel'] if x in self.modules]
-        if len(module_found) == 1 and 'sloth' not in self.modules:
+        # add sloth if CFE, LASAM, Topmodel is selected
+        if (any(x in self.modules for x in ['cfes', 'cfex', 'lasam'])) or ('topmodel' in self.modules and 'smp' in self.modules) and 'sloth' not in self.modules:
             logger.info("CFE or LASAM is used in the formulation. SLOTH added to module list")
             self.modules = ['sloth'] + self.modules
 

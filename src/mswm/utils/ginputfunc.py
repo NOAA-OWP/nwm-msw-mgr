@@ -3046,6 +3046,20 @@ def create_reg_realization_file(
                         "Qb_topmodel(1,double,m h^-1,node)": 0.0,
                         "Qv_topmodel(1,double,m h^-1,node)": 0.0,
                         "global_deficit(1,double,m,node)": 0.0}
+            elif 'topmodel' in grp_mod:
+                if 'sft' not in grp_mod:
+                    model_params = {
+                        "sloth_ice_fraction_schaake(1,double,1,node)": 0.0,
+                        "sloth_ice_fraction_xinanjiang(1,double,1,node)": 0.0,
+                        "sloth_smp(1,double,1,node)": 0.0}
+                else:
+                    model_params = {
+                        "sloth_soil_storage(1,double,m,node)": 1.0E-10,
+                        "sloth_soil_storage_change(1,double,m,node)": 0.0,
+                        "soil_moisture_wetting_fronts(1,double,1,node)": 0.0,
+                        "soil_depth_wetting_fronts(1,double,1,node)": 0.0,
+                        "num_wetting_fronts(1,int,1,node)": 1}
+                    main_output_variable = "sloth_soil_storage"
             elif 'lasam' in grp_mod:
                 if 'sft' not in grp_mod:
                     model_params = {"soil_temperature_profile(1,double,K,node)": 275.15}
@@ -3344,16 +3358,7 @@ def create_realization_file(
                                                 "library_file": lib_mod['topmodel'],
                                                 "init_config": os.path.join(bmi_dir['topmodel'], '{{id}}_topmodel.run'),
                                                 "allow_exceed_end_time": True, "fixed_time_step": False, "uses_forcing_file": False,
-                                                "registration_function": "register_bmi_topmodel",
-                                                "variables_names_map": {"water_potential_evaporation_flux" : "water_potential_evaporation_flux",
-					                                                    "atmosphere_water__liquid_equivalent_precipitation_rate" : "atmosphere_water__liquid_equivalent_precipitation_rate" ,
-					                                                    "atmosphere_air_water~vapor__relative_saturation" : "atmosphere_air_water~vapor__relative_saturation" ,
-					                                                    "land_surface_air__temperature" : "land_surface_air__temperature",
-					                                                    "land_surface_wind__x_component_of_velocity" : "land_surface_wind__x_component_of_velocity" ,
-					                                                    "land_surface_wind__y_component_of_velocity" : "land_surface_wind__y_component_of_velocity",
-					                                                    "land_surface_radiation~incoming~longwave__energy_flux" : "land_surface_radiation~incoming~longwave__energy_flux",
-					                                                    "land_surface_radiation~incoming~shortwave__energy_flux" : "land_surface_radiation~incoming~shortwave__energy_flux" ,
-					                                                    "land_surface_air__pressure" : "land_surface_air__pressure"}}}
+                                                "registration_function": "register_bmi_topmodel"}}
 
         # variable name mapping section
         pet_in = "water_potential_evaporation_flux"
@@ -3361,7 +3366,7 @@ def create_realization_file(
         var_maps = var_mapping(modules, pet_in, pcp_in, output_dict)
 
         # module output variable for input to t-route
-        main_output_variable = "Qout"
+        main_output_variable = "Qout" if 'smp' not in modules else "sloth_soil_storage"
 
     # sac-sma
     if 'sac' in modules:
@@ -3456,20 +3461,13 @@ def create_realization_file(
                     "Qb_topmodel(1,double,m h^-1,node)": 0.0,
                     "Qv_topmodel(1,double,m h^-1,node)": 0.0,
                     "global_deficit(1,double,m,node)": 0.0}
-        elif 'topmodel' in modules:
-            if 'sft' not in modules:
-                model_params = {
-                    "sloth_ice_fraction_schaake(1,double,1,node)": 0.0,
-                    "sloth_ice_fraction_xinanjiang(1,double,1,node)": 0.0,
-                    "sloth_smp(1,double,1,node)": 0.0}
-            else:
-                model_params = {
-                    "sloth_soil_storage(1,double,m,node)": 1.0E-10,
-                    "sloth_soil_storage_change(1,double,m,node)": 0.0,
-                    "soil_moisture_wetting_fronts(1,double,1,node)": 0.0,
-                    "soil_depth_wetting_fronts(1,double,1,node)": 0.0,
-					"num_wetting_fronts(1,int,1,node)": 1}
-                main_output_variable = "sloth_soil_storage"
+        elif 'topmodel' and 'smp' in modules:
+            model_params = {
+                "sloth_soil_storage(1,double,m,node)": 1.0E-10,
+                "sloth_soil_storage_change(1,double,m,node)": 0.0,
+                "soil_moisture_wetting_fronts(1,double,1,node)": 0.0,
+                "soil_depth_wetting_fronts(1,double,1,node)": 0.0,
+                "num_wetting_fronts(1,int,1,node)": 1}
         elif 'lasam' in modules:
             if 'sft' not in modules:
                 model_params = {"soil_temperature_profile(1,double,K,node)": 275.15}
