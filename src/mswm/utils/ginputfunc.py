@@ -3464,12 +3464,12 @@ def create_realization_file(
                     "sloth_smp(1,double,1,node)": 0.0}
             else:
                 model_params = {
-                    "sloth_SOIL_STORAGE(1,double,m,node)": 1.0E-10,
-                    "sloth_SOIL_STORAGE_CHANGE(1,double,m,node)": 0.0,
+                    "sloth_soil_storage(1,double,m,node)": 1.0E-10,
+                    "sloth_soil_storage_change(1,double,m,node)": 0.0,
                     "soil_moisture_wetting_fronts(1,double,1,node)": 0.0,
                     "soil_depth_wetting_fronts(1,double,1,node)": 0.0,
 					"num_wetting_fronts(1,int,1,node)": 1}
-                main_output_variable = "soil_storage"
+                main_output_variable = "sloth_soil_storage"
         elif 'lasam' in modules:
             if 'sft' not in modules:
                 model_params = {"soil_temperature_profile(1,double,K,node)": 275.15}
@@ -3518,8 +3518,8 @@ def create_realization_file(
                 "num_wetting_fronts": "soil_num_wetting_fronts"}
         elif 'topmodel' in modules:
             model_configs['smp']['params']["variables_names_map"] = {
-                "soil_storage" : "sloth_SOIL_STORAGE",
-				"soil_storage_change" : "sloth_SOIL_STORAGE_CHANGE",
+                "soil_storage" : "sloth_soil_storage",
+				"soil_storage_change" : "sloth_soil_storage_change",
 				"Qb_topmodel" : "land_surface_water__baseflow_volume_flux",
 				"Qv_topmodel" : "soil_water_root-zone_unsat-zone_top__recharge_volume_flux",
 				"global_deficit" : "soil_water__domain_volume_deficit"}
