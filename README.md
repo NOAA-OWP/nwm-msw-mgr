@@ -21,7 +21,7 @@ If you already have an environment for running ngen, you can use the same venv.
 
 Once the venv is activated, run:
 
-1. cd mswm
+1. cd nwm-msw-mgr
 2. pip install .
 
 ## Usage
