@@ -2580,7 +2580,7 @@ def create_fcst_times(
     if use_cold_start is True:
 
         fcst_start = cold_start_datetime
-        fcst_end = datetime.datetime.strftime(cycle_dt, "%Y-%m-%d %H:%M:%S")
+        fcst_end = datetime.datetime.strftime(cycle_dt + datetime.timedelta(hours=1), "%Y-%m-%d %H:%M:%S")
 
     # Construct start and end times based on forecast cycle
     elif ana_flag == 0:
@@ -2599,7 +2599,7 @@ def create_fcst_times(
         forcing_lookback = int(forcing_template['LookBack'] / 60)
 
         fcst_start = datetime.datetime.strftime(cycle_dt - datetime.timedelta(hours=forcing_lookback), "%Y-%m-%d %H:%M:%S")
-        fcst_end = datetime.datetime.strftime(cycle_dt, "%Y-%m-%d %H:%M:%S")
+        fcst_end = datetime.datetime.strftime(cycle_dt + datetime.timedelta(hours=1), "%Y-%m-%d %H:%M:%S")
 
     return fcst_start, fcst_end
 
