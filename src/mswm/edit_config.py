@@ -84,7 +84,6 @@ def create_valid_realization_file(agent: 'Agent', eval_params: 'EvaluationOption
     config_valid['time']['end_time'] = datetime.strftime(eval_params._valid_range[1], '%Y-%m-%d %H:%M:%S')
 
     # Replace forcing engine config file path with validation path
-    print(config_valid)
     if config_valid['global']['forcing']['provider'] == 'ForcingsEngineLumpedDataProvider':
         fe_config = Path(config_valid['global']['forcing']['params']['init_config'])
         config_valid['global']['forcing']['params']['init_config'] = fe_config.with_name(fe_config.stem + '_valid' + fe_config.suffix)
@@ -129,7 +128,7 @@ def create_valid_realization_file(agent: 'Agent', eval_params: 'EvaluationOption
 
     # Write realization file for validation run
     with open(config_valid_file, 'w') as outfile:
-        json.dump(config_valid, outfile, indent=4, separators=(", ", ": "), sort_keys=False)
+        json.dump(config_valid, outfile, indent=4, default=str, separators=(", ", ": "), sort_keys=False)
 
     # Write yaml configuration file for validation run
     create_valid_config_file(agent.yaml_file, agent.valid_path, config_valid_file, valid_run_name)
