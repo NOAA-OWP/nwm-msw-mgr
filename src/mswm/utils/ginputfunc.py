@@ -2551,6 +2551,7 @@ def create_fcst_times(
         cycle_date: str,
         cycle_hour: str,
         use_cold_start: bool,
+        use_int_ana: bool,
         cold_start_datetime: str = None
 ) -> Tuple[str, str]:
     """ Compute forecast start and end time based on selected forecast cycle, date, and hour
@@ -2561,6 +2562,7 @@ def create_fcst_times(
     cycle_date : date of forecast cycle
     cycle_hour : hour of forecast cycle (00z)
     use_cold_start : boolean flag for using cold start period
+    use_int_ana: boolean flag for using intermediate AnA run
     cold_start_datetime : datetime str of beginning of cold start period
 
     Returns
@@ -2577,10 +2579,17 @@ def create_fcst_times(
     ana_flag = forcing_template['AnAFlag']
 
     # Construct start and end times for cold start period
-    if use_cold_start is True:
+    if use_cold_start:
 
         fcst_start = cold_start_datetime
         fcst_end = datetime.datetime.strftime(cycle_dt - datetime.timedelta(hours=1), "%Y-%m-%d %H:%M:%S")
+
+    # Construct start and end times for intermediate ana period
+    elif use_int_ana:
+
+        fcst_start = datetime.datetime.strftime(cycle_dt + datetime.timedelta(hours=1), "%Y-%m-%d %H:%M:%S")
+        # DETERMINE END TIME BASED ON CYCLE INTERVAL AND NUM INTERVALS
+        fcst_end = datetime.datetime.strftime(cycle_dt + datetime.timedelta(hours=24), "%Y-%m-%d %H:%M:%S")
 
     # Construct start and end times based on forecast cycle
     elif ana_flag == 0:
@@ -2638,6 +2647,7 @@ def update_fcst_forcing_config(
         forcing_config_dir: Path,
         forcing_config_file: Path,
         use_cold_start: bool,
+        use_int_ana: bool,
         cold_start_datetime: str = None
 ) -> None:
     """ update bmi forcing engine config yaml file for forecast forcing
@@ -2652,6 +2662,7 @@ def update_fcst_forcing_config(
     forcing_config_dir: directory path for forcing config file
     forcing_config_dir: output path for forcing config file
     use_cold_start : boolean flag for using cold start period
+    use_int_ana: boolean flag for using cold start period
     cold_start_datetime : datetime str of beginning of cold start period
 
     Returns
@@ -2669,9 +2680,16 @@ def update_fcst_forcing_config(
     cycle_str = cycle_dt.strftime('%Y%m%d%H%M')
 
     # Set lookback minutes for cold start period
-    if use_cold_start is True:
+    if use_cold_start:
         cold_start_dt = datetime.datetime.strptime(cold_start_datetime, "%Y-%m-%d %H:%M:%S")
         forcing_template['LookBack'] = int((cycle_dt - cold_start_dt).total_seconds() / 60) - 60
+    
+    # Set lookback minutes for intermediate ana period
+    if use_int_ana:
+        int_ana_dt = datetime.datetime.strptime(cycle_dt, "%Y-%m-%d %H:%M:%S")
+        forcing_template['LookBack'] = int((cycle_dt - cold_start_dt).total_seconds() / 60) - 60
+
+
 
     # Set geogrid file name
     gpkg_name = os.path.splitext(os.path.basename(gpkg_file))[0]

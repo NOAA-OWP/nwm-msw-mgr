@@ -14,7 +14,8 @@ def build_default(input_path: str, use_cold_start: bool = False):
     Call RealizationBuilder class to generate realization and config files with default parameters
     """
     rb = RealizationBuilder(input_path=input_path, use_cold_start=use_cold_start)
-    rb.build_default_realization()
+    real_path = rb.build_default_realization()
+    return real_path
 
 
 def build_calib(input_path: str):
@@ -22,23 +23,32 @@ def build_calib(input_path: str):
     Call RealizationBuilder class to generate initial calibration realization and config files
     """
     rb = RealizationBuilder(input_path=input_path)
-    rb.build_calib_realization()
+    real_path = rb.build_calib_realization()
+    return real_path
 
 
-def build_fcst(input_path: str, valid_yaml: str, fcst_run_name: str, use_cold_start: bool = False):
+def build_fcst(input_path: str, valid_yaml: str, fcst_run_name: str, use_cold_start: bool = False, use_int_ana: bool = False):
     """
     Call RealizationBuilder class to generate forecast realization and config files
     """
-    rb = RealizationBuilder(input_path=input_path, valid_yaml=valid_yaml, fcst_run_name=fcst_run_name, use_cold_start=use_cold_start)
-    rb.build_fcst_realization()
+    rb = RealizationBuilder(input_path=input_path, valid_yaml=valid_yaml, fcst_run_name=fcst_run_name,
+                            use_cold_start=use_cold_start, use_int_ana=use_int_ana)
+    real_path = rb.build_fcst_realization()
+    return real_path
 
 
 def build_region(input_path: str):
     """
     Call RealizationBuilder class to generate realization and config files for regionalization
     """
+<<<<<<< HEAD
     rb = RealizationBuilder(input_path=input_path)
     rb.build_region_realization()
+=======
+    rb = RealizationBuilder(input_path=input_path, assign_path=assign_path)
+    real_path = rb.build_region_realization()
+    return real_path
+>>>>>>> 4d4230a (Partial implementation of intermediate ana hindcast run)
 
 
 def main():
@@ -69,6 +79,7 @@ def main():
     build_fcst_sub.add_argument("valid_yaml", help="Path to the config yaml file for a validation run")
     build_fcst_sub.add_argument("fcst_run_name", help="Name of the folder to be created for storing inputs/outputs from running ngen")
     build_fcst_sub.add_argument("--use_cold_start", action="store_true", help="Enable cold start flag when passed")
+    build_fcst_sub.add_argument("--use_int_ana", action="store_true", help="Enable intermediate AnA flag when passed")
 
     args = parser.parse_args()
 
@@ -80,7 +91,7 @@ def main():
     elif args.command == "build_region":
         build_region(args.input_path)
     elif args.command == "build_fcst":
-        build_fcst(args.input_path, args.valid_yaml, args.fcst_run_name, args.use_cold_start)
+        build_fcst(args.input_path, args.valid_yaml, args.fcst_run_name, args.use_cold_start, args.use_int_ana)
     else:
         raise ValueError(f"Unexpected mswm command: {args.command}")
 
