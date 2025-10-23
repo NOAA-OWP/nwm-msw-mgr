@@ -362,13 +362,15 @@ class RealizationBuilder:
 
         # Create forecast run directory or cold start run directory
         fcst_dir_name = ('Model_State_Run/Cold_Start_Run' if self.use_cold_start
-                         else 'Model_State_run/Intermediate_AnA_Run' if self.use_int_ana
+                         else 'Model_State_Run/Intermediate_AnA_Run' if self.use_int_ana
+                         else 'Hindcast_Run' if self.use_hindcast
                          else 'Forecast_Run')
         self.input_dir = Path(fcst_dir0, fcst_dir_name, self.fcst_run_name)
 
         # Set file basename for forecast or cold start
         self.basename_opt = ('cold_start' if self.use_cold_start
                              else 'int_ana' if self.use_int_ana
+                             else 'hindcast' if self.use_hindcast
                              else 'fcst')
 
         try:
@@ -445,7 +447,8 @@ class RealizationBuilder:
 
             if self.forcing_configuration not in ['nwm', 'aorc']:
                 # Retrieve ngen start and end time based on forecast cycle date, hour and configuration
-                self.fcst_start, self.fcst_end = gfun.create_fcst_times(self.forcing_template, self.cycle_date, self.cycle_hour, self.use_cold_start, self.use_int_ana, self.cold_start_datetime)
+                self.fcst_start, self.fcst_end = gfun.create_fcst_times(self.forcing_template, self.cycle_date, self.cycle_hour,
+                                                                        self.use_cold_start, self.use_int_ana, self.hind_cycle, self.cold_start_datetime)
             else:
                 # Set default fcst_start/fcst_end values
                 self.fcst_start = None
@@ -971,7 +974,7 @@ class RealizationBuilder:
             if self.forcing_configuration not in ['nwm', 'aorc']:
                 # Update dynamic parameters in forcing engine configuration file
                 gfun.update_forcing_config(self.cycle_date, self.cycle_hour, self.root_dir, self.forcing_template, gpkg_file, self.forcing_config_dir,
-                                           self.forcing_config_file, self.use_cold_start, self.use_int_ana, self.cold_start_datetime)
+                                        self.forcing_config_file, self.use_cold_start, self.use_int_ana, self.hind_cycle, self.cold_start_datetime)
             else:
                 # Update historical dynamic parameters in forcing engine configuration file
                 gfun.update_hist_forcing_config(self.time_period, self.root_dir, self.forcing_template, gpkg_file, self.forcing_config_dir, self.forcing_config_file, self.run_type)
