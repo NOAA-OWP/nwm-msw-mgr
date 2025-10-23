@@ -36,25 +36,19 @@ if not logging.getLogger().hasHandlers():
 
 class RealizationBuilder:
 
-<<<<<<< HEAD
-    def __init__(self, input_path: str, valid_yaml: str | None = None, use_cold_start: bool = False, forcing_path: str | None = None, fcst_run_name: str | None = None):
-=======
     def __init__(self, input_path: str, valid_yaml: str | None = None, use_cold_start: bool = False, use_int_ana: bool = False,
-                 assign_path: str | None = None, forcing_path: str | None = None, fcst_run_name: str | None = None):
->>>>>>> 4d4230a (Partial implementation of intermediate ana hindcast run)
+                 use_hindcast: bool = False, forcing_path: str | None = None, fcst_run_name: str | None = None, hind_cycle: int | None = None):
         # Initialize logging silently if not already set
         log_level_set()
 
         self.input_path = Path(input_path)
         self.valid_yaml = Path(valid_yaml) if valid_yaml else None
         self.use_cold_start = use_cold_start
-<<<<<<< HEAD
-=======
         self.use_int_ana = use_int_ana
-        self.assign_path = Path(assign_path) if assign_path else None
->>>>>>> 4d4230a (Partial implementation of intermediate ana hindcast run)
+        self.use_hindcast = use_hindcast
         self.forcing_path = Path(forcing_path) if forcing_path else None
         self.fcst_run_name = fcst_run_name if fcst_run_name else None
+        self.hind_cycle = hind_cycle if hind_cycle else 0
 
         logger.info(f"Initialized RealizationBuilder with {input_path}")
 
@@ -407,7 +401,6 @@ class RealizationBuilder:
                 cycle_datetime = self.forcingSec.get('cycle_datetime')
                 self.cycle_hour = self.forcingSec.get('cycle_hour')
 
-<<<<<<< HEAD
                 # Construct cycle date and cycle hour
                 cycle_dt = datetime.strptime(cycle_datetime, "%Y-%m-%d %H:%M:%S")
                 self.cycle_date = cycle_dt.strftime("%Y-%m-%d")
@@ -415,21 +408,15 @@ class RealizationBuilder:
 
                 # Construct forcing template file name
                 if self.use_cold_start:
-                    forcing_region = next((f"_{reg}" for reg in ["alaska", "hawaii", "puertorico"] if reg in self.forcing_configuration), "")
-                    self.forcing_configuration_str = f"cold_start{forcing_region}_config.yml"
+                    forcing_region = next((f"_{reg}" for reg in ["alaska", "hawaii", "puertorico"] if reg in self.forecast_configuration), "")
+                    self.forecast_configuration_str = f"cold_start{forcing_region}_config.yml"
+                elif self.use_int_ana:
+                    forcing_region = next((f"_{reg}" for reg in ["alaska", "hawaii", "puertorico"] if reg in self.forecast_configuration), "")
+                    self.forecast_configuration_str = f"standard_ana{forcing_region}_config.yml"
                 else:
                     self.forcing_configuration_str = f"{self.forcing_configuration}_config.yml"
 
             # Set forcing engine variables for historical forcing
-=======
-            # Construct forcing template file name
-            if self.use_cold_start:
-                forcing_region = next((f"_{reg}" for reg in ["alaska", "hawaii", "puertorico"] if reg in self.forecast_configuration), "")
-                self.forecast_configuration_str = f"cold_start{forcing_region}_config.yml"
-            elif self.use_int_ana:
-                forcing_region = next((f"_{reg}" for reg in ["alaska", "hawaii", "puertorico"] if reg in self.forecast_configuration), "")
-                self.forecast_configuration_str = f"standard_ana{forcing_region}_config.yml"
->>>>>>> 4d4230a (Partial implementation of intermediate ana hindcast run)
             else:
                 self.forcing_configuration_str = f"{self.forcing_configuration}_config.yml"
 
@@ -456,18 +443,13 @@ class RealizationBuilder:
                 logger.critical(f"Unexpected error loading config at: {self.forcing_template_file}\n{e}")
                 raise
 
-<<<<<<< HEAD
             if self.forcing_configuration not in ['nwm', 'aorc']:
                 # Retrieve ngen start and end time based on forecast cycle date, hour and configuration
-                self.fcst_start, self.fcst_end = gfun.create_fcst_times(self.forcing_template, self.cycle_date, self.cycle_hour, self.use_cold_start, self.cold_start_datetime)
+                self.fcst_start, self.fcst_end = gfun.create_fcst_times(self.forcing_template, self.cycle_date, self.cycle_hour, self.use_cold_start, self.use_int_ana, self.cold_start_datetime)
             else:
                 # Set default fcst_start/fcst_end values
                 self.fcst_start = None
                 self.fcst_end = None
-=======
-            # Retrieve ngen start and end time based on forecast cycle date, hour and configuration
-            self.fcst_start, self.fcst_end = gfun.create_fcst_times(self.forcing_template, self.cycle_date, self.cycle_hour, self.use_cold_start, self.use_int_ana, self.cold_start_datetime)
->>>>>>> 4d4230a (Partial implementation of intermediate ana hindcast run)
 
             logger.info('Ngen start and end time set from forcing cycle')
 
@@ -986,19 +968,13 @@ class RealizationBuilder:
             # Set geopackage file path
             gpkg_file = self.cat_file if hasattr(self, "cat_file") and self.cat_file else self.gpkg_cats
 
-<<<<<<< HEAD
             if self.forcing_configuration not in ['nwm', 'aorc']:
-                # Update forecast dynamic parameters in forcing engine configuration file
-                gfun.update_fcst_forcing_config(self.cycle_date, self.cycle_hour, self.root_dir, self.forcing_template, gpkg_file, self.forcing_config_dir,
-                                                self.forcing_config_file, self.use_cold_start, self.cold_start_datetime)
+                # Update dynamic parameters in forcing engine configuration file
+                gfun.update_forcing_config(self.cycle_date, self.cycle_hour, self.root_dir, self.forcing_template, gpkg_file, self.forcing_config_dir,
+                                           self.forcing_config_file, self.use_cold_start, self.use_int_ana, self.cold_start_datetime)
             else:
                 # Update historical dynamic parameters in forcing engine configuration file
                 gfun.update_hist_forcing_config(self.time_period, self.root_dir, self.forcing_template, gpkg_file, self.forcing_config_dir, self.forcing_config_file, self.run_type)
-=======
-            # Update dynamic parameters in forcing engine configuration file
-            gfun.update_forcing_config(self.cycle_date, self.cycle_hour, self.root_dir, self.forcing_template, gpkg_file, self.forcing_config_dir,
-                                       self.forcing_config_file, self.use_cold_start, self.use_int_ana, self.cold_start_datetime)
->>>>>>> 4d4230a (Partial implementation of intermediate ana hindcast run)
 
             logger.info(f"Configured BMI forcing engine: {self.forcing_config_file}")
 
