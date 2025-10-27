@@ -137,7 +137,9 @@ def change_hydrofab_attr(
         logger.info('Setting hydrofabric attribute names to AK/HI region')
 
     elif vpu == 'prvi':
-        attr_dict = {'dksat_Time._soil_layers_stag.1': 'geom_mean.dksat_soil_layers_stag=1',
+        attr_dict = {'X': 'centroid_x',
+                     'Y': 'centroid_y',
+                     'dksat_Time._soil_layers_stag.1': 'geom_mean.dksat_soil_layers_stag=1',
                      'dksat_Time._soil_layers_stag.2': 'geom_mean.dksat_soil_layers_stag=2',
                      'dksat_Time._soil_layers_stag.3': 'geom_mean.dksat_soil_layers_stag=3',
                      'dksat_Time._soil_layers_stag.4': 'geom_mean.dksat_soil_layers_stag=4',
@@ -172,7 +174,7 @@ def change_hydrofab_attr(
 
     # Rename columns in attribute dataframe
     if vpu == 'ak' or vpu == 'hi' or vpu == 'prvi':
-        dfa = dfa.rename(columns=attr_dict, inplace=True)
+        dfa.rename(columns=attr_dict, inplace=True)
 
     # Get catchment area from divides layer and append to attributes data frame
     divide_vals = divides_layer[['divide_id', 'lengthkm', 'areasqkm']]
