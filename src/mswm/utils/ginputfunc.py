@@ -3458,7 +3458,7 @@ def create_realization_file(
                     "Qb_topmodel(1,double,m h^-1,node)": 0.0,
                     "Qv_topmodel(1,double,m h^-1,node)": 0.0,
                     "global_deficit(1,double,m,node)": 0.0}
-        elif 'topmodel' and 'smp' in modules:
+        elif 'topmodel' in modules and 'smp' in modules:
             model_params = {
                 "sloth_soil_storage(1,double,m,node)": 1.0E-10,
                 "sloth_soil_storage_change(1,double,m,node)": 0.0,
