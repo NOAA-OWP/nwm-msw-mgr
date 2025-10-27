@@ -2582,9 +2582,12 @@ def create_fcst_times(
 
     # Construct start and end times for cold start period
     if use_cold_start:
-
         fcst_start = cold_start_datetime
         fcst_end = datetime.datetime.strftime(cycle_dt - datetime.timedelta(hours=1), "%Y-%m-%d %H:%M:%S")
+    # Construct start and end times for intermediate AnA period
+    elif use_int_ana:
+        fcst_start = datetime.datetime.strftime(cycle_dt, "%Y-%m-%d %H:%M:%S")
+        fcst_end = datetime.datetime.strftime(cycle_dt + datetime.timedelta(hours=hind_cycle) - datetime.timedelta(hours=1), "%Y-%m-%d %H:%M:%S")
 
     # Construct start and end times based on forecast cycle
     elif ana_flag == 0:
@@ -2679,13 +2682,13 @@ def update_fcst_forcing_config(
     # Set lookback minutes for cold start period
     if use_cold_start:
         cold_start_dt = datetime.datetime.strptime(cold_start_datetime, "%Y-%m-%d %H:%M:%S")
-        lookback = int((cycle_dt - cold_start_dt).total_seconds() / 60)
+        lookback = int((cycle_dt - cold_start_dt).total_seconds() / 60) - 60
         forcing_template['LookBack'] = lookback
         forcing_template['ForecastInputHorizons'] = [lookback, lookback]
 
     # Set lookback minutes for intermediate ana period
-    if use_int_ana:
-        lookback = int((cycle_dt - initial_cycle_dt).total_seconds() / 60)
+    elif use_int_ana:
+        lookback = int((cycle_dt - initial_cycle_dt).total_seconds() / 60) - 60
         forcing_template['LookBack'] = lookback
         forcing_template['ForecastInputHorizons'] = [lookback, lookback]
 
@@ -2704,6 +2707,7 @@ def update_fcst_forcing_config(
     # Write forcing config yaml file
     with open(forcing_config_file, "w", encoding="utf-8") as file:
         yaml.dump(forcing_template, file, Dumper=ForcingDumper, sort_keys=False, default_flow_style=False)
+
 
 def update_hist_forcing_config(
         time_period: dict,
@@ -2749,7 +2753,7 @@ def update_hist_forcing_config(
         end_times.append(datetime.datetime.strptime(time_period['run_time_period']['calib'][1], '%Y-%m-%d %H:%M:%S'))
         end_times.append(datetime.datetime.strptime(time_period['run_time_period']['valid'][1], '%Y-%m-%d %H:%M:%S'))
 
-    file_suffix = ['','valid'] if run_type == 'calibration' else ['']
+    file_suffix = ['', 'valid'] if run_type == 'calibration' else ['']
 
     # Set geogrid file name
     gpkg_name = os.path.splitext(os.path.basename(gpkg_file))[0]
@@ -3328,7 +3332,6 @@ def create_reg_realization_file(
 
             # module output variable for input to t-route
             main_output_variable = "land_surface_water__runoff_depth"
-
 
         # Store catchment model configs
         model_type_name = "bmi_multi"
