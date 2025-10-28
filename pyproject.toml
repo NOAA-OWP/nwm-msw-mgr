@@ -16,7 +16,11 @@ dependencies = [
 ]
 
 [tool.setuptools]
+include-package-data = true
 package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+"mswm.module_parameter_files" = ["**/*"]
