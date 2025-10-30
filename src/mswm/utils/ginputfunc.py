@@ -2736,7 +2736,7 @@ def update_hist_forcing_config(
         end_times.append(datetime.datetime.strptime(time_period['run_time_period']['calib'][1], '%Y-%m-%d %H:%M:%S'))
         end_times.append(datetime.datetime.strptime(time_period['run_time_period']['valid'][1], '%Y-%m-%d %H:%M:%S'))
         
-    file_suffix = ['','valid'] if run_type == 'calibration' else None
+    file_suffix = ['','valid'] if run_type == 'calibration' else []
 
     # Set geogrid file name
     gpkg_name = os.path.splitext(os.path.basename(gpkg_file))[0]
