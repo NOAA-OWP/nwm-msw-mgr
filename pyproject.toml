@@ -5,10 +5,13 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "mswm"
 version = "0.1.1"           # or mark as dynamic if you use setuptools-scm
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [
-  "geopandas~=1.1.1",
-  "pandas~=2.3.1",
+  "geopandas>=0.11.0,<0.14.0",
+  "shapely>=1.8.0,<2.0.0",        # CRITICAL - must be <2.0!
+  "fiona>=1.8.0,<1.10.0",         # Must match ngen-forcing
+  "pyproj>=3.2.0,<4.0.0",         # Must match ngen-forcing
+  "pandas>=2.0.0",                # From ngen-forcing (unpinned there)
   "netCDF4==1.6.3",
   "pydantic==2.11.4",
   "PyYAML~=6.0.2",
