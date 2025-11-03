@@ -3621,7 +3621,7 @@ def create_realization_file(
 
         # variable name mapping section
         variables_names_map = dict()
-        variables_names_map["streamflow_cms"] = "land_surface_water__runoff_volume_flux",
+        variables_names_map["streamflow_cms"] = "land_surface_water__runoff_volume_flux"
         variables_names_map["pytorch_model_path"] = os.path.join(bmi_dir['lstm'], "sugar_creek_trained.pt")
         variables_names_map["normalization_path"] = os.path.join(bmi_dir['lstm'], "input_scaling.csv")
         variables_names_map["initial_state_path"] = os.path.join(bmi_dir['lstm'], "initial_states.csv")
