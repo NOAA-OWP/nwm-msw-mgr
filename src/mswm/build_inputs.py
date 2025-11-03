@@ -841,7 +841,7 @@ class RealizationBuilder:
         # Symlink gpkg_file to Input directory
         if os.path.exists(self.cat_file) or os.path.islink(self.cat_file):
             try:
-                self.cat_file.unlink()
+                os.unlink(self.cat_file)
             except Exception as e:
                 logger.error(f"Failed to remove existing {self.cat_file}: {e}")
                 raise
@@ -914,7 +914,7 @@ class RealizationBuilder:
                     target = os.path.join(self.forcing_path, os.path.basename(ffile))
                     if os.path.exists(target) or os.path.islink(target):
                         try:
-                            target.unlink()
+                            os.unlink(target)
                         except Exception as e:
                             logger.error(f"Failed to remove existing {target}: {e}")
                             raise
@@ -1114,7 +1114,7 @@ class RealizationBuilder:
                                 shutil.rmtree(mod_input_dir)  # Remove existing bmi directory
                             else:
                                 try:
-                                    mod_input_dir.unlink()
+                                    os.unlink(mod_input_dir)
                                 except Exception as e:
                                     logger.error(f"Failed to remove existing {mod_input_dir}: {e}")
                                     raise

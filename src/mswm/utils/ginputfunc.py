@@ -556,7 +556,11 @@ def create_noah_input(
         dst = os.path.join(noah_input_dir, par)
         # Remove existing symlink
         if os.path.exists(dst) or os.path.islink(dst):
-            dst.unlink()
+            try:
+                os.unlink(dst)
+            except Exception as e:
+                logger.error(f"Failed to remove existing {dst}: {e}")
+                raise
         try:
             os.symlink(src, dst)
         except OSError as e:
@@ -985,7 +989,7 @@ def create_ueb_input(
         # Remove existing file or symlink
         if os.path.exists(dst) or os.path.islink(dst):
             try:
-                dst.unlink()
+                os.unlink(dst)
             except Exception as e:
                 logger.error(f"Failed to remove existing {dst}: {e}")
                 raise
@@ -1017,7 +1021,7 @@ def create_ueb_input(
                 # create a symbolic link
                 if os.path.exists(site_file) or os.path.islink(site_file):
                     try:
-                        site_file.unlink()
+                        os.unlink(site_file)
                     except Exception as e:
                         logger.error(f"Failed to remove existing {site_file}: {e}")
                         raise
@@ -1253,7 +1257,7 @@ def create_symlinks(src_file_list, src_dir, dst_dir):
             target = os.path.join(dst_dir, os.path.basename(ffile))
             if os.path.exists(target) or os.path.islink(target):
                 try:
-                    target.unlink()
+                    os.unlink(target)
                 except Exception as e:
                     logger.error(f"Failed to remove existing {target}: {e}")
                     raise
@@ -1517,7 +1521,7 @@ def change_sac_snow17_input(
         # create symbolic link to the existing sac parameter file
         if os.path.exists(param_file) or os.path.islink(param_file):
             try:
-                param_file.unlink()
+                os.unlink(param_file)
             except Exception as e:
                 logger.error(f"Failed to remove existing {param_file}: {e}")
                 raise
@@ -2893,7 +2897,7 @@ def create_reg_realization_file(
 
         if os.path.exists(lib_mod_link) or os.path.islink(lib_mod_link):
             try:
-                lib_mod_link.unlink()
+                os.unlink(lib_mod_link)
             except Exception as e:
                 logger.error(f"Failed to remove existing {lib_mod_link}: {e}")
                 raise
@@ -3335,7 +3339,7 @@ def create_realization_file(
         lib_mod.update({key: lib_mod_link})
         if os.path.exists(lib_mod_link) or os.path.islink(lib_mod_link):
             try:
-                lib_mod_link.unlink()
+                os.unlink(lib_mod_link)
             except Exception as e:
                 logger.error(f"Failed to remove existing {lib_mod_link}: {e}")
                 raise
@@ -3789,9 +3793,9 @@ def create_calib_config_file(
 
     # Create symlink for ngen executable
     ngen_file_link = os.path.join(workdir, 'Input/' + os.path.basename(model_dict['binary'])[0:4])
-    if os.path.exists(ngen_file_link) or os.path.link(ngen_file_link):
+    if os.path.exists(ngen_file_link) or os.path.islink(ngen_file_link):
         try:
-            ngen_file_link.unlink()
+            os.unlink(ngen_file_link)
         except Exception as e:
             logger.error(f"Failed to remove existing {ngen_file_link}: {e}")
             raise
