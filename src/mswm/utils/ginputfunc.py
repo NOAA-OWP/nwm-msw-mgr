@@ -1531,7 +1531,7 @@ def change_sac_snow17_input(
                 os.symlink(param_file0, param_file)
             except OSError as e:
                 logger.critical(f"Failed to create symlink: {param_file0} -> {param_file}: {e}")
-                raise 
+                raise
         else:
             try:
                 raise Exception(f'Parameter file does not exist: {param_file0}')
@@ -3160,12 +3160,11 @@ def create_reg_realization_file(
                     "num_wetting_fronts": "soil_num_wetting_fronts"}
             elif 'topmodel' in grp_mod:
                 model_configs['smp']['params']["variables_names_map"] = {
-                    "soil_storage" : "sloth_soil_storage",
-                    "soil_storage_change" : "sloth_soil_storage_change",
-                    "Qb_topmodel" : "land_surface_water__baseflow_volume_flux",
-                    "Qv_topmodel" : "soil_water_root-zone_unsat-zone_top__recharge_volume_flux",
-                    "global_deficit" : "soil_water__domain_volume_deficit"}
-
+                    "soil_storage": "sloth_soil_storage",
+                    "soil_storage_change": "sloth_soil_storage_change",
+                    "Qb_topmodel": "land_surface_water__baseflow_volume_flux",
+                    "Qv_topmodel": "soil_water_root-zone_unsat-zone_top__recharge_volume_flux",
+                    "global_deficit": "soil_water__domain_volume_deficit"}
 
         # lasam
         if 'lasam' in grp_mod:
@@ -3199,10 +3198,10 @@ def create_reg_realization_file(
 
             # variable name mapping section
             variables_names_map = dict()
-            variables_names_map["streamflow_cms"] = "land_surface_water__runoff_volume_flux",
-            variables_names_map["pytorch_model_path"] = os.path.join(bmi_dir['lstm'], "sugar_creek_trained.pt"),
-            variables_names_map["normalization_path"] = os.path.join(bmi_dir['lstm'], "input_scaling.csv"),
-            variables_names_map["initial_state_path"] = os.path.join(bmi_dir['lstm'], "initial_states.csv"),
+            variables_names_map["streamflow_cms"] = "land_surface_water__runoff_volume_flux"
+            variables_names_map["pytorch_model_path"] = os.path.join(bmi_dir['lstm'], "sugar_creek_trained.pt")
+            variables_names_map["normalization_path"] = os.path.join(bmi_dir['lstm'], "input_scaling.csv")
+            variables_names_map["initial_state_path"] = os.path.join(bmi_dir['lstm'], "initial_states.csv")
             variables_names_map["useGPU"] = False
 
             var_maps = dict()
@@ -3349,7 +3348,6 @@ def create_realization_file(
         except OSError as e:
             logger.critical(f"Failed to create symlink: {value} -> {lib_mod_link}: {e}")
             raise
-
 
     model_configs = {}
 
@@ -3587,11 +3585,11 @@ def create_realization_file(
                 "num_wetting_fronts": "soil_num_wetting_fronts"}
         elif 'topmodel' in modules:
             model_configs['smp']['params']["variables_names_map"] = {
-                "soil_storage" : "sloth_soil_storage",
-				"soil_storage_change" : "sloth_soil_storage_change",
-				"Qb_topmodel" : "land_surface_water__baseflow_volume_flux",
-				"Qv_topmodel" : "soil_water_root-zone_unsat-zone_top__recharge_volume_flux",
-				"global_deficit" : "soil_water__domain_volume_deficit"}
+                "soil_storage": "sloth_soil_storage",
+                "soil_storage_change": "sloth_soil_storage_change",
+                "Qb_topmodel": "land_surface_water__baseflow_volume_flux",
+                "Qv_topmodel": "soil_water_root-zone_unsat-zone_top__recharge_volume_flux",
+                "global_deficit": "soil_water__domain_volume_deficit"}
 
     # lasam
     if 'lasam' in modules:
@@ -3623,10 +3621,10 @@ def create_realization_file(
 
         # variable name mapping section
         variables_names_map = dict()
-        variables_names_map["streamflow_cms"] = "land_surface_water__runoff_volume_flux",
-        variables_names_map["pytorch_model_path"] = os.path.join(bmi_dir['lstm'], "sugar_creek_trained.pt"),
-        variables_names_map["normalization_path"] = os.path.join(bmi_dir['lstm'], "input_scaling.csv"),
-        variables_names_map["initial_state_path"] = os.path.join(bmi_dir['lstm'], "initial_states.csv"),
+        variables_names_map["streamflow_cms"] = "land_surface_water__runoff_volume_flux"
+        variables_names_map["pytorch_model_path"] = os.path.join(bmi_dir['lstm'], "sugar_creek_trained.pt")
+        variables_names_map["normalization_path"] = os.path.join(bmi_dir['lstm'], "input_scaling.csv")
+        variables_names_map["initial_state_path"] = os.path.join(bmi_dir['lstm'], "initial_states.csv")
         variables_names_map["useGPU"] = False
 
         var_maps = dict()

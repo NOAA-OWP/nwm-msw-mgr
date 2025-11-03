@@ -845,7 +845,6 @@ class RealizationBuilder:
             except Exception as e:
                 logger.error(f"Failed to remove existing {self.cat_file}: {e}")
                 raise
-            
 
         try:
             os.symlink(self.gpkg_file, self.cat_file)
@@ -1124,7 +1123,6 @@ class RealizationBuilder:
                         except OSError as e:
                             logger.critical(f"Failed to create symlink: {bmi_dir} -> {mod_input_dir}: {e}")
                             raise
-                        
 
             else:
                 # Create BMI config files from scratch if paths not provided
@@ -1258,6 +1256,17 @@ class RealizationBuilder:
                                                                                      self.output_dict['sm_frac_depth'], self.output_dict['sm_profile_depth'])
                     # Modify existing SFT inputs to match rainfall runoff model
                     elif m1 == "sft":
+                        # Loop through schemes that could be paired with SFT (CFES/CFEX/LASAM)
+                        # SFT could be paired with CFES/CFEX/LASAM simulatenously in different formulations, so configs must be generated separately
+                        for scheme in ['cfes', 'cfex', 'lasam', 'topmodel']:
+                            # Retrieve formulation groups where CFES/CFEX/LASAM co-occur with SFT
+                            scheme_sft_grps = [grp for grp, mods in self.grp_to_form.items() if scheme in mods and 'sft' in mods]
+
+                            if scheme_sft_grps:
+                                # Retrieve catchments and formulations corresponding to scheme
+                                scheme_cat = [cat for grp in scheme_sft_grps for cat in self.grp_to_cat[grp]]
+                                scheme_form = [self.cat_to_form[cat] for cat in scheme_cat]
+
                         # Create SFT inputs
                         gfun.change_sft_input(scheme_cat, scheme_form, mod_input_dir, bmi_dir, self.run_type)
 
@@ -1271,21 +1280,20 @@ class RealizationBuilder:
                             file_match = list(Path(bmi_dir).glob(f"*{cat}*"))
                             for fp in file_match:
                                 dest = Path(mod_input_dir) / fp.name
-                                
+
                                 if os.path.exists(dest) or os.path.islink(dest):
                                     try:
                                         dest.unlink()
                                     except Exception as e:
                                         logger.error(f"Failed to remove existing {dest}: {e}")
                                         raise
-                                    
+
                                 try:
                                     os.symlink(fp.resolve(), dest)
                                 except OSError as e:
                                     logger.critical(f"Failed to create symlink: {fp} -> {dest}: {e}")
                                     raise
                         logger.info(f'{m2}: create symlink from {bmi_dir} to {mod_input_dir}')
-                                
 
             else:
                 # Create BMI config files from scratch if paths not provided
