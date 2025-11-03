@@ -16,6 +16,7 @@ import json
 import yaml
 from collections import defaultdict
 from pydantic import ValidationError
+import shutil
 
 from mswm.utils import ginputfunc as gfun
 from mswm.utils import settings
@@ -804,8 +805,12 @@ class RealizationBuilder:
         symlink_path = Path(self.input_dir) / "ngen"
 
         # Remove existing symlink
-        if symlink_path.exists() or symlink_path.is_symlink():
-            symlink_path.unlink()
+        if os.path.exists(symlink_path) or os.path.islink(symlink_path):
+            try:
+                symlink_path.unlink()
+            except Exception as e:
+                logger.error(f"Failed to remove existing {symlink_path}: {e}")
+                raise
 
         # Link ngen executable
         try:
@@ -813,6 +818,7 @@ class RealizationBuilder:
             logger.info("Created symlink to ngen executable")
         except OSError as e:
             logger.critical(f"Failed to create symlink: {symlink_path} -> {exe_path}: {e}")
+            raise
 
     def _extract_hydrofabric(self):
         """
@@ -833,9 +839,20 @@ class RealizationBuilder:
         self.walk_file = self.input_dir + '{}'.format(self.basin) + '_crosswalk.json'
 
         # Symlink gpkg_file to Input directory
-        if not os.path.exists(self.cat_file):
+        if os.path.exists(self.cat_file) or os.path.islink(self.cat_file):
+            try:
+                os.unlink(self.cat_file)
+            except Exception as e:
+                logger.error(f"Failed to remove existing {self.cat_file}: {e}")
+                raise
+            
+
+        try:
             os.symlink(self.gpkg_file, self.cat_file)
             logger.info(f'Symlink created from {self.gpkg_file} to {self.cat_file}')
+        except OSError as e:
+            logger.critical(f"Failed to create symlink: {self.gpkg_file} -> {self.cat_file}: {e}")
+            raise
 
         # Create crosswalk file between catchments and gages for calibration run
         if self.run_type == 'calibration':
@@ -892,9 +909,22 @@ class RealizationBuilder:
                     logger.info(f'Forcing file {ffile} does not exist')
                     missing_catchment_files.append(ffile)
                 else:
+
+                    # Remove existing symlink
                     target = os.path.join(self.forcing_path, os.path.basename(ffile))
-                    if not os.path.exists(target):
+                    if os.path.exists(target) or os.path.islink(target):
+                        try:
+                            os.unlink(target)
+                        except Exception as e:
+                            logger.error(f"Failed to remove existing {target}: {e}")
+                            raise
+
+                    try:
                         os.symlink(ffile, target)
+                    except OSError as e:
+                        logger.critical(f"Failed to create symlink: {ffile} -> {target}: {e}")
+                        raise
+
             if missing_catchment_files:
                 try:
                     raise Exception(f"Missing catchment files in forcing data: {self.forcing_dir}")
@@ -1018,9 +1048,15 @@ class RealizationBuilder:
 
             # define module input directory
             mod_input_dir = os.path.join(self.input_dir, m2 + '_input')
+
+            # Remove existing file or symlink
             if os.path.isdir(mod_input_dir):
                 if os.path.islink(mod_input_dir):
-                    os.unlink(mod_input_dir)
+                    try:
+                        os.unlink(mod_input_dir)
+                    except Exception as e:
+                        logger.error(f"Failed to remove existing {mod_input_dir}: {e}")
+                        raise
 
             # make symlinks to existing input files or create new input files
             bmi_dir = self.conf3.get(m2.replace('-', '_') + '_bmi_dir')
@@ -1073,7 +1109,22 @@ class RealizationBuilder:
                     else:
                         # Create symbolic link
                         logger.info(f'{m2}: create symlink from {bmi_dir} to {mod_input_dir}')
-                        os.symlink(bmi_dir, mod_input_dir, target_is_directory=True)
+                        if os.path.exists(mod_input_dir) or os.path.islink(mod_input_dir):
+                            if os.path.isdir(mod_input_dir) and not os.path.islink(mod_input_dir):
+                                shutil.rmtree(mod_input_dir)  # Remove existing bmi directory
+                            else:
+                                try:
+                                    os.unlink(mod_input_dir)
+                                except Exception as e:
+                                    logger.error(f"Failed to remove existing {mod_input_dir}: {e}")
+                                    raise
+
+                        try:
+                            os.symlink(bmi_dir, mod_input_dir, target_is_directory=True)
+                        except OSError as e:
+                            logger.critical(f"Failed to create symlink: {bmi_dir} -> {mod_input_dir}: {e}")
+                            raise
+                        
 
             else:
                 # Create BMI config files from scratch if paths not provided
@@ -1147,7 +1198,11 @@ class RealizationBuilder:
             mod_input_dir = os.path.join(self.input_dir, m2 + '_input')
             if os.path.isdir(mod_input_dir):
                 if os.path.islink(mod_input_dir):
-                    os.unlink(mod_input_dir)
+                    try:
+                        os.unlink(mod_input_dir)
+                    except Exception as e:
+                        logger.error(f"Failed to remove existing {mod_input_dir}: {e}")
+                        raise
 
             # Store input dir in dictionary
             bmi_dir = self.conf3.get(m2.replace('-', '_') + '_bmi_dir')
@@ -1209,7 +1264,6 @@ class RealizationBuilder:
                     else:
                         # Create symbolic link to catchments with formulation
                         os.makedirs(mod_input_dir, exist_ok=True)
-                        logger.info(f'{m2}: create symlink from {bmi_dir} to {mod_input_dir}')
 
                         # Only link files for required catchments, rather than all files
                         # Could go back to symlinking all files if this causes performance issues
@@ -1217,8 +1271,21 @@ class RealizationBuilder:
                             file_match = list(Path(bmi_dir).glob(f"*{cat}*"))
                             for fp in file_match:
                                 dest = Path(mod_input_dir) / fp.name
-                                if not dest.exists():
+                                
+                                if os.path.exists(dest) or os.path.islink(dest):
+                                    try:
+                                        dest.unlink()
+                                    except Exception as e:
+                                        logger.error(f"Failed to remove existing {dest}: {e}")
+                                        raise
+                                    
+                                try:
                                     os.symlink(fp.resolve(), dest)
+                                except OSError as e:
+                                    logger.critical(f"Failed to create symlink: {fp} -> {dest}: {e}")
+                                    raise
+                        logger.info(f'{m2}: create symlink from {bmi_dir} to {mod_input_dir}')
+                                
 
             else:
                 # Create BMI config files from scratch if paths not provided
