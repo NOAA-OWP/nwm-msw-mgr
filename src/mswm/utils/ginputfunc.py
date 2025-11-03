@@ -554,8 +554,14 @@ def create_noah_input(
     for par in noah_par_tables:
         src = os.path.join(param_dir_source, par)
         dst = os.path.join(noah_input_dir, par)
-        if not os.path.exists(dst):
+        # Remove existing symlink
+        if os.path.exists(dst) or os.path.islink(dst):
+            dst.unlink()
+        try:
             os.symlink(src, dst)
+        except OSError as e:
+            logger.critical(f"Failed to create symlink: {src} -> {dst}: {e}")
+            raise
 
     # Files for either the calibration and validation run or the regionalization run
     if run_type == 'calibration':
@@ -975,10 +981,18 @@ def create_ueb_input(
                 raise
         dst = os.path.join(ueb_input_dir, 'ueb_' + par + '.dat')
         const_files.update({par: dst})
-        with open(src) as f:
-            if not os.path.exists(dst):
-                os.symlink(src, dst)
-                logger.info(f'Creating symlink from {src} to {dst}')
+
+        # Remove existing file or symlink
+        if os.path.exists(dst) or os.path.islink(dst):
+            try:
+                dst.unlink()
+            except Exception as e:
+                logger.error(f"Failed to remove existing {dst}: {e}")
+                raise
+
+        # Create new symlink
+        os.symlink(src, dst)
+        logger.info(f'Creating symlink from {src} to {dst}')
 
     # sitevars file
     for catID in catids:
@@ -1002,11 +1016,14 @@ def create_ueb_input(
             with open(src[0]) as f:
                 # create a symbolic link
                 if os.path.exists(site_file) or os.path.islink(site_file):
-                    pass
-                    # logger.warning(f'File/link {dst} already exists')
-                else:
-                    os.symlink(src[0], site_file)
-                    logger.info(f'Creating symlink from {src[0]} to {site_file}')
+                    try:
+                        site_file.unlink()
+                    except Exception as e:
+                        logger.error(f"Failed to remove existing {site_file}: {e}")
+                        raise
+
+                os.symlink(src[0], site_file)
+                logger.info(f'Creating symlink from {src[0]} to {site_file}')
 
         else:  # create the sitevars file based on a template file
 
@@ -1234,8 +1251,19 @@ def create_symlinks(src_file_list, src_dir, dst_dir):
             missing_input_files.append(ffile)
         else:
             target = os.path.join(dst_dir, os.path.basename(ffile))
-            if not os.path.exists(target):
+            if os.path.exists(target) or os.path.islink(target):
+                try:
+                    target.unlink()
+                except Exception as e:
+                    logger.error(f"Failed to remove existing {target}: {e}")
+                    raise
+
+            try:
                 os.symlink(ffile, target)
+                logger.info("Created symlink to ngen executable")
+            except OSError as e:
+                logger.critical(f"Failed to create symlink: {ffile} -> {target}: {e}")
+                raise
 
     if missing_input_files:
         try:
@@ -1275,9 +1303,18 @@ def create_lstm_config(
             raise
 
     if os.path.islink(train_data_dir) or os.path.exists(train_data_dir):
-        os.unlink(train_data_dir)
+        try:
+            os.unlink(train_data_dir)
+        except Exception as e:
+            logger.error(f"Failed to remove existing {train_data_dir}: {e}")
+            raise
 
-    os.symlink(lstm_train_data_dir, train_data_dir, target_is_directory=True)
+    try:
+        os.symlink(lstm_train_data_dir, train_data_dir, target_is_directory=True)
+        logger.info("Created symlink to ngen executable")
+    except OSError as e:
+        logger.critical(f"Failed to create symlink: {lstm_train_data_dir} -> {train_data_dir}: {e}")
+        raise
 
     # Create config.yml
     params_to_remove = ['test_*', 'train_*', 'validation_*', '*_dir']
@@ -1478,8 +1515,19 @@ def change_sac_snow17_input(
         param_file = os.path.join(input_dir, str0 + '{}'.format(catID) + '.txt')
 
         # create symbolic link to the existing sac parameter file
+        if os.path.exists(param_file) or os.path.islink(param_file):
+            try:
+                param_file.unlink()
+            except Exception as e:
+                logger.error(f"Failed to remove existing {param_file}: {e}")
+                raise
+
         if os.path.exists(param_file0):
-            os.symlink(param_file0, param_file)
+            try:
+                os.symlink(param_file0, param_file)
+            except OSError as e:
+                logger.critical(f"Failed to create symlink: {param_file0} -> {param_file}: {e}")
+                raise 
         else:
             try:
                 raise Exception(f'Parameter file does not exist: {param_file0}')
@@ -2842,8 +2890,19 @@ def create_reg_realization_file(
     for key, value in lib_file.items():
         lib_mod_link = os.path.join(workdir, 'Input/' + os.path.basename(value))
         lib_mod.update({key: lib_mod_link})
-        if not os.path.exists(lib_mod_link):
+
+        if os.path.exists(lib_mod_link) or os.path.islink(lib_mod_link):
+            try:
+                lib_mod_link.unlink()
+            except Exception as e:
+                logger.error(f"Failed to remove existing {lib_mod_link}: {e}")
+                raise
+        try:
             os.symlink(value, lib_mod_link)
+            logger.info("Created symlink to ngen executable")
+        except OSError as e:
+            logger.critical(f"Failed to create symlink: {value} -> {lib_mod_link}: {e}")
+            raise
 
     # Set model formulations for each regionalization group
     grp_main = {}
@@ -3274,8 +3333,19 @@ def create_realization_file(
     for key, value in lib_file.items():
         lib_mod_link = os.path.join(workdir, 'Input/' + os.path.basename(value))
         lib_mod.update({key: lib_mod_link})
-        if not os.path.exists(lib_mod_link):
+        if os.path.exists(lib_mod_link) or os.path.islink(lib_mod_link):
+            try:
+                lib_mod_link.unlink()
+            except Exception as e:
+                logger.error(f"Failed to remove existing {lib_mod_link}: {e}")
+                raise
+        try:
             os.symlink(value, lib_mod_link)
+            logger.info("Created symlink to ngen executable")
+        except OSError as e:
+            logger.critical(f"Failed to create symlink: {value} -> {lib_mod_link}: {e}")
+            raise
+
 
     model_configs = {}
 
@@ -3719,9 +3789,17 @@ def create_calib_config_file(
 
     # Create symlink for ngen executable
     ngen_file_link = os.path.join(workdir, 'Input/' + os.path.basename(model_dict['binary'])[0:4])
-    if os.path.exists(ngen_file_link):
-        os.remove(ngen_file_link)
-    os.symlink(model_dict['binary'], ngen_file_link)
+    if os.path.exists(ngen_file_link) or os.path.link(ngen_file_link):
+        try:
+            ngen_file_link.unlink()
+        except Exception as e:
+            logger.error(f"Failed to remove existing {ngen_file_link}: {e}")
+            raise
+    try:
+        os.symlink(model_dict['binary'], ngen_file_link)
+    except OSError as e:
+        logger.critical(f"Failed to create symlink: {model_dict['binary']} -> {ngen_file_link}: {e}")
+        raise
 
     model_dict['binary'] = ngen_file_link
     basin_yaml['model'] = model_dict
