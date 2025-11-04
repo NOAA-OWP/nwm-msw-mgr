@@ -2931,11 +2931,11 @@ def create_reg_realization_file(
                     "num_wetting_fronts": "soil_num_wetting_fronts"}
             elif 'topmodel' in grp_mod:
                 model_configs['smp']['params']["variables_names_map"] = {
-                    "soil_storage" : "sloth_soil_storage",
-                    "soil_storage_change" : "sloth_soil_storage_change",
-                    "Qb_topmodel" : "land_surface_water__baseflow_volume_flux",
-                    "Qv_topmodel" : "soil_water_root-zone_unsat-zone_top__recharge_volume_flux",
-                    "global_deficit" : "soil_water__domain_volume_deficit"}
+                    "soil_storage": "sloth_soil_storage",
+                    "soil_storage_change": "sloth_soil_storage_change",
+                    "Qb_topmodel": "land_surface_water__baseflow_volume_flux",
+                    "Qv_topmodel": "soil_water_root-zone_unsat-zone_top__recharge_volume_flux",
+                    "global_deficit": "soil_water__domain_volume_deficit"}
 
 
         # lasam
@@ -3347,11 +3347,11 @@ def create_realization_file(
                 "num_wetting_fronts": "soil_num_wetting_fronts"}
         elif 'topmodel' in modules:
             model_configs['smp']['params']["variables_names_map"] = {
-                "soil_storage" : "sloth_soil_storage",
-				"soil_storage_change" : "sloth_soil_storage_change",
-				"Qb_topmodel" : "land_surface_water__baseflow_volume_flux",
-				"Qv_topmodel" : "soil_water_root-zone_unsat-zone_top__recharge_volume_flux",
-				"global_deficit" : "soil_water__domain_volume_deficit"}
+                "soil_storage": "sloth_soil_storage",
+                "soil_storage_change": "sloth_soil_storage_change",
+                "Qb_topmodel": "land_surface_water__baseflow_volume_flux",
+                "Qv_topmodel": "soil_water_root-zone_unsat-zone_top__recharge_volume_flux",
+                "global_deficit": "soil_water__domain_volume_deficit"}
 
     # lasam
     if 'lasam' in modules:
