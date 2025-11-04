@@ -2580,7 +2580,7 @@ def create_fcst_times(
     if use_cold_start is True:
 
         fcst_start = cold_start_datetime
-        fcst_end = datetime.datetime.strftime(cycle_dt, "%Y-%m-%d %H:%M:%S")
+        fcst_end = datetime.datetime.strftime(cycle_dt - datetime.timedelta(hours=1), "%Y-%m-%d %H:%M:%S")
 
     # Construct start and end times based on forecast cycle
     elif ana_flag == 0:
@@ -2599,7 +2599,7 @@ def create_fcst_times(
         forcing_lookback = int(forcing_template['LookBack'] / 60)
 
         fcst_start = datetime.datetime.strftime(cycle_dt - datetime.timedelta(hours=forcing_lookback), "%Y-%m-%d %H:%M:%S")
-        fcst_end = datetime.datetime.strftime(cycle_dt, "%Y-%m-%d %H:%M:%S")
+        fcst_end = datetime.datetime.strftime(cycle_dt - datetime.timedelta(hours=1), "%Y-%m-%d %H:%M:%S")
 
     return fcst_start, fcst_end
 
@@ -2662,6 +2662,8 @@ def update_forcing_config(
     # Create directory for storing config file
     os.makedirs(forcing_config_dir, exist_ok=True)
 
+    ana_flag = forcing_template['AnAFlag']
+
     # Format cycle_date and hour for config file
     cycle_dt = datetime.datetime.strptime(cycle_date, "%Y-%m-%d").replace(hour=int(cycle_hour.replace("z", "")))
     cycle_str = cycle_dt.strftime('%Y%m%d%H%M')
@@ -2669,7 +2671,7 @@ def update_forcing_config(
     # Set lookback minutes for cold start period
     if use_cold_start is True:
         cold_start_dt = datetime.datetime.strptime(cold_start_datetime, "%Y-%m-%d %H:%M:%S")
-        forcing_template['LookBack'] = int((cycle_dt - cold_start_dt).total_seconds() / 60)
+        forcing_template['LookBack'] = int((cycle_dt - cold_start_dt).total_seconds() / 60) - 60
 
     # Set geogrid file name
     gpkg_name = os.path.splitext(os.path.basename(gpkg_file))[0]
@@ -2680,7 +2682,10 @@ def update_forcing_config(
     forcing_template = replace_forcing_placeholders(forcing_template, vars)
 
     # Update forcing_template with dynamic variables
-    forcing_template['RefcstBDateProc'] = cycle_str
+    if ana_flag:
+        forcing_template['RefcstBDateProc'] = (cycle_dt - datetime.timedelta(hours=1)).strftime('%Y%m%d%H%M')
+    else:
+        forcing_template['RefcstBDateProc'] = cycle_str
     forcing_template['Geopackage'] = gpkg_file
 
     # Write forcing config yaml file
