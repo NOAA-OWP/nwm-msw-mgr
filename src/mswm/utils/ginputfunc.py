@@ -80,7 +80,7 @@ __all__ = [
     'create_troute_config',
     'create_fcst_times',
     'replace_forcing_placeholders',
-    'update_forcing_config',
+    'update_fcst_forcing_config',
     'update_forcing_in_realization',
     'map_var_names_forcing_engine',
     'create_reg_realization_file',
@@ -2629,7 +2629,7 @@ def replace_forcing_placeholders(
         return obj
 
 
-def update_forcing_config(
+def update_fcst_forcing_config(
         cycle_date: str,
         cycle_hour: str,
         root_dir: str,
@@ -2640,7 +2640,7 @@ def update_forcing_config(
         use_cold_start: bool,
         cold_start_datetime: str = None
 ) -> None:
-    """ update bmi forcing engine config yaml file
+    """ update bmi forcing engine config yaml file for forecast forcing
 
     Parameters
     ----------
@@ -2691,6 +2691,81 @@ def update_forcing_config(
     # Write forcing config yaml file
     with open(forcing_config_file, "w", encoding="utf-8") as file:
         yaml.dump(forcing_template, file, Dumper=ForcingDumper, sort_keys=False, default_flow_style=False)
+
+def update_hist_forcing_config(
+        time_period: dict,
+        root_dir: str,
+        forcing_template: dict,
+        gpkg_file: str,
+        forcing_config_dir: Path,
+        forcing_config_file: Path,
+        run_type: str
+) -> None:
+    """ update bmi forcing engine config yaml file for historical forcing
+
+    Parameters
+    ----------
+    time_period: dictionary of run start and end time
+    root_dir : root directory for forcing engine paths
+    forcing_template : dictionary of forcing bmi config template file
+    gpkg_file: path to geopackage file
+    forcing_config_dir: directory path for forcing config file
+    forcing_config_dir: output path for forcing config file
+    run_type: type of run (calib, regionalization, or default)
+
+    Returns
+    ----------
+    None
+    """
+
+    # Create directory for storing config file
+    os.makedirs(forcing_config_dir, exist_ok=True)
+
+    # Retrieve start and end times
+    start_times = []
+    end_times = []
+    if run_type == 'regionalization':
+        start_times.append(datetime.datetime.strptime(time_period['run_time_period']['region'][0], '%Y-%m-%d %H:%M:%S'))
+        end_times.append(datetime.datetime.strptime(time_period['run_time_period']['region'][1], '%Y-%m-%d %H:%M:%S'))
+    elif run_type == 'default':
+        start_times.append(datetime.datetime.strptime(time_period['run_time_period']['default'][0], '%Y-%m-%d %H:%M:%S'))
+        end_times.append(datetime.datetime.strptime(time_period['run_time_period']['default'][1], '%Y-%m-%d %H:%M:%S'))
+    elif run_type == 'calibration':
+        start_times.append(datetime.datetime.strptime(time_period['run_time_period']['calib'][0], '%Y-%m-%d %H:%M:%S'))
+        start_times.append(datetime.datetime.strptime(time_period['run_time_period']['valid'][0], '%Y-%m-%d %H:%M:%S'))
+        end_times.append(datetime.datetime.strptime(time_period['run_time_period']['calib'][1], '%Y-%m-%d %H:%M:%S'))
+        end_times.append(datetime.datetime.strptime(time_period['run_time_period']['valid'][1], '%Y-%m-%d %H:%M:%S'))
+        
+    file_suffix = ['','valid'] if run_type == 'calibration' else ['']
+
+    # Set geogrid file name
+    gpkg_name = os.path.splitext(os.path.basename(gpkg_file))[0]
+
+    # Replace {root_dir} and {gage} placeholders in forcing config
+    vars = {'{root_dir}': root_dir,
+            '{gage}': gpkg_name}
+    forcing_template = replace_forcing_placeholders(forcing_template, vars)
+    forcing_template['Geopackage'] = gpkg_file
+
+    for i in range(len(start_times)):
+
+        # Determine length of run in minutes
+        diff_time = int((end_times[i] - start_times[i]).total_seconds() / 60)
+
+        # Format start time for config file
+        start_str = start_times[i].strftime('%Y%m%d%H%M')
+
+        # Update forcing_template with dynamic variables
+        forcing_template['RefcstBDateProc'] = start_str
+        forcing_template['ForecastInputHorizons'] = [diff_time]
+
+        # If creating validation run forcing engine config, append file suffix for valid
+        if file_suffix[i] == 'valid':
+            forcing_config_file = forcing_config_file.with_name(forcing_config_file.stem + '_' + file_suffix[i] + forcing_config_file.suffix)
+
+        # Write forcing config yaml file
+        with open(forcing_config_file, "w", encoding="utf-8") as file:
+            yaml.dump(forcing_template, file, Dumper=ForcingDumper, sort_keys=False, default_flow_style=False)
 
 
 def update_forcing_in_realization(
@@ -2989,6 +3064,10 @@ def create_reg_realization_file(
             pcp_in = name_prcp.get(forcing_provider)
             var_maps = var_mapping(grp_mod, pet_in, pcp_in, output_dict)
 
+            # Add additional precip mapping for bmi regionalization
+            if forcing_provider == 'bmi':
+                var_maps['input'][name_prcp.get('csv')] = name_prcp.get(forcing_provider)
+
             # module output variable for input to t-route
             main_output_variable = "Q_OUT"
 
@@ -3009,6 +3088,10 @@ def create_reg_realization_file(
             pet_in = "water_potential_evaporation_flux"
             pcp_in = name_prcp.get(forcing_provider)
             var_maps = var_mapping(grp_mod, pet_in, pcp_in, output_dict)
+
+            # Add additional precip mapping for bmi regionalization
+            if forcing_provider == 'bmi':
+                var_maps['input'][name_prcp.get('csv')] = name_prcp.get(forcing_provider)
 
             # module output variable for input to t-route
             main_output_variable = "Qout" if 'smp' not in grp_mod else "sloth_soil_storage"
@@ -3189,6 +3272,10 @@ def create_reg_realization_file(
             pcp_in = "precipitation_rate"
             var_maps = var_mapping(grp_mod, pet_in, pcp_in, output_dict)
 
+            # Add additional precip mapping for bmi regionalization
+            if forcing_provider == 'bmi':
+                var_maps['input'][name_prcp.get('csv')] = name_prcp.get(forcing_provider)
+
             # module output variable for input to t-route
             main_output_variable = "total_discharge"
 
@@ -3215,8 +3302,20 @@ def create_reg_realization_file(
             var_maps['output']['swe_out'] = ''
             var_maps['output']['sm_out'] = ''
 
+            # Add additional mapping for bmi regionalization
+            if forcing_provider == 'bmi':
+                var_maps['input'][name_lw.get('csv')] = name_lw.get(forcing_provider)
+                var_maps['input'][name_sw.get('csv')] = name_lw.get(forcing_provider)
+                var_maps['input'][name_pressure.get('csv')] = name_pressure.get(forcing_provider)
+                var_maps['input'][name_Q2.get('csv')] = name_Q2.get(forcing_provider)
+                var_maps['input'][name_prcp.get('csv')] = name_prcp.get(forcing_provider)
+                var_maps['input'][name_temp.get('csv')] = name_temp.get(forcing_provider)
+                var_maps['input'][name_xwind.get('csv')] = name_xwind.get(forcing_provider)
+                var_maps['input'][name_ywind.get('csv')] = name_ywind.get(forcing_provider)
+
             # module output variable for input to t-route
             main_output_variable = "land_surface_water__runoff_depth"
+
 
         # Store catchment model configs
         model_type_name = "bmi_multi"

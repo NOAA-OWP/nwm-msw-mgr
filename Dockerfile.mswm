@@ -1,4 +1,5 @@
 FROM ngen-int:latest
+#FROM ngen:latest
 
 WORKDIR /ngen-app/mswm/
 
