@@ -189,7 +189,7 @@ class ForcingConfig(StrictBaseModel):
             else:
                 if self.forecast_configuration not in valid_configs:
                     raise ValueError(f"Invalid `forecast_configuration` value: '{self.forecast_configuration}'."
-                                    f"Valid options are: {', '.join(valid_configs)}.")
+                                     f"Valid options are: {', '.join(valid_configs)}.")
 
         # forcing template dir required if forcing_provider is csv
         if self.forcing_provider == 'bmi' and self.forcing_template_dir is None:
