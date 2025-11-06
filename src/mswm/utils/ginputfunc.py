@@ -3539,7 +3539,7 @@ def create_realization_file(
         var_maps = var_mapping(modules, pet_in, pcp_in, output_dict)
 
         # module output variable for input to t-route
-        main_output_variable = "Qout" if 'smp' not in modules else "sloth_soil_storage"
+        main_output_variable = "Qout"
 
     # sac-sma
     if 'sac' in modules:
