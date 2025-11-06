@@ -10,7 +10,7 @@ import pandas as pd
 
 modules_all = pd.DataFrame([('sloth', 'sloth', 'SLOTH', ['SLOTH'], False),
                             ('pet', 'pet', 'PET', ['Evapotranspiration'], False),
-                            ('topoflow', 'topoflow', 'topoflow', ['Glacier_snow'], True),
+                            ('topoflow', 'topoflow', 'topoflow', ['Glacier_snow', 'Evapotranspiration', 'Rainfall_runoff'], True),
                             ('noah', 'noah-owp-modular', 'NoahOWP', ['Glacier_snow', 'Evapotranspiration'], True),
                             ('snow17', 'snow-17', 'snow17', ['Glacier_snow'], True),
                             ('ueb', 'ueb', 'UEB', ['Glacier_snow'], True),
