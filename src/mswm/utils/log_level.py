@@ -63,8 +63,10 @@ def log_level_set(log_file_dir: str):
             log_file_dir = Path('/ngencerf/data/run-logs/mswm/')
         else:
             log_file_dir = Path(BASE_DIR) / 'run-logs/mswm/'
+        log_file_name = f"mswm_{create_timestamp()}.log"
+    else:
+        log_file_name = "mswm.log"
 
-    log_file_name = f"mswm_{create_timestamp()}.log"
     os.makedirs(log_file_dir, exist_ok=True)
     logFilePath = os.path.join(log_file_dir, log_file_name)
 
