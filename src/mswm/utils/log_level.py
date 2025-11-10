@@ -45,7 +45,7 @@ def create_timestamp(date_only: bool = False, iso: bool = False, append_ms: bool
         return ts_base
 
 
-def log_level_set():
+def log_level_set(log_file_dir: str):
     """
     Initialize logging once. If already initialized, does nothing.
     Prints 'Logging into:' exactly once, on first initialization.
@@ -57,10 +57,12 @@ def log_level_set():
 
     BASE_DIR = Path(__file__).resolve().parent.parent
 
-    if Path("/ngencerf/data").exists():
-        log_file_dir = Path('/ngencerf/data/run-logs/mswm/')
-    else:
-        log_file_dir = Path(BASE_DIR) / 'run-logs/mswm/'
+    # If run directory doesn't exist, ouput logs to default location
+    if not (Path(log_file_dir).parent).exists():
+        if Path("/ngencerf/data").exists():
+            log_file_dir = Path('/ngencerf/data/run-logs/mswm/')
+        else:
+            log_file_dir = Path(BASE_DIR) / 'run-logs/mswm/'
 
     log_file_name = f"mswm_{create_timestamp()}.log"
     os.makedirs(log_file_dir, exist_ok=True)
