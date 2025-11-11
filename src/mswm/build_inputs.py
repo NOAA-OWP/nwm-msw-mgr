@@ -27,16 +27,6 @@ from mswm.utils.input_configuration import InputConfig
 
 # Initialize stderr/stdout logger
 logger = None
-if Path("/ngencerf/data").exists():
-    log_file_dir = Path('/ngencerf/data/run-logs/mswm/')
-else:
-    BASE_DIR = Path(__file__).resolve().parent.parent
-    log_file_dir = Path(BASE_DIR) / 'run-logs/mswm/'
-log_file_name = f"mswm_{create_timestamp()}.log"
-logFilePath = os.path.join(log_file_dir, log_file_name)
-logfile = open(logFilePath, "w", buffering=1)
-sys.stdout = logfile
-sys.stderr = logfile
 
 
 class RealizationBuilder:
@@ -60,7 +50,7 @@ class RealizationBuilder:
             try:
                 raise FileNotFoundError(f'Input file not found: {self.input_path}')
             except FileNotFoundError as e:
-                print(e)
+                print(e, file=sys.stderr)
                 raise
 
         # Read input config file
@@ -68,21 +58,21 @@ class RealizationBuilder:
             self.config = configparser.ConfigParser()
             self.config.read(self.input_path)
         except FileNotFoundError as e:
-            print(f"Input file not found: {self.input_path}\n{e}")
+            print(f"Input file not found: {self.input_path}\n{e}", file=sys.stderr)
             raise
         except configparser.Error as e:
-            print(f"ConfigParser error reading config file: {self.input_path}\n{e}")
+            print(f"ConfigParser error reading config file: {self.input_path}\n{e}", file=sys.stderr)
             raise
         except Exception as e:
-            print(f"Unexpected error loading config: {self.input_path}\n{e}")
+            print(f"Unexpected error loading config: {self.input_path}\n{e}", file=sys.stderr)
             raise
 
-        print(f"Input.config file loaded from: {self.input_path}")
+        print(f"Input.config file loaded from: {self.input_path}", file=sys.stdout)
 
         # Raise error if config file is empty
         if not {section: dict(self.config[section]) for section in self.config.sections()}:
             try:
-                raise ValueError(f'Input.config file is empty or contains no valid sections: {self.input_path}')
+                raise ValueError(f'Input.config file is empty or contains no valid sections: {self.input_path}', file=sys.stderr)
             except ValueError as e:
                 print(e)
                 raise
@@ -104,7 +94,7 @@ class RealizationBuilder:
         try:
             self.input_configs = InputConfig(**configs).model_dump()
         except ValidationError as e:
-            print(f"Input.config Pydantic validation failed: {self.input_path}{e}")
+            print(f"Input.config Pydantic validation failed: {self.input_path}{e}", file=sys.stderr)
             raise
 
     def _load_yaml(self):
@@ -117,7 +107,7 @@ class RealizationBuilder:
             try:
                 raise FileNotFoundError(f'Config valid yaml file does not exist: {self.valid_yaml}')
             except FileNotFoundError as e:
-                print(e)
+                print(e, file=sys.stderr)
                 raise
 
         # Read the yaml-based configuration file
@@ -125,16 +115,16 @@ class RealizationBuilder:
             with open(self.valid_yaml) as file:
                 self.valid_conf = yaml.safe_load(file)
         except FileNotFoundError as e:
-            print(f'Config valid yaml file does not exist: {self.valid_yaml}\n{e}')
+            print(f'Config valid yaml file does not exist: {self.valid_yaml}\n{e}', file=sys.stderr)
             raise
         except yaml.YAMLError as e:
-            print(f"YAML parsing error in valid config yaml file: {self.valid_yaml}\n{e}")
+            print(f"YAML parsing error in valid config yaml file: {self.valid_yaml}\n{e}", file=sys.stderr)
             raise
         except Exception as e:
-            print(f"Unexpected error loading valid config yaml file at: {self.valid_yaml}\n{e}")
+            print(f"Unexpected error loading valid config yaml file at: {self.valid_yaml}\n{e}", file=sys.stderr)
             raise
 
-        print(f"Configuration yaml file loaded: {self.valid_yaml}")
+        print(f"Configuration yaml file loaded: {self.valid_yaml}", file=sys.stdout)
 
     def _create_fcst_dir(self):
         """
@@ -144,10 +134,10 @@ class RealizationBuilder:
         try:
             fcst_dir0 = Path(self.valid_conf['general']['yaml_file']).parent.parent
         except KeyError as e:
-            print(f"Yaml file path not found in config valid yaml file: {e}")
+            print(f"Yaml file path not found in config valid yaml file: {e}", file=sys.stderr)
             raise
         except FileNotFoundError as e:
-            print(f"Invalid yaml file path: {self.valid_conf['general']['yaml_file']} - {e}")
+            print(f"Invalid yaml file path: {self.valid_conf['general']['yaml_file']} - {e}", file=sys.stderr)
             raise
 
         # Create forecast run directory or cold start run directory
@@ -163,10 +153,10 @@ class RealizationBuilder:
         try:
             self.input_dir.mkdir(parents=True, exist_ok=True)
         except Exception as e:
-            print(f"Invalid yaml file path: {self.input_dir} - {e}")
+            print(f"Invalid yaml file path: {self.input_dir} - {e}", file=sys.stderr)
             raise
 
-        print(f'Run directory created at: {self.input_dir}')
+        print(f'Run directory created at: {self.input_dir}', file=sys.stdout)
 
     def _parse_yaml(self):
         """
@@ -395,10 +385,10 @@ class RealizationBuilder:
         try:
             os.makedirs(self.input_dir, exist_ok=True)
         except Exception as e:
-            print(f"Invalid input directory: {e}. Check `main_dir` variable")
+            print(f"Invalid input directory: {e}. Check `main_dir` variable", file=sys.stderr)
             raise
 
-        print(f"Input directory created at: {self.input_dir}")
+        print(f"Input directory created at: {self.input_dir}", file=sys.stdout)
 
     def _init_log(self):
         """
@@ -414,7 +404,6 @@ class RealizationBuilder:
         log_level_set(log_path)
         global logger
         logger = logging.getLogger(MODULE_NAME)
-        logger.info(f"MSWM stdout and stderr written to: {logFilePath}")
         logger.info(f"Building {self.run_type} realization from: {self.input_path}")
 
     def _parse_forcing_engine(self):
