@@ -34,7 +34,7 @@ else:
     log_file_dir = Path(BASE_DIR) / 'run-logs/mswm/'
 log_file_name = f"mswm_{create_timestamp()}.log"
 logFilePath = os.path.join(log_file_dir, log_file_name)
-logfile = open(logFilePath, "w")
+logfile = open(logFilePath, "w", buffering=1)
 sys.stdout = logfile
 sys.stderr = logfile
 
