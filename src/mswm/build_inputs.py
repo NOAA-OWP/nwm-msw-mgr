@@ -20,14 +20,15 @@ import shutil
 
 from mswm.utils import ginputfunc as gfun
 from mswm.utils import settings
-from mswm.utils.log_level import log_level_set
+from mswm.utils.log_level import log_level_set, create_timestamp, MODULE_NAME
 from mswm.utils.input_configuration import InputConfig
 
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger(MODULE_NAME)
 if not logging.getLogger().hasHandlers():
     # When running outside of Django, configure basic logging to stderr
     logging.basicConfig(
+        filename=f"~/logs/mswm_{create_timestamp()}.log",
         level=logging.INFO,
         format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S"
@@ -55,7 +56,7 @@ class RealizationBuilder:
             try:
                 raise FileNotFoundError(f'Input file not found: {self.input_path}')
             except FileNotFoundError as e:
-                print(e)
+                logger.critical(e)
                 raise
 
         # Read input config file
@@ -63,23 +64,23 @@ class RealizationBuilder:
             self.config = configparser.ConfigParser()
             self.config.read(self.input_path)
         except FileNotFoundError as e:
-            print(f"Input file not found: {self.input_path}\n{e}")
+            logger.critical(f"Input file not found: {self.input_path}\n{e}")
             raise
         except configparser.Error as e:
-            print(f"ConfigParser error reading config file: {self.input_path}\n{e}")
+            logger.critical(f"ConfigParser error reading config file: {self.input_path}\n{e}")
             raise
         except Exception as e:
-            print(f"Unexpected error loading config: {self.input_path}\n{e}")
+            logger.critical(f"Unexpected error loading config: {self.input_path}\n{e}")
             raise
 
-        print(f"Input.config file loaded from: {self.input_path}")
+        logger.info(f"Input.config file loaded from: {self.input_path}")
 
         # Raise error if config file is empty
         if not {section: dict(self.config[section]) for section in self.config.sections()}:
             try:
                 raise ValueError(f'Input.config file is empty or contains no valid sections: {self.input_path}')
             except ValueError as e:
-                print(e)
+                logger.critical(e)
                 raise
 
     def _validate_config(self):
@@ -99,7 +100,7 @@ class RealizationBuilder:
         try:
             self.input_configs = InputConfig(**configs).model_dump()
         except ValidationError as e:
-            print(f"Input.config Pydantic validation failed: {self.input_path}{e}")
+            logger.critical(f"Input.config Pydantic validation failed: {self.input_path}{e}")
             raise
 
     def _load_yaml(self):
@@ -139,10 +140,10 @@ class RealizationBuilder:
         try:
             fcst_dir0 = Path(self.valid_conf['general']['yaml_file']).parent.parent
         except KeyError as e:
-            print(f"Yaml file path not found in config valid yaml file: {e}")
+            logger.critical(f"Yaml file path not found in config valid yaml file: {e}")
             raise
         except FileNotFoundError as e:
-            print(f"Invalid yaml file path: {self.valid_conf['general']['yaml_file']} - {e}")
+            logger.critical(f"Invalid yaml file path: {self.valid_conf['general']['yaml_file']} - {e}")
             raise
 
         # Create forecast run directory or cold start run directory
@@ -158,10 +159,10 @@ class RealizationBuilder:
         try:
             self.input_dir.mkdir(parents=True, exist_ok=True)
         except Exception as e:
-            print(f"Invalid yaml file path: {self.input_dir} - {e}")
+            logger.critical(f"Invalid yaml file path: {self.input_dir} - {e}")
             raise
 
-        print(f'Run directory created at: {self.input_dir}')
+        logger.info(f'Run directory created at: {self.input_dir}')
 
     def _parse_yaml(self):
         """
@@ -393,7 +394,7 @@ class RealizationBuilder:
             logger.critical(f"Invalid input directory: {e}. Check `main_dir` variable")
             raise
 
-        print(f"Input directory created at: {self.input_dir}")
+        logger.info(f"Input directory created at: {self.input_dir}")
 
     def _init_log(self):
         """
@@ -406,6 +407,7 @@ class RealizationBuilder:
             log_path = os.path.join(self.work_dir, 'logs')
 
         # Initialize logging
+        logger.info(f"Log path set to: {log_path}")
         log_level_set(log_path)
         logger.info(f"Building {self.run_type} realization from: {self.input_path}")
 
