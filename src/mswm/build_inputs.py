@@ -417,11 +417,11 @@ class RealizationBuilder:
 
                 # Construct forcing template file name
                 if self.use_cold_start:
-                    forcing_region = next((f"_{reg}" for reg in ["alaska", "hawaii", "puertorico"] if reg in self.forecast_configuration), "")
-                    self.forecast_configuration_str = f"cold_start{forcing_region}_config.yml"
+                    forcing_region = next((f"_{reg}" for reg in ["alaska", "hawaii", "puertorico"] if reg in self.forcing_configuration), "")
+                    self.forcing_configuration_str = f"cold_start{forcing_region}_config.yml"
                 elif self.use_int_ana:
-                    forcing_region = next((f"_{reg}" for reg in ["alaska", "hawaii", "puertorico"] if reg in self.forecast_configuration), "")
-                    self.forecast_configuration_str = f"standard_ana{forcing_region}_config.yml"
+                    forcing_region = next((f"_{reg}" for reg in ["alaska", "hawaii", "puertorico"] if reg in self.forcing_configuration), "")
+                    self.forcing_configuration_str = f"standard_ana{forcing_region}_config.yml"
                 else:
                     self.forcing_configuration_str = f"{self.forcing_configuration}_config.yml"
 
