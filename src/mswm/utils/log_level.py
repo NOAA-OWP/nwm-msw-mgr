@@ -55,6 +55,8 @@ def log_level_set(log_file_dir: str):
     if getattr(log_level_set, "_initialized", False):
         return
 
+    global logger
+
     # Try to create log in run folder
     try:
         os.makedirs(log_file_dir, exist_ok=True)
