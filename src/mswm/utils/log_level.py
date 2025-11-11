@@ -55,19 +55,18 @@ def log_level_set(log_file_dir: str):
     if getattr(log_level_set, "_initialized", False):
         return
 
-    BASE_DIR = Path(__file__).resolve().parent.parent
-
-    # If run directory doesn't exist, ouput logs to default location
-    if not (Path(log_file_dir).parent).exists():
+    # Try to create log in run logs folder
+    try:
+        os.makedirs(log_file_dir, exist_ok=True)
+        log_file_name = "mswm.log"
+    except OSError:
+        # If creating the log directory fails, use default fallback
         if Path("/ngencerf/data").exists():
             log_file_dir = Path('/ngencerf/data/run-logs/mswm/')
         else:
+            BASE_DIR = Path(__file__).resolve().parent.parent
             log_file_dir = Path(BASE_DIR) / 'run-logs/mswm/'
         log_file_name = f"mswm_{create_timestamp()}.log"
-    else:
-        log_file_name = "mswm.log"
-
-    os.makedirs(log_file_dir, exist_ok=True)
     logFilePath = os.path.join(log_file_dir, log_file_name)
 
     formatted_module = MODULE_NAME.upper().ljust(LOG_MODULE_NAME_LEN)[:LOG_MODULE_NAME_LEN]
