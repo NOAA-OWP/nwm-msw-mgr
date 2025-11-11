@@ -48,7 +48,7 @@ class RealizationBuilder:
         self.input_path = Path(self.input_path).absolute()
         if not self.input_path.exists():
             try:
-                raise FileNotFoundError(f'Input file not found: {self.input_path}')
+                raise FileNotFoundError(f'[MSWM]Input file not found: {self.input_path}', file=sys.stderr)
             except FileNotFoundError as e:
                 print(e, file=sys.stderr)
                 raise
@@ -58,21 +58,21 @@ class RealizationBuilder:
             self.config = configparser.ConfigParser()
             self.config.read(self.input_path)
         except FileNotFoundError as e:
-            print(f"Input file not found: {self.input_path}\n{e}", file=sys.stderr)
+            print(f"[MSWM] Input file not found: {self.input_path}\n{e}", file=sys.stderr)
             raise
         except configparser.Error as e:
-            print(f"ConfigParser error reading config file: {self.input_path}\n{e}", file=sys.stderr)
+            print(f"[MSWM] ConfigParser error reading config file: {self.input_path}\n{e}", file=sys.stderr)
             raise
         except Exception as e:
-            print(f"Unexpected error loading config: {self.input_path}\n{e}", file=sys.stderr)
+            print(f"[MSWM] Unexpected error loading config: {self.input_path}\n{e}", file=sys.stderr)
             raise
 
-        print(f"Input.config file loaded from: {self.input_path}", file=sys.stdout)
+        print(f"[MSWM] Input.config file loaded from: {self.input_path}", file=sys.stdout)
 
         # Raise error if config file is empty
         if not {section: dict(self.config[section]) for section in self.config.sections()}:
             try:
-                raise ValueError(f'Input.config file is empty or contains no valid sections: {self.input_path}', file=sys.stderr)
+                raise ValueError(f'[MSWM] Input.config file is empty or contains no valid sections: {self.input_path}', file=sys.stderr)
             except ValueError as e:
                 print(e)
                 raise
@@ -94,7 +94,7 @@ class RealizationBuilder:
         try:
             self.input_configs = InputConfig(**configs).model_dump()
         except ValidationError as e:
-            print(f"Input.config Pydantic validation failed: {self.input_path}{e}", file=sys.stderr)
+            print(f"[MSWM] Input.config Pydantic validation failed: {self.input_path}{e}", file=sys.stderr)
             raise
 
     def _load_yaml(self):
@@ -105,7 +105,7 @@ class RealizationBuilder:
         self.valid_yaml = Path(self.valid_yaml).absolute()
         if not self.valid_yaml.exists():
             try:
-                raise FileNotFoundError(f'Config valid yaml file does not exist: {self.valid_yaml}')
+                raise FileNotFoundError(f'[MSWM] Config valid yaml file does not exist: {self.valid_yaml}')
             except FileNotFoundError as e:
                 print(e, file=sys.stderr)
                 raise
@@ -115,16 +115,16 @@ class RealizationBuilder:
             with open(self.valid_yaml) as file:
                 self.valid_conf = yaml.safe_load(file)
         except FileNotFoundError as e:
-            print(f'Config valid yaml file does not exist: {self.valid_yaml}\n{e}', file=sys.stderr)
+            print(f'[MSWM] Config valid yaml file does not exist: {self.valid_yaml}\n{e}', file=sys.stderr)
             raise
         except yaml.YAMLError as e:
-            print(f"YAML parsing error in valid config yaml file: {self.valid_yaml}\n{e}", file=sys.stderr)
+            print(f"[MSWM] YAML parsing error in valid config yaml file: {self.valid_yaml}\n{e}", file=sys.stderr)
             raise
         except Exception as e:
-            print(f"Unexpected error loading valid config yaml file at: {self.valid_yaml}\n{e}", file=sys.stderr)
+            print(f"[MSWM] Unexpected error loading valid config yaml file at: {self.valid_yaml}\n{e}", file=sys.stderr)
             raise
 
-        print(f"Configuration yaml file loaded: {self.valid_yaml}", file=sys.stdout)
+        print(f"[MSWM] Configuration yaml file loaded: {self.valid_yaml}", file=sys.stdout)
 
     def _create_fcst_dir(self):
         """
@@ -134,10 +134,10 @@ class RealizationBuilder:
         try:
             fcst_dir0 = Path(self.valid_conf['general']['yaml_file']).parent.parent
         except KeyError as e:
-            print(f"Yaml file path not found in config valid yaml file: {e}", file=sys.stderr)
+            print(f"[MSWM] Yaml file path not found in config valid yaml file: {e}", file=sys.stderr)
             raise
         except FileNotFoundError as e:
-            print(f"Invalid yaml file path: {self.valid_conf['general']['yaml_file']} - {e}", file=sys.stderr)
+            print(f"[MSWM] Invalid yaml file path: {self.valid_conf['general']['yaml_file']} - {e}", file=sys.stderr)
             raise
 
         # Create forecast run directory or cold start run directory
@@ -153,10 +153,10 @@ class RealizationBuilder:
         try:
             self.input_dir.mkdir(parents=True, exist_ok=True)
         except Exception as e:
-            print(f"Invalid yaml file path: {self.input_dir} - {e}", file=sys.stderr)
+            print(f"[MSWM] Invalid yaml file path: {self.input_dir} - {e}", file=sys.stderr)
             raise
 
-        print(f'Run directory created at: {self.input_dir}', file=sys.stdout)
+        print(f'[MSWM] Run directory created at: {self.input_dir}', file=sys.stdout)
 
     def _parse_yaml(self):
         """
@@ -385,10 +385,10 @@ class RealizationBuilder:
         try:
             os.makedirs(self.input_dir, exist_ok=True)
         except Exception as e:
-            print(f"Invalid input directory: {e}. Check `main_dir` variable", file=sys.stderr)
+            print(f"[MSWM] Invalid input directory: {e}. Check `main_dir` variable", file=sys.stderr)
             raise
 
-        print(f"Input directory created at: {self.input_dir}", file=sys.stdout)
+        print(f"[MSWM] Input directory created at: {self.input_dir}", file=sys.stdout)
 
     def _init_log(self):
         """
