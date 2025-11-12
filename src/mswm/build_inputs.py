@@ -145,10 +145,10 @@ class RealizationBuilder:
         self.input_dir = Path(fcst_dir0, fcst_dir_name, self.fcst_run_name)
 
         # Set file basename for forecast or cold start
-        self.basename_opt = "fcst" if not self.use_cold_start else "cold_start"
+        self.basename_opt = 'fcst' if not self.use_cold_start else 'cold_start'
 
         # Set run_type to forecast for log generation
-        self.run_type = 'forecast'
+        self.run_type = 'forecast' if not self.use_cold_start else 'cold start'
 
         try:
             self.input_dir.mkdir(parents=True, exist_ok=True)
@@ -395,7 +395,7 @@ class RealizationBuilder:
         Initialize logging depending on run type
         """
         # Set location for msw-mgr log
-        if self.run_type == 'forecast':
+        if self.run_type == 'forecast' or self.run_type == 'cold start':
             log_path = os.path.join(self.input_dir, 'logs')
         else:
             log_path = os.path.join(self.work_dir, 'logs')
@@ -1604,7 +1604,10 @@ class RealizationBuilder:
         self._update_fcst_troute()
         self._write_fcst_realization()
 
-        logger.info("Forecast run set up successfully")
+        if self.use_cold_start:
+            logger.info("Cold start run set up successfully")
+        else:
+            logger.info("Forecast run set up successfully")
 
     def build_default_realization(self):
         """
