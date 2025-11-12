@@ -45,27 +45,6 @@ def create_timestamp(date_only: bool = False, iso: bool = False, append_ms: bool
         return ts_base
 
 
-def change_logger_file(namedLogger: logging.Logger, new_filename: str):
-    for h in namedLogger.handlers[:]:
-        if isinstance(h, logging.FileHandler):
-            # Preserve existing formatter and level
-            fmt = h.formatter
-            lvl = h.level
-
-            # Remove and close the old handler
-            namedLogger.removeHandler(h)
-            h.close()
-
-            # Create a new handler with the same settings
-            new_h = logging.FileHandler(new_filename)
-            new_h.setLevel(lvl)
-            if fmt:
-                new_h.setFormatter(fmt)
-
-            namedLogger.addHandler(new_h)
-            break
-
-
 def log_level_set(log_file_dir: str):
     """
     Initialize logging once. If already initialized, does nothing.
@@ -74,10 +53,13 @@ def log_level_set(log_file_dir: str):
 
     global logger
 
-    # Change log file location if already set up
-    if getattr(log_level_set, "_initialized", False):
-        change_logger_file(logger, log_file_dir)
-        return
+    # Remove logger if it already exists
+    if logging.getLogger(MODULE_NAME).hasHandlers():
+        old_logger = logging.getLogger(MODULE_NAME)
+        for h in old_logger.handlers[:]:
+            old_logger.removeHandler(h)
+            h.close()
+        logging.Logger.manager.loggerDict.pop(MODULE_NAME, None)
 
     # Try to create log in run folder
     try:
@@ -91,8 +73,8 @@ def log_level_set(log_file_dir: str):
             BASE_DIR = Path(__file__).resolve().parent.parent
             log_file_dir = Path(BASE_DIR) / 'run-logs/mswm/'
         log_file_name = f"mswm_{create_timestamp()}.log"
-    logFilePath = os.path.join(log_file_dir, log_file_name)
 
+    logFilePath = os.path.join(log_file_dir, log_file_name)
     formatted_module = MODULE_NAME.upper().ljust(LOG_MODULE_NAME_LEN)[:LOG_MODULE_NAME_LEN]
 
     try:
