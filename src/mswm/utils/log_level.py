@@ -45,6 +45,27 @@ def create_timestamp(date_only: bool = False, iso: bool = False, append_ms: bool
         return ts_base
 
 
+def change_logger_file(namedLogger: logging.Logger, new_filename: str):
+    for h in namedLogger.handlers[:]:
+        if isinstance(h, logging.FileHandler):
+            # Preserve existing formatter and level
+            fmt = h.formatter
+            lvl = h.level
+
+            # Remove and close the old handler
+            namedLogger.removeHandler(h)
+            h.close()
+
+            # Create a new handler with the same settings
+            new_h = logging.FileHandler(new_filename)
+            new_h.setLevel(lvl)
+            if fmt:
+                new_h.setFormatter(fmt)
+
+            namedLogger.addHandler(new_h)
+            break
+
+
 def log_level_set(log_file_dir: str):
     """
     Initialize logging once. If already initialized, does nothing.
@@ -53,9 +74,10 @@ def log_level_set(log_file_dir: str):
 
     global logger
 
-    # # Prevent reinitializing logging if already set up
-    # if getattr(log_level_set, "_initialized", False):
-    #     return
+    # Change log file location if already set up
+    if getattr(log_level_set, "_initialized", False):
+        change_logger_file(logger, log_file_dir)
+        return
 
     # Try to create log in run folder
     try:
@@ -87,12 +109,12 @@ def log_level_set(log_file_dir: str):
         logger.setLevel(log_level)
         logger.handlers.clear()
         logger.addHandler(handler)
-        logger.propogate = False
+        logger.propagate = False
 
         # Only prints once because function never runs again
         print(f"Logging into: {logFilePath}")
 
-        # # Mark that we've done setup once
-        # log_level_set._initialized = True
+        # Mark that we've done setup once
+        log_level_set._initialized = True
     except OSError:
         print(f"Can't open local directory Log File: {logFilePath}", file=sys.stderr)

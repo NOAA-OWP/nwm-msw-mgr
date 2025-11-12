@@ -25,8 +25,9 @@ from mswm.utils.input_configuration import InputConfig
 
 
 # Initialize MSWM setup logger
-logger = logging.getLogger()
-if not logger.hasHandlers():
+main_logger = logging.getLogger()
+logger = None
+if not main_logger.hasHandlers():
     # When running outside of Django, configure basic logging to stderr
     logging.basicConfig(
         level=logging.INFO,
@@ -56,7 +57,7 @@ class RealizationBuilder:
             try:
                 raise FileNotFoundError(f'Input file not found: {self.input_path}')
             except FileNotFoundError as e:
-                logger.critical(e)
+                main_logger.critical(e)
                 raise
 
         # Read input config file
@@ -64,23 +65,23 @@ class RealizationBuilder:
             self.config = configparser.ConfigParser()
             self.config.read(self.input_path)
         except FileNotFoundError as e:
-            logger.critical(f"Input file not found: {self.input_path}\n{e}")
+            main_logger.critical(f"Input file not found: {self.input_path}\n{e}")
             raise
         except configparser.Error as e:
-            logger.critical(f"ConfigParser error reading config file: {self.input_path}\n{e}")
+            main_logger.critical(f"ConfigParser error reading config file: {self.input_path}\n{e}")
             raise
         except Exception as e:
-            logger.critical(f"Unexpected error loading config: {self.input_path}\n{e}")
+            main_logger.critical(f"Unexpected error loading config: {self.input_path}\n{e}")
             raise
 
-        logger.info(f"Input.config file loaded from: {self.input_path}")
+        main_logger.info(f"Input.config file loaded from: {self.input_path}")
 
         # Raise error if config file is empty
         if not {section: dict(self.config[section]) for section in self.config.sections()}:
             try:
                 raise ValueError(f'Input.config file is empty or contains no valid sections: {self.input_path}')
             except ValueError as e:
-                logger.critical(e)
+                main_logger.critical(e)
                 raise
 
     def _validate_config(self):
@@ -100,7 +101,7 @@ class RealizationBuilder:
         try:
             self.input_configs = InputConfig(**configs).model_dump()
         except ValidationError as e:
-            logger.critical(f"Input.config Pydantic validation failed: {self.input_path}{e}")
+            main_logger.critical(f"Input.config Pydantic validation failed: {self.input_path}{e}")
             raise
 
     def _load_yaml(self):
@@ -113,7 +114,7 @@ class RealizationBuilder:
             try:
                 raise FileNotFoundError(f'Config valid yaml file does not exist: {self.valid_yaml}')
             except FileNotFoundError as e:
-                logger.critical(e)
+                main_logger.critical(e)
                 raise
 
         # Read the yaml-based configuration file
@@ -121,16 +122,16 @@ class RealizationBuilder:
             with open(self.valid_yaml) as file:
                 self.valid_conf = yaml.safe_load(file)
         except FileNotFoundError as e:
-            logger.critical(f'Config valid yaml file does not exist: {self.valid_yaml}\n{e}')
+            main_logger.critical(f'Config valid yaml file does not exist: {self.valid_yaml}\n{e}')
             raise
         except yaml.YAMLError as e:
-            logger.critical(f"YAML parsing error in valid config yaml file: {self.valid_yaml}\n{e}")
+            main_logger.critical(f"YAML parsing error in valid config yaml file: {self.valid_yaml}\n{e}")
             raise
         except Exception as e:
-            logger.critical(f"Unexpected error loading valid config yaml file at: {self.valid_yaml}\n{e}")
+            main_logger.critical(f"Unexpected error loading valid config yaml file at: {self.valid_yaml}\n{e}")
             raise
 
-        logger.info(f"Configuration yaml file loaded: {self.valid_yaml}")
+        main_logger.info(f"Configuration yaml file loaded: {self.valid_yaml}")
 
     def _create_fcst_dir(self):
         """
@@ -140,10 +141,10 @@ class RealizationBuilder:
         try:
             fcst_dir0 = Path(self.valid_conf['general']['yaml_file']).parent.parent
         except KeyError as e:
-            logger.critical(f"Yaml file path not found in config valid yaml file: {e}")
+            main_logger.critical(f"Yaml file path not found in config valid yaml file: {e}")
             raise
         except FileNotFoundError as e:
-            logger.critical(f"Invalid yaml file path: {self.valid_conf['general']['yaml_file']} - {e}")
+            main_logger.critical(f"Invalid yaml file path: {self.valid_conf['general']['yaml_file']} - {e}")
             raise
 
         # Create forecast run directory or cold start run directory
@@ -159,10 +160,10 @@ class RealizationBuilder:
         try:
             self.input_dir.mkdir(parents=True, exist_ok=True)
         except Exception as e:
-            logger.critical(f"[MSWM] Invalid yaml file path: {self.input_dir} - {e}")
+            main_logger.critical(f"[MSWM] Invalid yaml file path: {self.input_dir} - {e}")
             raise
 
-        logger.info(f'[MSWM] Run directory created at: {self.input_dir}')
+        main_logger.info(f'[MSWM] Run directory created at: {self.input_dir}')
 
     def _parse_yaml(self):
         """
@@ -391,10 +392,10 @@ class RealizationBuilder:
         try:
             os.makedirs(self.input_dir, exist_ok=True)
         except Exception as e:
-            logger.critical(f"Invalid input directory: {e}. Check `main_dir` variable")
+            main_logger.critical(f"Invalid input directory: {e}. Check `main_dir` variable")
             raise
 
-        logger.info(f"Input directory created at: {self.input_dir}")
+        main_logger.info(f"Input directory created at: {self.input_dir}")
 
     def _init_log(self):
         """
@@ -405,11 +406,6 @@ class RealizationBuilder:
             log_path = os.path.join(self.input_dir, 'logs')
         else:
             log_path = os.path.join(self.work_dir, 'logs')
-
-        # Remove root logger
-        root_logger = logging.getLogger()
-        for handler in root_logger.handlers[:]:
-            root_logger.removeHandler(handler)
 
         # Initialize logging
         log_level_set(log_path)
