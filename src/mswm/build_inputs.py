@@ -6,7 +6,6 @@ This module contains functions to manage the initial creation of configuration f
 
 from pathlib import Path
 import os
-import sys
 import logging
 import re
 import math
@@ -21,12 +20,19 @@ import shutil
 
 from mswm.utils import ginputfunc as gfun
 from mswm.utils import settings
-from mswm.utils.log_level import log_level_set, create_timestamp, MODULE_NAME
+from mswm.utils.log_level import log_level_set, MODULE_NAME
 from mswm.utils.input_configuration import InputConfig
 
 
-# Initialize stderr/stdout logger
-logger = None
+# Initialize MSWM setup logger
+logger = logging.getLogger()
+if not logger.hasHandlers():
+    # When running outside of Django, configure basic logging to stderr
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S"
+    )
 
 
 class RealizationBuilder:
@@ -48,9 +54,9 @@ class RealizationBuilder:
         self.input_path = Path(self.input_path).absolute()
         if not self.input_path.exists():
             try:
-                raise FileNotFoundError(f'[MSWM]Input file not found: {self.input_path}', file=sys.stderr)
+                raise FileNotFoundError(f'Input file not found: {self.input_path}')
             except FileNotFoundError as e:
-                print(e, file=sys.stderr)
+                logger.critical(e)
                 raise
 
         # Read input config file
@@ -58,23 +64,23 @@ class RealizationBuilder:
             self.config = configparser.ConfigParser()
             self.config.read(self.input_path)
         except FileNotFoundError as e:
-            print(f"[MSWM] Input file not found: {self.input_path}\n{e}", file=sys.stderr)
+            logger.critical(f"Input file not found: {self.input_path}\n{e}")
             raise
         except configparser.Error as e:
-            print(f"[MSWM] ConfigParser error reading config file: {self.input_path}\n{e}", file=sys.stderr)
+            logger.critical(f"ConfigParser error reading config file: {self.input_path}\n{e}")
             raise
         except Exception as e:
-            print(f"[MSWM] Unexpected error loading config: {self.input_path}\n{e}", file=sys.stderr)
+            logger.critical(f"Unexpected error loading config: {self.input_path}\n{e}")
             raise
 
-        print(f"[MSWM] Input.config file loaded from: {self.input_path}", file=sys.stdout)
+        logger.info(f"Input.config file loaded from: {self.input_path}")
 
         # Raise error if config file is empty
         if not {section: dict(self.config[section]) for section in self.config.sections()}:
             try:
-                raise ValueError(f'[MSWM] Input.config file is empty or contains no valid sections: {self.input_path}', file=sys.stderr)
+                raise ValueError(f'Input.config file is empty or contains no valid sections: {self.input_path}')
             except ValueError as e:
-                print(e)
+                logger.critical(e)
                 raise
 
     def _validate_config(self):
@@ -94,7 +100,7 @@ class RealizationBuilder:
         try:
             self.input_configs = InputConfig(**configs).model_dump()
         except ValidationError as e:
-            print(f"[MSWM] Input.config Pydantic validation failed: {self.input_path}{e}", file=sys.stderr)
+            logger.critical(f"Input.config Pydantic validation failed: {self.input_path}{e}")
             raise
 
     def _load_yaml(self):
@@ -105,9 +111,9 @@ class RealizationBuilder:
         self.valid_yaml = Path(self.valid_yaml).absolute()
         if not self.valid_yaml.exists():
             try:
-                raise FileNotFoundError(f'[MSWM] Config valid yaml file does not exist: {self.valid_yaml}')
+                raise FileNotFoundError(f'Config valid yaml file does not exist: {self.valid_yaml}')
             except FileNotFoundError as e:
-                print(e, file=sys.stderr)
+                logger.critical(e)
                 raise
 
         # Read the yaml-based configuration file
@@ -115,16 +121,16 @@ class RealizationBuilder:
             with open(self.valid_yaml) as file:
                 self.valid_conf = yaml.safe_load(file)
         except FileNotFoundError as e:
-            print(f'[MSWM] Config valid yaml file does not exist: {self.valid_yaml}\n{e}', file=sys.stderr)
+            logger.critical(f'Config valid yaml file does not exist: {self.valid_yaml}\n{e}')
             raise
         except yaml.YAMLError as e:
-            print(f"[MSWM] YAML parsing error in valid config yaml file: {self.valid_yaml}\n{e}", file=sys.stderr)
+            logger.critical(f"YAML parsing error in valid config yaml file: {self.valid_yaml}\n{e}")
             raise
         except Exception as e:
-            print(f"[MSWM] Unexpected error loading valid config yaml file at: {self.valid_yaml}\n{e}", file=sys.stderr)
+            logger.critical(f"Unexpected error loading valid config yaml file at: {self.valid_yaml}\n{e}")
             raise
 
-        print(f"[MSWM] Configuration yaml file loaded: {self.valid_yaml}", file=sys.stdout)
+        logger.info(f"Configuration yaml file loaded: {self.valid_yaml}")
 
     def _create_fcst_dir(self):
         """
@@ -134,10 +140,10 @@ class RealizationBuilder:
         try:
             fcst_dir0 = Path(self.valid_conf['general']['yaml_file']).parent.parent
         except KeyError as e:
-            print(f"[MSWM] Yaml file path not found in config valid yaml file: {e}", file=sys.stderr)
+            logger.critical(f"Yaml file path not found in config valid yaml file: {e}")
             raise
         except FileNotFoundError as e:
-            print(f"[MSWM] Invalid yaml file path: {self.valid_conf['general']['yaml_file']} - {e}", file=sys.stderr)
+            logger.critical(f"Invalid yaml file path: {self.valid_conf['general']['yaml_file']} - {e}")
             raise
 
         # Create forecast run directory or cold start run directory
@@ -153,10 +159,10 @@ class RealizationBuilder:
         try:
             self.input_dir.mkdir(parents=True, exist_ok=True)
         except Exception as e:
-            print(f"[MSWM] Invalid yaml file path: {self.input_dir} - {e}", file=sys.stderr)
+            logger.critical(f"[MSWM] Invalid yaml file path: {self.input_dir} - {e}")
             raise
 
-        print(f'[MSWM] Run directory created at: {self.input_dir}', file=sys.stdout)
+        logger.info(f'[MSWM] Run directory created at: {self.input_dir}')
 
     def _parse_yaml(self):
         """
@@ -385,20 +391,25 @@ class RealizationBuilder:
         try:
             os.makedirs(self.input_dir, exist_ok=True)
         except Exception as e:
-            print(f"[MSWM] Invalid input directory: {e}. Check `main_dir` variable", file=sys.stderr)
+            logger.critical(f"Invalid input directory: {e}. Check `main_dir` variable")
             raise
 
-        print(f"[MSWM] Input directory created at: {self.input_dir}", file=sys.stdout)
+        logger.info(f"Input directory created at: {self.input_dir}")
 
     def _init_log(self):
         """
         Initialize logging depending on run type
         """
         # Set location for msw-mgr log
-        if self.run_type == 'forecast' or self.run_type == 'cold start':
+        if self.run_type in ('forecast', 'cold start'):
             log_path = os.path.join(self.input_dir, 'logs')
         else:
             log_path = os.path.join(self.work_dir, 'logs')
+
+        # Remove root logger
+        root_logger = logging.getLogger()
+        for handler in root_logger.handlers[:]:
+            root_logger.removeHandler(handler)
 
         # Initialize logging
         log_level_set(log_path)

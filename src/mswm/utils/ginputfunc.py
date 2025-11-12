@@ -22,9 +22,10 @@ import pandas as pd
 import yaml
 
 from mswm.utils import settings
+from mswm.utils.log_level import MODULE_NAME
 
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger(MODULE_NAME)
 
 
 class QuotedDumper(yaml.SafeDumper):

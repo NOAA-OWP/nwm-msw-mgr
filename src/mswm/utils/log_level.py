@@ -51,11 +51,11 @@ def log_level_set(log_file_dir: str):
     Prints 'Logging into:' exactly once, on first initialization.
     """
 
-    # Prevent reinitializing logging if already set up
-    if getattr(log_level_set, "_initialized", False):
-        return
-
     global logger
+
+    # # Prevent reinitializing logging if already set up
+    # if getattr(log_level_set, "_initialized", False):
+    #     return
 
     # Try to create log in run folder
     try:
@@ -87,11 +87,12 @@ def log_level_set(log_file_dir: str):
         logger.setLevel(log_level)
         logger.handlers.clear()
         logger.addHandler(handler)
+        logger.propogate = False
 
         # Only prints once because function never runs again
         print(f"Logging into: {logFilePath}")
 
-        # Mark that we've done setup once
-        log_level_set._initialized = True
+        # # Mark that we've done setup once
+        # log_level_set._initialized = True
     except OSError:
         print(f"Can't open local directory Log File: {logFilePath}", file=sys.stderr)
