@@ -78,25 +78,30 @@ def log_level_set(log_file_dir: str):
     formatted_module = MODULE_NAME.upper().ljust(LOG_MODULE_NAME_LEN)[:LOG_MODULE_NAME_LEN]
 
     try:
+
+        # Remove existing log in the same folder if it exists
+        if os.path.exists(logFilePath):
+            os.remove(logFilePath)
+
+        # Create new logger
+        logger = logging.getLogger(MODULE_NAME)
+        logger.setLevel(log_level)
+
+        # Setup handler
         handler = logging.FileHandler(logFilePath, mode='a')
         formatter = CustomFormatter(
             fmt=f"%(asctime)s.%(msecs)03d {formatted_module} %(levelname_padded)s %(message)s",
             datefmt="%Y-%m-%dT%H:%M:%S"
         )
         handler.setFormatter(formatter)
-
+        logger.addHandler(handler)
         logging.Formatter.converter = time.gmtime
 
-        logger = logging.getLogger(MODULE_NAME)
-        logger.setLevel(log_level)
-        logger.handlers.clear()
-        logger.addHandler(handler)
+        # Prevent propagation to root logger
         logger.propagate = False
 
         # Only prints once because function never runs again
         print(f"Logging into: {logFilePath}")
 
-        # Mark that we've done setup once
-        log_level_set._initialized = True
     except OSError:
         print(f"Can't open local directory Log File: {logFilePath}", file=sys.stderr)

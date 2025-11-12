@@ -411,6 +411,7 @@ class RealizationBuilder:
         log_level_set(log_path)
         global logger
         logger = logging.getLogger(MODULE_NAME)
+        gfun.init_ginput_logger()
         logger.info(f"Building {self.run_type} realization from: {self.input_path}")
 
     def _parse_forcing_engine(self):
