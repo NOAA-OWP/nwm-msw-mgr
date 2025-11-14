@@ -22,9 +22,9 @@ import pandas as pd
 import yaml
 
 from mswm.utils import settings
+from mswm.utils.log_level import MODULE_NAME
 
-
-logger = logging.getLogger(__name__)
+logger = None
 
 
 class QuotedDumper(yaml.SafeDumper):
@@ -56,6 +56,7 @@ def is_probably_regex(pattern):
 
 
 __all__ = [
+    'init_ginput_logger',
     'change_hydrofab_attr',
     'create_fcst_times',
     'create_walk_file',
@@ -88,6 +89,14 @@ __all__ = [
     'create_calib_config_file',
     'create_partition_file',
 ]
+
+
+def init_ginput_logger():
+    """"
+    Initialize ginputfunc.py logger once MSWM named logger is created
+    """
+    global logger
+    logger = logging.getLogger(MODULE_NAME)
 
 
 def change_hydrofab_attr(
@@ -2692,6 +2701,7 @@ def update_fcst_forcing_config(
     with open(forcing_config_file, "w", encoding="utf-8") as file:
         yaml.dump(forcing_template, file, Dumper=ForcingDumper, sort_keys=False, default_flow_style=False)
 
+
 def update_hist_forcing_config(
         time_period: dict,
         root_dir: str,
@@ -2735,8 +2745,8 @@ def update_hist_forcing_config(
         start_times.append(datetime.datetime.strptime(time_period['run_time_period']['valid'][0], '%Y-%m-%d %H:%M:%S'))
         end_times.append(datetime.datetime.strptime(time_period['run_time_period']['calib'][1], '%Y-%m-%d %H:%M:%S'))
         end_times.append(datetime.datetime.strptime(time_period['run_time_period']['valid'][1], '%Y-%m-%d %H:%M:%S'))
-        
-    file_suffix = ['','valid'] if run_type == 'calibration' else ['']
+
+    file_suffix = ['', 'valid'] if run_type == 'calibration' else ['']
 
     # Set geogrid file name
     gpkg_name = os.path.splitext(os.path.basename(gpkg_file))[0]
@@ -3315,7 +3325,6 @@ def create_reg_realization_file(
 
             # module output variable for input to t-route
             main_output_variable = "land_surface_water__runoff_depth"
-
 
         # Store catchment model configs
         model_type_name = "bmi_multi"
