@@ -98,7 +98,7 @@ __all__ = [
 ]
 
 
-def call_icefabric_api(
+def call_icefabric_ipe(
         mod: str,
         all_mod: list,
         basin: str,
@@ -106,7 +106,7 @@ def call_icefabric_api(
         rootzone_aet: int | None = None,
         envca: bool | None = None
 ) -> dict:
-    """ Query hydrofabric API for initial parameter estimates
+    """ Query icefabric API for initial parameter estimates
 
     Parameters
     ----------
@@ -192,6 +192,59 @@ def call_icefabric_api(
 
     # Return icefabric response
     return ipe_formatted
+
+
+def call_icefabric_gpkg(
+        basin: str,
+        domain: str,
+        input_dir
+) -> dict:
+    """ Query icefabric API for geopackage
+
+    Parameters
+    ----------
+    mod: module name string
+    all_mod: list of all modules in the formulation
+    basin: basin name string
+    domain: string of name of gage domain
+    input_dir: run directory location to save gpkg
+
+    Returns
+    ----------
+    dictionary of initial parameter estimates
+    """
+
+    # Base endpoint
+    url = f"http://edfs.test.nextgenwaterprediction.com:8000/v1/hydrofabric/gages-{basin}/"
+
+    # Build query parameters
+    params = {"id_type": "hl_uri",
+              "domain": {domain},
+              "layers": ["divides", "flowpaths", "network", "nexus"]}
+
+    # Set output file path
+    gpkg_fp = os.path.join(input_dir, f"gages-{basin}")
+
+    # Call icefabric API endpoint to save geopackage
+    try:
+        with httpx.Client(timeout=60.0) as client:
+            resp = client.get(url, params=params)
+            resp.raise_for_status()
+            with open(gpkg_fp, "wb") as f:
+                f.write(resp.content)
+            logger.info(f"Saved geopackage file from Icefabric API to {gpkg_fp}")
+    except httpx.HTTPStatusError as e:
+        logger.critical(f"Icefabric API call gages-{basin} gpkg failed: {e}")
+        raise
+    except ValueError:
+        logger.critical(f"Icefabric API call did not return valid results for gpkg: gages-{basin}")
+        raise
+    except (OSError, IOError) as e:
+        logger.critical(f"Failed to write gpkg file: {e}")
+        raise
+
+    # Return output gpkg path
+    return gpkg_fp
 
 
 def change_hydrofab_attr(
