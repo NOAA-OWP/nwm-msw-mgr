@@ -4,25 +4,25 @@ This module contains functions to manage the initial creation of configuration f
 @author: Jeffrey Wade, Xia Feng
 """
 
-from pathlib import Path
-import os
+import json
 import logging
-import re
 import math
+import os
+import re
+import shutil
+from collections import defaultdict
 from datetime import datetime
+from pathlib import Path
+
 import geopandas as gpd
 import pandas as pd
-import json
 import yaml
-from collections import defaultdict
 from pydantic import ValidationError
-import shutil
 
 from mswm.utils import ginputfunc as gfun
 from mswm.utils import settings
-from mswm.utils.log_level import log_level_set, MODULE_NAME
 from mswm.utils.input_configuration import InputConfig
-
+from mswm.utils.log_level import MODULE_NAME, log_level_set
 
 # Initialize MSWM setup logger
 main_logger = logging.getLogger()
@@ -857,24 +857,24 @@ class RealizationBuilder:
                 raise
 
         # Set cat, nexus, and walk files
-        self.cat_file = os.path.join(self.input_dir, os.path.basename(self.gpkg_file))
-        self.nexus_file = os.path.join(self.input_dir, os.path.basename(self.gpkg_file))
+        self.cat_file = self.gpkg_file
+        self.nexus_file = self.gpkg_file
         self.walk_file = self.input_dir + '{}'.format(self.basin) + '_crosswalk.json'
 
         # Symlink gpkg_file to Input directory
-        if os.path.exists(self.cat_file) or os.path.islink(self.cat_file):
-            try:
-                os.unlink(self.cat_file)
-            except Exception as e:
-                logger.error(f"Failed to remove existing {self.cat_file}: {e}")
-                raise
+        # if os.path.exists(self.cat_file) or os.path.islink(self.cat_file):
+        #     try:
+        #         os.unlink(self.cat_file)
+        #     except Exception as e:
+        #         logger.error(f"Failed to remove existing {self.cat_file}: {e}")
+        #         raise
 
-        try:
-            os.symlink(self.gpkg_file, self.cat_file)
-            logger.info(f'Symlink created from {self.gpkg_file} to {self.cat_file}')
-        except OSError as e:
-            logger.critical(f"Failed to create symlink: {self.gpkg_file} -> {self.cat_file}: {e}")
-            raise
+        # try:
+        #     os.symlink(self.gpkg_file, self.cat_file)
+        #     logger.info(f'Symlink created from {self.gpkg_file} to {self.cat_file}')
+        # except OSError as e:
+        #     logger.critical(f"Failed to create symlink: {self.gpkg_file} -> {self.cat_file}: {e}")
+        #     raise
 
         # Create crosswalk file between catchments and gages for calibration run
         if self.run_type == 'calibration':
