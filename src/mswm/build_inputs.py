@@ -327,6 +327,10 @@ class RealizationBuilder:
         # reassign config sections for convenience
         self.conf1 = self.input_configs.get('General')
         self.run_type = self.conf1.get("run_type") if self.conf1 else None
+        self.domain = self.conf1.get("domain") + "_hf" if self.conf1 else None
+
+        # Set envca flag for CONUS Environment Canada gages
+        self.envca = self.conf1.get("envca") if self.conf1 else None
 
         # Load run_type specific config section or empty dict for default
         run_key = (self.run_type or "").capitalize()
@@ -859,15 +863,10 @@ class RealizationBuilder:
         self.gpkg_file = self.conf3.get('hydrofab_file')
         if self.gpkg_file is None:
             # If gpkg_file not provided, save gpkg from icefabric to file
-            self.domain = "conus_hf"
             self.gpkg_file = gfun.call_icefabric_gpkg(self.basin, self.domain, self.input_dir)
 
-            # Set cat, nexus, and walk files
-            self.cat_file = os.path.join(self.input_dir, os.path.basename(self.gpkg_file))
-            self.nexus_file = os.path.join(self.input_dir, os.path.basename(self.gpkg_file))
-            self.walk_file = self.input_dir + '{}'.format(self.basin) + '_crosswalk.json'
         else:
-            # Symlink existing file
+            # Ensure user provided geopackage file exists
             if not os.path.exists(self.gpkg_file):
                 try:
                     raise Exception(f'Geo package file does not exist: {self.gpkg_file}')
@@ -875,12 +874,13 @@ class RealizationBuilder:
                     logger.critical(e)
                     raise
 
-            # Set cat, nexus, and walk files
-            self.cat_file = os.path.join(self.input_dir, os.path.basename(self.gpkg_file))
-            self.nexus_file = os.path.join(self.input_dir, os.path.basename(self.gpkg_file))
-            self.walk_file = self.input_dir + '{}'.format(self.basin) + '_crosswalk.json'
+        # Set cat, nexus, and walk files
+        self.cat_file = os.path.join(self.input_dir, os.path.basename(self.gpkg_file))
+        self.nexus_file = os.path.join(self.input_dir, os.path.basename(self.gpkg_file))
+        self.walk_file = self.input_dir + '{}'.format(self.basin) + '_crosswalk.json'
 
-            # Symlink gpkg_file to Input directory
+        # Symlink gpkg_file to Input directory if provided by
+        if self.conf3.get('hydrofab_file') is not None:
             if not os.path.exists(self.cat_file):
                 os.symlink(self.gpkg_file, self.cat_file)
                 logger.info(f'Symlink created from {self.gpkg_file} to {self.cat_file}')
@@ -890,13 +890,14 @@ class RealizationBuilder:
             gfun.create_walk_file(self.basin, self.gpkg_file, self.walk_file)
             logger.info(f"Crosswalk file created at: {self.walk_file}")
 
-        # Read catchment parameter values from geopackage divide-attributes
-        try:
-            self.attr_file = gpd.read_file(self.gpkg_file, layer='divide-attributes')
-            self.attr_file.set_index("divide_id", inplace=True)
-        except Exception as e:
-            logger.critical(f"Error while reading geopackage file: {e}")
-            raise
+        # Read catchment parameter values from geopackage divide-attributes (when not using icefabric API)
+        if self.conf3.get('hydrofab_file') is not None:
+            try:
+                self.attr_file = gpd.read_file(self.gpkg_file, layer='divide-attributes')
+                self.attr_file.set_index("divide_id", inplace=True)
+            except Exception as e:
+                logger.critical(f"Error while reading geopackage file: {e}")
+                raise
 
         # Read catchment divide layer from hydrofabric
         try:
@@ -907,9 +908,9 @@ class RealizationBuilder:
             raise
 
         # Update hydrofabic attribute names based on region and minor parameter value fixes
-        self.attr_file = gfun.change_hydrofab_attr(self.attr_file, self.divides_layer)
-
-        logger.info(f"Attribute file loaded from: {self.gpkg_file}")
+        if self.conf3.get('hydrofab_file') is not None:
+            self.attr_file = gfun.change_hydrofab_attr(self.attr_file, self.divides_layer)
+            logger.info(f"Attribute file loaded from: {self.gpkg_file}")
 
     def _extract_forcing(self):
         """
@@ -1090,11 +1091,7 @@ class RealizationBuilder:
             if m1 == 'topoflow':
                 ipe = self.topoflow_ipe.copy()
             else:
-                self.domain = "conus_hf"
-                envca = None
-                print(f"Module: {m1}")
-                ipe = gfun.call_icefabric_ipe(m1, mod_all, self.basin, self.domain, self.is_aet_rootzone, envca)
-                print(f"IPE: {ipe}")
+                ipe = gfun.call_icefabric_ipe(m1, mod_all, self.basin, self.domain, self.envca, self.is_aet_rootzone)
 
             # # Subset IPE based on catchments using module
             ipe_sub = {k: ipe[k] for k in cat_mod if k in ipe}
@@ -1117,7 +1114,8 @@ class RealizationBuilder:
             elif m1 == 'snow17':
                 gfun.create_snow17_input(cat_mod, mod_input_dir, ipe_sub)
             elif m1 == "pet":
-                gfun.create_pet_input(cat_mod, self.attr_file, mod_input_dir)
+                pass
+                # gfun.create_pet_input(cat_mod, self.attr_file, mod_input_dir)
             elif m1 == "sac":
                 gfun.create_sac_input(cat_mod, mod_input_dir, ipe_sub)
             elif m1 == 'noah':
