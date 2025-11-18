@@ -4,6 +4,7 @@ This module contains functions to manage the initial creation of configuration f
 @author: Jeffrey Wade, Xia Feng
 """
 
+import copy
 from pathlib import Path
 import os
 import logging
@@ -15,7 +16,7 @@ import pandas as pd
 import json
 import yaml
 from collections import defaultdict
-from pydantic import ValidationError
+from pydantic import ValidationError, validate_call
 import shutil
 
 from mswm.utils import ginputfunc as gfun
@@ -30,11 +31,16 @@ if not logging.getLogger().hasHandlers():
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S"
+        datefmt=settings.DEFAULT_DATETIME_FORMAT,
     )
 
 
 class RealizationBuilder:
+    """
+    This class reads a .conf file from disk (input_path) during calls to method `build_*_realization()`.
+    To apply overrides on the configurations read from disk: set the `config_overrides` property to an instance of InputConfig.
+    The `config_overrides_mode__amend` property is True by default, and can be set to False to affect behavior of config overrides.
+    """
 
     def __init__(self, input_path: str, valid_yaml: str | None = None, use_cold_start: bool = False, forcing_path: str | None = None, fcst_run_name: str | None = None):
         # Initialize logging silently if not already set
@@ -46,9 +52,33 @@ class RealizationBuilder:
         self.forcing_path = Path(forcing_path) if forcing_path else None
         self.fcst_run_name = fcst_run_name if fcst_run_name else None
 
+        # Initialize this to empty dict so that config override has a target even when input_path is not used
+        self.input_configs = {}
+
+        # Private attributes controlled by public properties. User may set these to non-default values after instantiating the class.
+        self._config_overrides: InputConfig | None = None
+        self._config_overrides_mode__amend: bool = True
+
         logger.info(f"Initialized RealizationBuilder with {input_path}")
 
-    def _load_config(self):
+    @property
+    def config_overrides(self):
+        return self._config_overrides
+
+    @config_overrides.setter
+    @validate_call
+    def config_overrides(self, new: InputConfig | None):
+        self._config_overrides = new
+
+    @property
+    def config_overrides_mode__amend(self):
+        return self._config_overrides_mode__amend
+
+    @config_overrides_mode__amend.setter
+    def config_overrides_mode__amend(self, new: bool):
+        self._config_overrides_mode__amend = new
+
+    def __load_config(self):
         """
         Read input.config file
         """
@@ -86,7 +116,10 @@ class RealizationBuilder:
                 logger.critical(e)
                 raise
 
-    def _validate_config(self):
+        self.__validate_config()
+
+
+    def __validate_config(self):
         """
         Validate input.config file using Pydantic (input_configuration.py)
         """
@@ -106,6 +139,48 @@ class RealizationBuilder:
             logger.critical(f"Input.config Pydantic validation failed: {self.input_path}{e}")
             raise
         logger.info("Input.config validated successfully")
+
+    def __override_config(self) -> None:
+        """
+        Override the current config in-memory, either partially or in full.
+
+        Variable Class Attributes Used as Parameters
+        ----------
+        self.config_overrides : InputConfig
+            If None, this method does nothing.
+
+        self.config_overrides_mode__amend : bool
+            If True, then the individual keys from `overrides` will replace individual keys
+            from the existing config dictionary `self.input_configs`, but keys which are missing
+            from `overrides` will be ignored (will not be deleted from `self.input_configs`).
+                Use case: iterating over a list of forecast types without altering the start time.
+
+            If False, then the `overrides` object will be used wholly as-is, fully replacing
+            the existing config dictionary.  Therefore `overrides` must be a complete configuration in this case.
+                Use case: building a full configuration in memory
+        """
+        if not self.config_overrides:
+            logger.info(f"self.config_overrides = {self.config_overrides}, will not apply overrides")
+            return
+        
+        logger.info(f"Will apply config overrides with self.config_overrides_mode__amend={self.config_overrides_mode__amend}")
+
+        if self.config_overrides_mode__amend:
+            configs = copy.deepcopy(self.input_configs)
+            for section, cfg in self.config_overrides.__dict__.items():
+                if cfg is None:
+                    continue
+                configs.setdefault(section, {})
+                for k, v in cfg.__dict__.items():
+                    logger.debug(f"Config overrides: will set [{section}] {k} = {v}")
+                    configs[section][k] = v
+        else:
+            configs = self.config_overrides
+
+        model = InputConfig(**configs)
+        configs = model.model_dump()
+        logger.info(f"Applying config overrides")
+        self.input_configs = configs
 
     def _load_yaml(self):
         """
@@ -394,7 +469,7 @@ class RealizationBuilder:
                 self.cycle_hour = self.forcingSec.get('cycle_hour')
 
                 # Construct cycle date and cycle hour
-                cycle_dt = datetime.strptime(cycle_datetime, "%Y-%m-%d %H:%M:%S")
+                cycle_dt = datetime.strptime(cycle_datetime, settings.DEFAULT_DATETIME_FORMAT)
                 self.cycle_date = cycle_dt.strftime("%Y-%m-%d")
                 self.cycle_hour = cycle_dt.strftime("%H") + "z"
 
@@ -467,7 +542,7 @@ class RealizationBuilder:
                 time_vals = []
                 for i, time_str in enumerate(times):
                     try:
-                        time_vals.append(datetime.strptime(time_str.strip(), "%Y-%m-%d %H:%M:%S"))
+                        time_vals.append(datetime.strptime(time_str.strip(), settings.DEFAULT_DATETIME_FORMAT))
                     except ValueError:
                         errors.append(f"Invalid datetime format: {outer_key}: {run_type}: {time_str}")
                 if time_vals[0] >= time_vals[1]:
@@ -1508,8 +1583,7 @@ class RealizationBuilder:
         """
         logger.info("Building calibration realization from %s", self.input_path)
 
-        self._load_config()
-        self._validate_config()
+        self._load_config_apply_overrides()
         self._parse_config()
 
         if self.run_type != 'calibration':
@@ -1545,8 +1619,7 @@ class RealizationBuilder:
         """
         logger.info("Building regionalization realization from %s", self.input_path)
 
-        self._load_config()
-        self._validate_config()
+        self._load_config_apply_overrides()
         self._parse_config()
 
         if self.run_type != 'regionalization':
@@ -1579,14 +1652,24 @@ class RealizationBuilder:
 
         logger.info("Regionalization run set up successfully")
 
+    def _load_config_apply_overrides(self):
+        """Load the config file from disk and apply overrides.
+        If config overrides are applied with amend = False, then skip reading the config file."""
+        if not self.config_overrides_mode__amend:
+            raise NotImplementedError(f"Untested: self.config_overrides_mode__amend={self.config_overrides_mode__amend}")
+        if self.config_overrides and (not self.config_overrides_mode__amend):
+            logging.info(f"Skipping load of config file since overrides will replace entire config (no amend)")
+        else:
+            self.__load_config()
+        self.__override_config()
+
     def build_fcst_realization(self):
         """
         Replicate functionality of ngen-fcst, creating realization file from validation yaml file and formatting other input files
         """
         logger.info("Building forecast realization from %s", self.input_path)
 
-        self._load_config()
-        self._validate_config()
+        self._load_config_apply_overrides()
         self._load_yaml()
         self._parse_yaml()
         self._parse_config()
@@ -1609,8 +1692,7 @@ class RealizationBuilder:
 
         logger.info("Building default realization from %s", self.input_path)
 
-        self._load_config()
-        self._validate_config()
+        self._load_config_apply_overrides()
         self._parse_config()
 
         if self.run_type != 'default':
