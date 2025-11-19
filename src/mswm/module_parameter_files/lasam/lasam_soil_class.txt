@@ -1,0 +1,9 @@
+id,category,lasam_class,noah_class
+cat-10617,1,Clay,CLAY
+cat-10618,3,Loam,LOAM
+cat-10619,1,Clay,CLAY
+cat-10621,3,Loam,LOAM
+cat-10625,1,Clay,CLAY
+cat-10626,3,Loam,LOAM
+cat-10620,3,Loam,LOAM
+

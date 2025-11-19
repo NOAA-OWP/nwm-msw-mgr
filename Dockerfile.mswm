@@ -1,0 +1,10 @@
+FROM ngen-int:latest
+#FROM ngen:latest
+
+WORKDIR /ngen-app/mswm/
+
+COPY pyproject.toml ./
+
+COPY src/ ./src/
+
+RUN pip install -e .
