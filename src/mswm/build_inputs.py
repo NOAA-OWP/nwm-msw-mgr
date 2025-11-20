@@ -42,22 +42,39 @@ class RealizationBuilder:
     The `config_overrides_mode__amend` property is True by default, and can be set to False to affect behavior of config overrides.
     """
 
-    def __init__(self, input_path: str, valid_yaml: str | None = None, use_cold_start: bool = False, forcing_path: str | None = None, fcst_run_name: str | None = None):
+    def __init__(self, input_path: str | None = None, valid_yaml: str | None = None, use_cold_start: bool = False, forcing_path: str | None = None, fcst_run_name: str | None = None, config_overrides: InputConfig | None = None):
         # Initialize logging silently if not already set
         log_level_set()
 
-        self.input_path = Path(input_path)
+        # Private attributes controlled by public properties.
+        self._config_overrides: InputConfig | None
+        self._config_overrides_mode__amend: bool
+
+        if config_overrides:
+            if input_path:
+                raise ValueError(f"Must provide `input_path` or `config_overrides` (both were provided)")
+            self.input_path = None
+            self.config_overrides = config_overrides
+            self.config_overrides_mode__amend = False
+
+        elif input_path:
+            if config_overrides:
+                raise ValueError(f"Must provide `input_path` or `config_overrides` (both were provided)")
+            self.input_path = Path(input_path)
+            self.config_overrides = None
+            self.config_overrides_mode__amend = True
+
+        else:
+            raise ValueError(f"Must provide `input_path` or `config_overrides`")
+
         self.valid_yaml = Path(valid_yaml) if valid_yaml else None
+
         self.use_cold_start = use_cold_start
         self.forcing_path = Path(forcing_path) if forcing_path else None
         self.fcst_run_name = fcst_run_name if fcst_run_name else None
 
         # Initialize this to empty dict so that config override has a target even when input_path is not used
         self.input_configs = {}
-
-        # Private attributes controlled by public properties. User may set these to non-default values after instantiating the class.
-        self._config_overrides: InputConfig | None = None
-        self._config_overrides_mode__amend: bool = True
 
         logger.info(f"Initialized RealizationBuilder with {input_path}")
 
@@ -177,7 +194,7 @@ class RealizationBuilder:
                         raise KeyError(f"Override key {k} not in Section {section_override}. Section keys: {list(configs[section_override].keys())}")
                     configs[section_override][k] = v
         else:
-            configs = self.config_overrides
+            configs = self.config_overrides.model_dump()
 
         model = InputConfig(**configs)
         configs = model.model_dump()
@@ -1657,8 +1674,6 @@ class RealizationBuilder:
     def load_config_apply_overrides(self):
         """Load the config file from disk and apply overrides.
         If config overrides are applied with amend = False, then skip reading the config file."""
-        if not self.config_overrides_mode__amend:
-            raise NotImplementedError(f"Untested: self.config_overrides_mode__amend={self.config_overrides_mode__amend}")
         if self.config_overrides and (not self.config_overrides_mode__amend):
             logging.info(f"Skipping load of config file since overrides will replace entire config (no amend)")
         else:
