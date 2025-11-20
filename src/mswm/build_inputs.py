@@ -167,13 +167,15 @@ class RealizationBuilder:
 
         if self.config_overrides_mode__amend:
             configs = copy.deepcopy(self.input_configs)
-            for section, cfg in self.config_overrides.__dict__.items():
-                if cfg is None:
+            for section_override, dict_override in self.config_overrides.__dict__.items():
+                if dict_override is None:
                     continue
-                configs.setdefault(section, {})
-                for k, v in cfg.__dict__.items():
-                    logger.debug(f"Config overrides: will set [{section}] {k} = {v}")
-                    configs[section][k] = v
+                configs.setdefault(section_override, {})
+                for k, v in dict_override.__dict__.items():
+                    logger.debug(f"Config overrides: will set [{section_override}] {k} = {v}")
+                    if k not in configs[section_override]:
+                        raise KeyError(f"Override key {k} not in Section {section_override}. Section keys: {list(configs[section_override].keys())}")
+                    configs[section_override][k] = v
         else:
             configs = self.config_overrides
 
@@ -1583,7 +1585,7 @@ class RealizationBuilder:
         """
         logger.info("Building calibration realization from %s", self.input_path)
 
-        self._load_config_apply_overrides()
+        self.load_config_apply_overrides()
         self._parse_config()
 
         if self.run_type != 'calibration':
@@ -1619,7 +1621,7 @@ class RealizationBuilder:
         """
         logger.info("Building regionalization realization from %s", self.input_path)
 
-        self._load_config_apply_overrides()
+        self.load_config_apply_overrides()
         self._parse_config()
 
         if self.run_type != 'regionalization':
@@ -1652,7 +1654,7 @@ class RealizationBuilder:
 
         logger.info("Regionalization run set up successfully")
 
-    def _load_config_apply_overrides(self):
+    def load_config_apply_overrides(self):
         """Load the config file from disk and apply overrides.
         If config overrides are applied with amend = False, then skip reading the config file."""
         if not self.config_overrides_mode__amend:
@@ -1669,7 +1671,7 @@ class RealizationBuilder:
         """
         logger.info("Building forecast realization from %s", self.input_path)
 
-        self._load_config_apply_overrides()
+        self.load_config_apply_overrides()
         self._load_yaml()
         self._parse_yaml()
         self._parse_config()
@@ -1692,7 +1694,7 @@ class RealizationBuilder:
 
         logger.info("Building default realization from %s", self.input_path)
 
-        self._load_config_apply_overrides()
+        self.load_config_apply_overrides()
         self._parse_config()
 
         if self.run_type != 'default':
