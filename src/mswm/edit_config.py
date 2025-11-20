@@ -104,8 +104,12 @@ def create_valid_realization_file(agent: 'Agent', eval_params: 'EvaluationOption
     config_valid['routing']['t_route_config_file_with_path'] = rt
 
     # Add output variables to validation realization
-    config_valid['global']['formulations'][0]['params']['output_variables'] = valid_output_vars
-    config_valid['global']['formulations'][0]['params']['output_variables'] = valid_output_headers
+    if len(valid_output_vars) != 0:
+        output_vars = [
+            {"name": var, "header": hdr}
+            for var, hdr in zip(valid_output_vars, valid_output_headers)
+        ]
+        config_valid['global']['formulations'][0]['params']['output_variables'] = output_vars
 
     # # Add output variables and headers to sft related run
     # cf1 = config_valid['global']['formulations'][0]['params'].popitem()
