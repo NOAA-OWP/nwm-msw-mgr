@@ -38,6 +38,7 @@ class GeneralConfig(StrictBaseModel):
     main_dir: str
     start_period: Optional[str] = None
     end_period: Optional[str] = None
+    output_precip: Optional[bool] = None
     output_swe: Optional[bool] = None
     output_sm: Optional[bool] = None
     sm_profile_depth: Optional[float] = None
@@ -92,6 +93,8 @@ class CalibConfig(StrictBaseModel):
     start_iteration: Optional[int] = None
     number_iteration: Optional[int] = None
     restart: Optional[int] = None
+    calib_output_vars: bool
+    valid_output_vars: bool
     calib_start_period: str
     calib_end_period: str
     calib_eval_start_period: str

@@ -3419,6 +3419,7 @@ def create_realization_file(
         time_period: dict,
         rt_dict: dict,
         output_dict: dict,
+        calib_output_vars: bool,
         run_type: str
 ) -> None:
     """
@@ -3437,11 +3438,12 @@ def create_realization_file(
     time_period : simulation and evaluation time period
     rt_dict : routing model source file directory and configuration file
     output_dict: whether to output certain variables (currently SWE and soil moisture)
+    calib_output_vars: boolean flag for writing calibration output variables
     run_type: type of run (calib, regionalization, or default)
 
     Returns
     ----------
-    None
+    output_config: dictionary containing output variable configuration
     """
 
     # Create symlinks for libraries
@@ -3769,10 +3771,13 @@ def create_realization_file(
             if value:
                 output_config['output_variables'] = output_config['output_variables'] + var_maps['output']['sm_out']
                 output_config['output_header_fields'] = output_config['output_header_fields'] + var_maps['output']['sm_out_header']
-    if output_config['output_variables'] != []:
-        gbmain['params']['output_variables'] = output_config['output_variables']
-    if output_config['output_header_fields'] != []:
-        gbmain['params']['output_header_fields'] = output_config['output_header_fields']
+
+    # Write output variables section if requested
+    if calib_output_vars:
+        if output_config['output_variables'] != []:
+            gbmain['params']['output_variables'] = output_config['output_variables']
+        if output_config['output_header_fields'] != []:
+            gbmain['params']['output_header_fields'] = output_config['output_header_fields']
 
     # determine the RR module in the current formulation
     rr_mod1 = [m1 for m1 in modules if 'Rainfall_runoff' in settings.modules_all.loc[settings.modules_all['module'] == m1, 'process'].values[0]]
@@ -3818,6 +3823,8 @@ def create_realization_file(
     with open(realization_file, 'w') as outfile:
         json.dump(g, outfile, indent=4, separators=(", ", ": "), sort_keys=False)
     logger.info(f'Realization file is created at {realization_file}')
+
+    return output_config
 
 
 def create_calib_config_file(

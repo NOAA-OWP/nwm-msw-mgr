@@ -57,6 +57,13 @@ def create_valid_realization_file(agent: 'Agent', eval_params: 'EvaluationOption
 
     """
 
+    # Retrieve output variables from calib_yaml
+    with open(agent.yaml_file) as file:
+        y = yaml.safe_load(file)
+
+    valid_output_vars = y['general']['valid_output_vars']
+    valid_output_headers = y['general']['valid_output_headers']
+
     if valid_run_name == "valid_control":
         agent.model.update_config(0, params, path=Path(agent.valid_path))
     elif valid_run_name == "valid_best":
@@ -96,31 +103,35 @@ def create_valid_realization_file(agent: 'Agent', eval_params: 'EvaluationOption
     rt = os.path.join(os.path.dirname(config_valid['routing']['t_route_config_file_with_path']), rt)
     config_valid['routing']['t_route_config_file_with_path'] = rt
 
-    # Add output variables and headers to sft related run
-    cf1 = config_valid['global']['formulations'][0]['params'].popitem()
-    output_variables = list()
-    output_header_fields = list()
-    if config_valid['global']['formulations'][0]['params']['model_type_name'] in ["NoahOWP_CFE_SK_SFT_SMP", "NoahOWP_CFE_XAJ_SFT_SMP"]:
-        output_variables = ["soil_ice_fraction", "TGS", "RAIN_RATE", "DIRECT_RUNOFF", "GIUH_RUNOFF",
-                            "NASH_LATERAL_RUNOFF", "DEEP_GW_TO_CHANNEL_FLUX", "Q_OUT", "SOIL_STORAGE",
-                            "ice_fraction_schaake", "POTENTIAL_ET", "ACTUAL_ET", "soil_moisture_fraction"]
-        output_header_fields = ["soil_ice_fraction", "ground_temperature", "rain_rate", "direct_runoff",
-                                "giuh_runoff", "nash_lateral_runoff", "deep_gw_to_channel_flux", "q_out",
-                                "soil_storage", "ice_fraction_schaake", "PET", "AET", "soil_moisture_fraction"]
-    if config_valid['global']['formulations'][0]['params']['model_type_name'] == "NoahOWP_CFE_XAJ_SFT_SMP":
-        output_variables[9] = "ice_fraction_xinanjiang"
-        output_header_fields[9] = "ice_fraction_xinanjiang"
-    if config_valid['global']['formulations'][0]['params']['model_type_name'] == "NoahOWP_LASAM_SFT_SMP":
-        output_variables = ["soil_ice_fraction", "TGS", "precipitation", "potential_evapotranspiratio", "actual_evapotranspiration",
-                            "soil_storage", "surface_runoff", "giuh_runoff", "groundwater_to_stream_recharge", "percolation",
-                            "total_discharge", "infiltration", "EVAPOTRAN", "soil_moisture_fraction"]
-        output_header_fields = ["soil_ice_fraction", "ground_temperature", "rain_rate", "PET_rate", "actual_ET",
-                                "soil_storage", "direct_runoff", "giuh_runoff", "deep_gw_to_channel_flux",
-                                "soil_to_gw_flux", "q_out", "infiltration", "PET_NOM", "soil_moisture_fraction"]
-    if len(output_variables) > 1 and len(output_header_fields) > 1:
-        config_valid['global']['formulations'][0]['params']['output_variables'] = output_variables
-        config_valid['global']['formulations'][0]['params']['output_header_fields'] = output_header_fields
-    config_valid['global']['formulations'][0]['params']['modules'] = cf1[1]
+    # Add output variables to validation realization
+    config_valid['global']['formulations'][0]['params']['output_variables'] = valid_output_vars
+    config_valid['global']['formulations'][0]['params']['output_variables'] = valid_output_headers
+
+    # # Add output variables and headers to sft related run
+    # cf1 = config_valid['global']['formulations'][0]['params'].popitem()
+    # output_variables = list()
+    # output_header_fields = list()
+    # if config_valid['global']['formulations'][0]['params']['model_type_name'] in ["NoahOWP_CFE_SK_SFT_SMP", "NoahOWP_CFE_XAJ_SFT_SMP"]:
+    #     output_variables = ["soil_ice_fraction", "TGS", "RAIN_RATE", "DIRECT_RUNOFF", "GIUH_RUNOFF",
+    #                         "NASH_LATERAL_RUNOFF", "DEEP_GW_TO_CHANNEL_FLUX", "Q_OUT", "SOIL_STORAGE",
+    #                         "ice_fraction_schaake", "POTENTIAL_ET", "ACTUAL_ET", "soil_moisture_fraction"]
+    #     output_header_fields = ["soil_ice_fraction", "ground_temperature", "rain_rate", "direct_runoff",
+    #                             "giuh_runoff", "nash_lateral_runoff", "deep_gw_to_channel_flux", "q_out",
+    #                             "soil_storage", "ice_fraction_schaake", "PET", "AET", "soil_moisture_fraction"]
+    # if config_valid['global']['formulations'][0]['params']['model_type_name'] == "NoahOWP_CFE_XAJ_SFT_SMP":
+    #     output_variables[9] = "ice_fraction_xinanjiang"
+    #     output_header_fields[9] = "ice_fraction_xinanjiang"
+    # if config_valid['global']['formulations'][0]['params']['model_type_name'] == "NoahOWP_LASAM_SFT_SMP":
+    #     output_variables = ["soil_ice_fraction", "TGS", "precipitation", "potential_evapotranspiratio", "actual_evapotranspiration",
+    #                         "soil_storage", "surface_runoff", "giuh_runoff", "groundwater_to_stream_recharge", "percolation",
+    #                         "total_discharge", "infiltration", "EVAPOTRAN", "soil_moisture_fraction"]
+    #     output_header_fields = ["soil_ice_fraction", "ground_temperature", "rain_rate", "PET_rate", "actual_ET",
+    #                             "soil_storage", "direct_runoff", "giuh_runoff", "deep_gw_to_channel_flux",
+    #                             "soil_to_gw_flux", "q_out", "infiltration", "PET_NOM", "soil_moisture_fraction"]
+    # if len(output_variables) > 1 and len(output_header_fields) > 1:
+    #     config_valid['global']['formulations'][0]['params']['output_variables'] = output_variables
+    #     config_valid['global']['formulations'][0]['params']['output_header_fields'] = output_header_fields
+    # config_valid['global']['formulations'][0]['params']['modules'] = cf1[1]
 
     # Write realization file for validation run
     with open(config_valid_file, 'w') as outfile:
