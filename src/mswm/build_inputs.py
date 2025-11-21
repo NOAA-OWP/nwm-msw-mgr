@@ -21,12 +21,14 @@ import shutil
 
 from mswm.utils import ginputfunc as gfun
 from mswm.utils import settings
-from mswm.utils.log_level import log_level_set
+from mswm.utils.log_level import log_level_set, MODULE_NAME
 from mswm.utils.input_configuration import InputConfig
 
 
-logger = logging.getLogger(__name__)
-if not logging.getLogger().hasHandlers():
+# Initialize MSWM setup logger
+main_logger = logging.getLogger()
+logger = None
+if not main_logger.hasHandlers():
     # When running outside of Django, configure basic logging to stderr
     logging.basicConfig(
         level=logging.INFO,
@@ -106,7 +108,7 @@ class RealizationBuilder:
             try:
                 raise FileNotFoundError(f'Input file not found: {self.input_path}')
             except FileNotFoundError as e:
-                logger.critical(e)
+                main_logger.critical(e)
                 raise
 
         # Read input config file
@@ -114,23 +116,23 @@ class RealizationBuilder:
             self.config = configparser.ConfigParser()
             self.config.read(self.input_path)
         except FileNotFoundError as e:
-            logger.critical(f"Input file not found: {self.input_path}\n{e}")
+            main_logger.critical(f"Input file not found: {self.input_path}\n{e}")
             raise
         except configparser.Error as e:
-            logger.critical(f"ConfigParser error reading config file: {self.input_path}\n{e}")
+            main_logger.critical(f"ConfigParser error reading config file: {self.input_path}\n{e}")
             raise
         except Exception as e:
-            logger.critical(f"Unexpected error loading config: {self.input_path}\n{e}")
+            main_logger.critical(f"Unexpected error loading config: {self.input_path}\n{e}")
             raise
 
-        logger.info(f"Input.config file loaded from {self.input_path}")
+        main_logger.info(f"Input.config file loaded from: {self.input_path}")
 
         # Raise error if config file is empty
         if not {section: dict(self.config[section]) for section in self.config.sections()}:
             try:
                 raise ValueError(f'Input.config file is empty or contains no valid sections: {self.input_path}')
             except ValueError as e:
-                logger.critical(e)
+                main_logger.critical(e)
                 raise
 
         self.__validate_config()
@@ -153,9 +155,8 @@ class RealizationBuilder:
         try:
             self.input_configs = InputConfig(**configs).model_dump()
         except ValidationError as e:
-            logger.critical(f"Input.config Pydantic validation failed: {self.input_path}{e}")
+            main_logger.critical(f"Input.config Pydantic validation failed: {self.input_path}{e}")
             raise
-        logger.info("Input.config validated successfully")
 
     def __override_config(self) -> None:
         """
@@ -211,7 +212,7 @@ class RealizationBuilder:
             try:
                 raise FileNotFoundError(f'Config valid yaml file does not exist: {self.valid_yaml}')
             except FileNotFoundError as e:
-                logger.critical(e)
+                main_logger.critical(e)
                 raise
 
         # Read the yaml-based configuration file
@@ -219,16 +220,68 @@ class RealizationBuilder:
             with open(self.valid_yaml) as file:
                 self.valid_conf = yaml.safe_load(file)
         except FileNotFoundError as e:
-            logger.critical(f'Config valid yaml file does not exist: {self.valid_yaml}\n{e}')
+            main_logger.critical(f'Config valid yaml file does not exist: {self.valid_yaml}\n{e}')
             raise
         except yaml.YAMLError as e:
-            logger.critical(f"YAML parsing error in valid config yaml file: {self.valid_yaml}\n{e}")
+            main_logger.critical(f"YAML parsing error in valid config yaml file: {self.valid_yaml}\n{e}")
             raise
         except Exception as e:
-            logger.critical(f"Unexpected error loading valid config yaml file at: {self.valid_yaml}\n{e}")
+            main_logger.critical(f"Unexpected error loading valid config yaml file at: {self.valid_yaml}\n{e}")
             raise
 
-        logger.info(f"Configuration yaml file loaded:  {self.valid_yaml}")
+        main_logger.info(f"Configuration yaml file loaded: {self.valid_yaml}")
+
+    def _create_fcst_dir(self):
+        """
+        Create directory for forecast run
+        """
+        # create fcst directory
+        try:
+            fcst_dir0 = Path(self.valid_conf['general']['yaml_file']).parent.parent
+        except KeyError as e:
+            main_logger.critical(f"Yaml file path not found in config valid yaml file: {e}")
+            raise
+        except FileNotFoundError as e:
+            main_logger.critical(f"Invalid yaml file path: {self.valid_conf['general']['yaml_file']} - {e}")
+            raise
+
+        # Create forecast run directory or cold start run directory
+        fcst_dir_name = 'Cold_Start_Run' if self.use_cold_start else 'Forecast_Run'
+        self.input_dir = Path(fcst_dir0, fcst_dir_name, self.fcst_run_name)
+
+        # Set file basename for forecast or cold start
+        self.basename_opt = 'fcst' if not self.use_cold_start else 'cold_start'
+
+        # Set run_type to forecast for log generation
+        self.run_type = 'forecast' if not self.use_cold_start else 'cold start'
+
+        try:
+            self.input_dir.mkdir(parents=True, exist_ok=True)
+        except Exception as e:
+            main_logger.critical(f"[MSWM] Invalid yaml file path: {self.input_dir} - {e}")
+            raise
+
+        main_logger.info(f'[MSWM] Run directory created at: {self.input_dir}')
+
+    def _parse_yaml(self):
+        """
+        Read realization file, hydrofabric gpkg and ngen executable paths from yaml file
+        """
+        # Set realization file path
+        try:
+            self.real_input_file = Path(self.valid_conf['model']['realization']).absolute()
+
+            # Get hydrofabric gpkg paths
+            self.gpkg_cats = self.valid_conf['model']['catchments']
+            self.gpkg_nexus = self.valid_conf['model']['nexus']
+
+            # Get ngen executable path
+            self.ngen_exe = self.valid_conf['model']['binary']
+        except Exception as e:
+            logger.critical(f"Yaml config valid file is missing fields: {self.valid_yaml}\n{e}")
+            raise
+
+        logger.info("Yaml file parsed")
 
     def _load_reg_formulation(self):
         """
@@ -368,26 +421,6 @@ class RealizationBuilder:
 
         logger.info(f"Regionalization parameters loaded from: {self.assign_file}")
 
-    def _parse_yaml(self):
-        """
-        Read realization file, hydrofabric gpkg and ngen executable paths from yaml file
-        """
-        # Set realization file path
-        try:
-            self.real_input_file = Path(self.valid_conf['model']['realization']).absolute()
-
-            # Get hydrofabric gpkg paths
-            self.gpkg_cats = self.valid_conf['model']['catchments']
-            self.gpkg_nexus = self.valid_conf['model']['nexus']
-
-            # Get ngen executable path
-            self.ngen_exe = self.valid_conf['model']['binary']
-        except Exception as e:
-            logger.critical(f"Yaml config valid file is missing fields: {self.valid_yaml}\n{e}")
-            raise
-
-        logger.info("Yaml file parsed")
-
     def _load_realization(self):
         """
         Load realization json file
@@ -434,36 +467,50 @@ class RealizationBuilder:
         if not self.parallelSec or self.parallelSec.get("nprocs", 0) < 2:
             self.parallelSec = None
 
-        logger.info('Input.config sections parsed')
-
-    def _create_fcst_dir(self):
+    def _create_input_dir(self):
         """
-        Create directory for forecast run
+        Create input directory to store realization file and BMI config files
         """
-        # create fcst directory
+        # Set run directory based on run_type
+        self.basin = self.conf1['basin']
+        obj_fnc = self.conf2.get('objective_function') or "none"
+        opt_alg = self.conf2.get('optimization_algorithm') or "none"
+        if self.run_type == 'calibration':
+            run_dir = os.path.join(self.conf1['main_dir'], '_'.join([obj_fnc, opt_alg]))
+        elif self.run_type == 'regionalization':
+            run_dir = os.path.join(self.conf1['main_dir'], 'regionalization')
+        elif self.run_type == 'default':
+            run_dir = os.path.join(self.conf1['main_dir'], 'default')
+
+        # Form input directory paths
+        self.work_dir = os.path.join(run_dir, self.conf1['formulation'] + '/' + self.basin)
+        self.input_dir = os.path.join(self.work_dir, 'Input/')
+
+        # Create directory
         try:
-            fcst_dir0 = Path(self.valid_conf['general']['yaml_file']).parent.parent
-        except KeyError as e:
-            logger.critical(f"Yaml file path not found in config valid yaml file: {e}")
-            raise
-        except FileNotFoundError as e:
-            logger.critical(f"Invalid yaml file path: {self.valid_conf['general']['yaml_file']} - {e}")
-            raise
-
-        # Create forecast run directory or cold start run directory
-        fcst_dir_name = 'Cold_Start_Run' if self.use_cold_start else 'Forecast_Run'
-        self.input_dir = Path(fcst_dir0, fcst_dir_name, self.fcst_run_name)
-
-        # Set file basename for forecast or cold start
-        self.basename_opt = "fcst" if not self.use_cold_start else "cold_start"
-
-        try:
-            self.input_dir.mkdir(parents=True, exist_ok=True)
+            os.makedirs(self.input_dir, exist_ok=True)
         except Exception as e:
-            logger.critical(f"Invalid yaml file path: {self.input_dir} - {e}")
+            main_logger.critical(f"Invalid input directory: {e}. Check `main_dir` variable")
             raise
 
-        logger.info(f'New run directory created at: {self.input_dir}')
+        main_logger.info(f"Input directory created at: {self.input_dir}")
+
+    def _init_log(self):
+        """
+        Initialize logging depending on run type
+        """
+        # Set location for msw-mgr log
+        if self.run_type in ('forecast', 'cold start'):
+            log_path = os.path.join(self.input_dir, 'logs')
+        else:
+            log_path = os.path.join(self.work_dir, 'logs')
+
+        # Initialize logging
+        log_level_set(log_path)
+        global logger
+        logger = logging.getLogger(MODULE_NAME)
+        gfun.init_ginput_logger()
+        logger.info(f"Building {self.run_type} realization from: {self.input_path}")
 
     def _parse_forcing_engine(self):
         """
@@ -865,34 +912,6 @@ class RealizationBuilder:
                 raise ValueError(f"Library path valdiation failed:\n{err_message}")
 
         logger.info("Module libarary paths set")
-
-    def _create_input_dir(self):
-        """
-        Create input directory to store realization file and BMI config files
-        """
-        # Set run directory based on run_type
-        self.basin = self.conf1['basin']
-        obj_fnc = self.conf2.get('objective_function') or "none"
-        opt_alg = self.conf2.get('optimization_algorithm') or "none"
-        if self.run_type == 'calibration':
-            run_dir = os.path.join(self.conf1['main_dir'], '_'.join([obj_fnc, opt_alg]))
-        elif self.run_type == 'regionalization':
-            run_dir = os.path.join(self.conf1['main_dir'], 'regionalization')
-        elif self.run_type == 'default':
-            run_dir = os.path.join(self.conf1['main_dir'], 'default')
-
-        # Form input directory paths
-        self.work_dir = os.path.join(run_dir, self.conf1['formulation'] + '/' + self.basin)
-        self.input_dir = os.path.join(self.work_dir, 'Input/')
-
-        # Create directory
-        try:
-            os.makedirs(self.input_dir, exist_ok=True)
-        except Exception as e:
-            logger.critical(f"Invalid input directory: {e}. Check `main_dir` variable")
-            raise
-
-        logger.info(f"Input directory created at: {self.input_dir}")
 
     def _symlink_ngen(self):
         """
@@ -1604,6 +1623,8 @@ class RealizationBuilder:
 
         self.load_config_apply_overrides()
         self._parse_config()
+        self._create_input_dir()
+        self._init_log()
 
         if self.run_type != 'calibration':
             try:
@@ -1618,7 +1639,6 @@ class RealizationBuilder:
         self._parse_modules()
         self._validate_processes()
         self._set_lib_paths()
-        self._create_input_dir()
         self._extract_hydrofabric()
         self._extract_forcing()
         self._configure_forcing_engine()
@@ -1640,6 +1660,8 @@ class RealizationBuilder:
 
         self.load_config_apply_overrides()
         self._parse_config()
+        self._create_input_dir()
+        self._init_log()
 
         if self.run_type != 'regionalization':
             try:
@@ -1659,7 +1681,6 @@ class RealizationBuilder:
         self._map_cat_to_form()
         self._map_mod_to_cat()
         self._set_lib_paths()
-        self._create_input_dir()
         self._symlink_ngen()
         self._extract_hydrofabric()
         self._extract_forcing()
@@ -1688,10 +1709,11 @@ class RealizationBuilder:
 
         self.load_config_apply_overrides()
         self._load_yaml()
+        self._create_fcst_dir()
+        self._init_log()
         self._parse_yaml()
         self._parse_config()
         self._load_realization()
-        self._create_fcst_dir()
         self._parse_forcing_engine()
         self._extract_forcing()
         self._configure_forcing_engine()
@@ -1700,17 +1722,21 @@ class RealizationBuilder:
         self._update_fcst_troute()
         self._write_fcst_realization()
 
-        logger.info("Forecast run set up successfully")
+        if self.use_cold_start:
+            logger.info("Cold start run set up successfully")
+        else:
+            logger.info("Forecast run set up successfully")
 
     def build_default_realization(self):
         """
         Create realization and BMI config files using default parameter values for each catchment
         """
-
         logger.info("Building default realization from %s", self.input_path)
 
         self.load_config_apply_overrides()
         self._parse_config()
+        self._create_input_dir()
+        self._init_log()
 
         if self.run_type != 'default':
             try:
@@ -1724,7 +1750,6 @@ class RealizationBuilder:
         self._parse_modules()
         self._validate_processes()
         self._set_lib_paths()
-        self._create_input_dir()
         self._symlink_ngen()
         self._extract_hydrofabric()
         self._extract_forcing()
