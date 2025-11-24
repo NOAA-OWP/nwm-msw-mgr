@@ -3346,10 +3346,15 @@ def create_reg_realization_file(
                 if value:
                     output_config['output_variables'] = output_config['output_variables'] + var_maps['output']['sm_out']
                     output_config['output_header_fields'] = output_config['output_header_fields'] + var_maps['output']['sm_out_header']
-        if output_config['output_variables'] != []:
-            grp_configs['params']['output_variables'] = output_config['output_variables']
-        if output_config['output_header_fields'] != []:
-            grp_configs['params']['output_header_fields'] = output_config['output_header_fields']
+
+        output_vars = [
+            {"name": var, "header": hdr}
+            for var, hdr in zip(output_config['output_variables'], output_config['output_header_fields'])
+        ]
+        if output_vars != []:
+            grp_configs['params']['output_variables'] = output_vars
+        else:
+            grp_configs['params']['output_variables'] = []
 
         # determine the RR module in the current formulation
         rr_mod1 = [m1 for m1 in grp_mod if 'Rainfall_runoff' in settings.modules_all.loc[settings.modules_all['module'] == m1, 'process'].values[0]]
