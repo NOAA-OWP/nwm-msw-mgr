@@ -3772,12 +3772,18 @@ def create_realization_file(
                 output_config['output_variables'] = output_config['output_variables'] + var_maps['output']['sm_out']
                 output_config['output_header_fields'] = output_config['output_header_fields'] + var_maps['output']['sm_out_header']
 
-    # Write output variables section if requested
+    # Write output variables section if requested, otherwise write empty section
     if calib_output_vars:
-        if output_config['output_variables'] != []:
-            gbmain['params']['output_variables'] = output_config['output_variables']
-        if output_config['output_header_fields'] != []:
-            gbmain['params']['output_header_fields'] = output_config['output_header_fields']
+        output_vars = [
+            {"name": var, "header": hdr}
+            for var, hdr in zip(output_config['output_variables'], output_config['output_header_fields'])
+        ]
+        if output_vars != []:
+            gbmain['params']['output_variables'] = output_vars
+        else:
+            gbmain['params']['output_variables'] = []
+    else:
+        gbmain['params']['output_variables'] = []
 
     # determine the RR module in the current formulation
     rr_mod1 = [m1 for m1 in modules if 'Rainfall_runoff' in settings.modules_all.loc[settings.modules_all['module'] == m1, 'process'].values[0]]

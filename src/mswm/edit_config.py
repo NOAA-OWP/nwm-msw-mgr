@@ -110,6 +110,8 @@ def create_valid_realization_file(agent: 'Agent', eval_params: 'EvaluationOption
             for var, hdr in zip(valid_output_vars, valid_output_headers)
         ]
         config_valid['global']['formulations'][0]['params']['output_variables'] = output_vars
+    else:
+        config_valid['global']['formulations'][0]['params']['output_variables'] = []
 
     # # Add output variables and headers to sft related run
     # cf1 = config_valid['global']['formulations'][0]['params'].popitem()
