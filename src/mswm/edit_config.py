@@ -63,6 +63,7 @@ def create_valid_realization_file(agent: 'Agent', eval_params: 'EvaluationOption
 
     valid_output_vars = y['general']['valid_output_vars']
     valid_output_headers = y['general']['valid_output_headers']
+    valid_output_units = y['general']['valid_output_units']
 
     if valid_run_name == "valid_control":
         agent.model.update_config(0, params, path=Path(agent.valid_path))
@@ -106,8 +107,8 @@ def create_valid_realization_file(agent: 'Agent', eval_params: 'EvaluationOption
     # Add output variables to validation realization
     if len(valid_output_vars) != 0:
         output_vars = [
-            {"name": var, "header": hdr}
-            for var, hdr in zip(valid_output_vars, valid_output_headers)
+            {"name": var, "header": hdr, "units": unit}
+            for var, hdr, unit in zip(valid_output_vars, valid_output_headers, valid_output_units)
         ]
         config_valid['global']['formulations'][0]['params']['output_variables'] = output_vars
     else:

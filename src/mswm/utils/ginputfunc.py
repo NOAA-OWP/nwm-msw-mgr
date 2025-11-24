@@ -2900,6 +2900,7 @@ def var_mapping(
         if output_dict['output_swe']:
             var_maps['output']['swe_out'] = 'sneqv'
             var_maps['output']['swe_out_header'] = 'SWE_mm'
+            var_maps['output']['swe_out_units'] = 'mm'
         else:
             var_maps['output']['swe_out'] = ''
     elif 'ueb' in modules:
@@ -2907,6 +2908,7 @@ def var_mapping(
         if output_dict['output_swe']:
             var_maps['output']['swe_out'] = 'SWE'
             var_maps['output']['swe_out_header'] = 'SWE_m'
+            var_maps['output']['swe_out_units'] = 'm'
         else:
             var_maps['output']['swe_out'] = ''
     elif 'noah' in modules:  # check noah last since it can also be included to provided ET
@@ -2914,11 +2916,13 @@ def var_mapping(
         if output_dict['output_swe']:
             var_maps['output']['swe_out'] = 'SNEQV'
             var_maps['output']['swe_out_header'] = 'SWE_mm'
+            var_maps['output']['swe_out_units'] = 'mm'
         else:
             var_maps['output']['swe_out'] = ''
     elif 'topmodel' in modules:
         if output_dict['output_swe']:
             var_maps['output']['swe_out'] = 'soil_water_table'
+            var_maps['output']['swe_out_units'] = 'm'
         else:
             var_maps['output']['swe_out'] = ''
     else:
@@ -2929,6 +2933,7 @@ def var_mapping(
         var_maps['output']['sm_out'] = ['soil_moisture_fraction', 'soil_moisture_profile']
         var_maps['output']['sm_out_header'] = ['sm_frac_' + str(output_dict['sm_frac_depth']) + 'm',
                                                'sm_profile_' + str(output_dict['sm_profile_depth']) + 'm']
+        var_maps['output']['sm_out_units'] = ['1', '1']
     else:
         var_maps['output']['sm_out'] = ''
 
@@ -3765,23 +3770,25 @@ def create_realization_file(
                          "main_output_variable": main_output_variable}}
 
     # Output section
-    output_config = {'output_variables': [], 'output_header_fields': []}
+    output_config = {'output_variables': [], 'output_header_fields': [], 'output_units': []}
     for key, value in output_dict.items():
         if key == 'output_swe' and var_maps['output']['swe_out'] != '':
             if value:
                 output_config['output_variables'] = output_config['output_variables'] + [var_maps['output']['swe_out']]
                 output_config['output_header_fields'] = output_config['output_header_fields'] + [var_maps['output']['swe_out_header']]
+                output_config['output_units'] = output_config['output_units'] + [var_maps['output']['swe_out_units']]
 
         elif key == 'output_sm' and var_maps['output']['sm_out'] != '':
             if value:
                 output_config['output_variables'] = output_config['output_variables'] + var_maps['output']['sm_out']
                 output_config['output_header_fields'] = output_config['output_header_fields'] + var_maps['output']['sm_out_header']
+                output_config['output_units'] = output_config['output_units'] + var_maps['output']['sm_out_units']
 
     # Write output variables section if requested, otherwise write empty section
     if calib_output_vars:
         output_vars = [
-            {"name": var, "header": hdr}
-            for var, hdr in zip(output_config['output_variables'], output_config['output_header_fields'])
+            {"name": var, "header": hdr, "units": unit}
+            for var, hdr, unit in zip(output_config['output_variables'], output_config['output_header_fields'], output_config['output_units'])
         ]
         if output_vars != []:
             gbmain['params']['output_variables'] = output_vars

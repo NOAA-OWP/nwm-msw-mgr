@@ -1588,7 +1588,6 @@ class RealizationBuilder:
         streamflow_threshold = self.conf2.get('streamflow_threshold') or 0.0
         user_email = self.conf2.get('user_email') or ''
 
-
         # Create calibration configuration file
         self.calib_config_file = os.path.join(self.work_dir + '/Input', '{}'.format(self.basin) + '_config_calib.yaml')
         self.model_dict = {'type': 'ngen', 'binary': self.conf3['ngen_exe_file'], 'realization': self.realization_file,
@@ -1641,6 +1640,7 @@ class RealizationBuilder:
         if self.valid_output_vars:
             general_dict['valid_output_vars'] = self.output_config['output_variables']
             general_dict['valid_output_headers'] = self.output_config['output_header_fields']
+            general_dict['valid_output_units'] = self.output_config['output_units']
 
         # Create calibration config file
         gfun.create_calib_config_file(self.conf2['calib_parameter_file'], self.modules, self.work_dir, general_dict, self.model_dict, self.calib_config_file)
