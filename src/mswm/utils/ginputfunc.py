@@ -3784,6 +3784,12 @@ def create_realization_file(
                 output_config['output_header_fields'] = output_config['output_header_fields'] + var_maps['output']['sm_out_header']
                 output_config['output_units'] = output_config['output_units'] + var_maps['output']['sm_out_units']
 
+    # Add precipitation to output_config
+    if output_dict['output_precip']:
+        output_config['output_variables'] = output_config['output_variables'] + ["QRAIN"]
+        output_config['output_header_fields'] = output_config['output_header_fields'] + ["precip_mm_s-1"]
+        output_config['output_units'] = output_config['output_units'] + ["mm/s"]
+
     # Write output variables section if requested, otherwise write empty section
     if calib_output_vars:
         output_vars = [
