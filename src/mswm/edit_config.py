@@ -61,9 +61,10 @@ def create_valid_realization_file(agent: 'Agent', eval_params: 'EvaluationOption
     with open(agent.yaml_file) as file:
         y = yaml.safe_load(file)
 
-    valid_output_vars = y['general']['valid_output_vars']
-    valid_output_headers = y['general']['valid_output_headers']
-    valid_output_units = y['general']['valid_output_units']
+    general_dict = y.get('general', {})
+    valid_output_vars = general_dict.get('valid_output_vars', [])
+    valid_output_headers = general_dict.get('valid_output_headers', [])
+    valid_output_units = general_dict.get('valid_output_units', [])
 
     if valid_run_name == "valid_control":
         agent.model.update_config(0, params, path=Path(agent.valid_path))
