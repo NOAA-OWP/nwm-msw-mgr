@@ -40,8 +40,22 @@ if not main_logger.hasHandlers():
 class RealizationBuilder:
     """
     This class reads a .conf file from disk (input_path) during calls to method `build_*_realization()`.
-    To apply overrides on the configurations read from disk: set the `config_overrides` property to an instance of InputConfig.
-    The `config_overrides_mode__amend` property is True by default, and can be set to False to affect behavior of config overrides.
+    Optionally, the configurations can be taken from config_overrides, if provided.
+
+    `config_overrides` (class argument and property): InputConfig
+        When this is provided as an argument to class construction, it is used instead of
+        reading configuration from disk, and `config_overrides_mode__amend` is set to False.
+        
+        This can also be provided after class construction, in order to cause the configuration to be
+        updated per-section, per-key, using the overrides, rather than fully replaced.
+
+    `config_overrides_mode__amend` (property): bool
+        When this is True, then the overrides from `config_overrides` are applied per-section, per-key,
+        rather than wholesale replacing the configurations read from disk.
+
+        When `config_overrides` are provided during class instantiation, this property is set to False (overrides will fully replace configuration, no aspect of configuration from disk will be used).
+        When `config_overrides` are not provided during class instantiation, this property is set to True (overrides will amend configuration read from disk).
+        This property can be changed after instantiating this class, before calling one of the `build_*_realization()` methods.
     """
 
     def __init__(self, input_path: str | None = None, valid_yaml: str | None = None, use_cold_start: bool = False, forcing_path: str | None = None, fcst_run_name: str | None = None, config_overrides: InputConfig | None = None):
@@ -99,6 +113,13 @@ class RealizationBuilder:
         Read input.config file
         """
         import configparser
+
+        if self.input_path is None:
+            main_logger.debug(f"self.input_path is None")
+            if self.config_overrides is None:
+                raise ValueError(f"self.input_path = {self.input_path} and self.config_overrides = {self.config_overrides}")
+            return
+
         # Confirm input file exists
         self.input_path = Path(self.input_path).absolute()
         if not self.input_path.exists():
@@ -185,11 +206,11 @@ class RealizationBuilder:
 
         if self.config_overrides_mode__amend:
             configs = copy.deepcopy(self.input_configs)
-            for section_override, dict_override in self.config_overrides.__dict__.items():
+            for section_override, dict_override in self.config_overrides.model_dump().items():
                 if dict_override is None:
                     continue
                 configs.setdefault(section_override, {})
-                for k, v in dict_override.__dict__.items():
+                for k, v in dict_override.items():
                     main_logger.debug(f"Config overrides: will set [{section_override}] {k} = {v}")
                     if k not in configs[section_override]:
                         raise KeyError(f"Override key {k} not in Section {section_override}. Section keys: {list(configs[section_override].keys())}")
