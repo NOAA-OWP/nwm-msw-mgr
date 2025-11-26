@@ -3787,7 +3787,7 @@ def create_realization_file(
     # Add precipitation to output_config
     if output_dict['output_precip']:
         output_config['output_variables'] = output_config['output_variables'] + ["QRAIN"]
-        output_config['output_header_fields'] = output_config['output_header_fields'] + ["precip_mm_s-1"]
+        output_config['output_header_fields'] = output_config['output_header_fields'] + ["rainrate"]
         output_config['output_units'] = output_config['output_units'] + ["mm/s"]
 
     # Write output variables section if requested, otherwise write empty section
