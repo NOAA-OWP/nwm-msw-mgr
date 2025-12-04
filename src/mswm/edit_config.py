@@ -76,10 +76,6 @@ def create_valid_realization_file(agent: 'Agent', eval_params: 'EvaluationOption
         config_valid = json.load(fl)
 
     # Replace calib simulation time period with valid sumulation period
-    print(eval_params.evaluation_start)
-    print(eval_params._eval_range)
-    print(eval_params._full_eval_range)
-    print(eval_params._valid_range)
     config_valid['time']['start_time'] = datetime.strftime(eval_params._valid_range[0], '%Y-%m-%d %H:%M:%S')
     config_valid['time']['end_time'] = datetime.strftime(eval_params._valid_range[1], '%Y-%m-%d %H:%M:%S')
 
