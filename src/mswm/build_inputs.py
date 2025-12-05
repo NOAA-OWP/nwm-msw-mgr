@@ -209,11 +209,9 @@ class RealizationBuilder:
             for section_override, dict_override in self.config_overrides.model_dump().items():
                 if dict_override is None:
                     continue
-                configs.setdefault(section_override, {})
+                if (section_override not in configs) or (configs[section_override] is None):
+                    configs[section_override] = {}
                 for k, v in dict_override.items():
-                    main_logger.debug(f"Config overrides: will set [{section_override}] {k} = {v}")
-                    if k not in configs[section_override]:
-                        raise KeyError(f"Override key {k} not in Section {section_override}. Section keys: {list(configs[section_override].keys())}")
                     configs[section_override][k] = v
         else:
             configs = self.config_overrides.model_dump()
