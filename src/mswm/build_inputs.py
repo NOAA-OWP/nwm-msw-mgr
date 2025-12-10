@@ -1147,8 +1147,11 @@ class RealizationBuilder:
                 self.output_dict[s1] = float(self.conf1[s1])
 
         # Retrieve calib and valid output variable settings
-        self.calib_output_vars = self.conf2.get('calib_output_vars', False)
-        self.valid_output_vars = self.conf2.get('valid_output_vars', True)
+        self.calib_output_vars = self.conf2.get('calib_output_vars')
+        self.valid_output_vars = self.conf2.get('valid_output_vars')
+
+        self.calib_output_vars = False if self.calib_output_vars is None else self.calib_output_vars
+        self.valid_output_vars = True if self.valid_output_vars is None else self.valid_output_vars
 
         logger.info("Set output variables")
 

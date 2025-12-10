@@ -93,8 +93,8 @@ class CalibConfig(StrictBaseModel):
     start_iteration: Optional[int] = None
     number_iteration: Optional[int] = None
     restart: Optional[int] = None
-    calib_output_vars: bool
-    valid_output_vars: bool
+    calib_output_vars: Optional[bool] = None
+    valid_output_vars: Optional[bool] = None
     calib_start_period: str
     calib_end_period: str
     calib_eval_start_period: str
