@@ -1134,7 +1134,8 @@ class RealizationBuilder:
         self.output_dict = dict()
         for s1 in ['output_swe', 'output_sm', 'output_precip']:
             if (s1 not in self.conf1.keys()) or (self.conf1[s1] is None) or (self.conf1[s1] == ''):
-                self.output_dict[s1] = False
+                # Default output_precip to True if not specified
+                self.output_dict[s1] = True if s1 == 'output_precip' else False
             else:
                 self.output_dict[s1] = self.conf1[s1]
 
@@ -1146,8 +1147,8 @@ class RealizationBuilder:
                 self.output_dict[s1] = float(self.conf1[s1])
 
         # Retrieve calib and valid output variable settings
-        self.calib_output_vars = self.conf2.get('calib_output_vars')
-        self.valid_output_vars = self.conf2.get('valid_output_vars')
+        self.calib_output_vars = self.conf2.get('calib_output_vars', False)
+        self.valid_output_vars = self.conf2.get('valid_output_vars', True)
 
         logger.info("Set output variables")
 
