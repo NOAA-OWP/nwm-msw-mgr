@@ -106,6 +106,8 @@ def create_valid_realization_file(agent: 'Agent', eval_params: 'EvaluationOption
     config_valid['routing']['t_route_config_file_with_path'] = rt
 
     # Add output variables to validation realization
+    logger.info("Setting validation output variables")
+    logger.info(f"valid_output_vars from calib.yaml: {valid_output_vars}")
     if len(valid_output_vars) != 0:
         output_vars = [
             {"name": var, "header": hdr, "units": unit}
@@ -114,6 +116,8 @@ def create_valid_realization_file(agent: 'Agent', eval_params: 'EvaluationOption
         config_valid['global']['formulations'][0]['params']['output_variables'] = output_vars
     else:
         config_valid['global']['formulations'][0]['params']['output_variables'] = []
+
+    logger.info(f"valid_output_vars set in realization: {config_valid['global']['formulations'][0]['params']['output_variables']}")
 
     # # Add output variables and headers to sft related run
     # cf1 = config_valid['global']['formulations'][0]['params'].popitem()
