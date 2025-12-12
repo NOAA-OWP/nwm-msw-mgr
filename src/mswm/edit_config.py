@@ -107,7 +107,6 @@ def create_valid_realization_file(agent: 'Agent', eval_params: 'EvaluationOption
 
     # Add output variables to validation realization
     logger.info("Setting validation output variables")
-    logger.info(f"valid_output_vars from calib.yaml: {valid_output_vars}")
     if len(valid_output_vars) != 0:
         output_vars = [
             {"name": var, "header": hdr, "units": unit}
