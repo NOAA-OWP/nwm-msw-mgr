@@ -1130,11 +1130,12 @@ class RealizationBuilder:
         """
         Set SWE and Soil Moisture output variables
         """
-        # whether to output SWE or soil moisture (default to False)
+        # whether to output SWE, soil moisture, or precip (default to False)
         self.output_dict = dict()
-        for s1 in ['output_swe', 'output_sm']:
+        for s1 in ['output_swe', 'output_sm', 'output_precip']:
             if (s1 not in self.conf1.keys()) or (self.conf1[s1] is None) or (self.conf1[s1] == ''):
-                self.output_dict[s1] = False
+                # Default output_precip to True if not specified
+                self.output_dict[s1] = True if s1 == 'output_precip' else False
             else:
                 self.output_dict[s1] = self.conf1[s1]
 
@@ -1145,7 +1146,14 @@ class RealizationBuilder:
             if (self.conf1[s1] is not None) and (self.conf1[s1] != ''):
                 self.output_dict[s1] = float(self.conf1[s1])
 
-        logger.info("Set SWE and SM output variables")
+        # Retrieve calib and valid output variable settings
+        self.calib_output_vars = self.conf2.get('calib_output_vars')
+        self.valid_output_vars = self.conf2.get('valid_output_vars')
+
+        self.calib_output_vars = False if self.calib_output_vars is None else self.calib_output_vars
+        self.valid_output_vars = True if self.valid_output_vars is None else self.valid_output_vars
+
+        logger.info("Set output variables")
 
     def _update_fcst_realization(self):
         """
@@ -1516,8 +1524,8 @@ class RealizationBuilder:
         rt_dict = {"routing": {"t_route_config_file_with_path": routing_config_file}}
 
         # Write realization file
-        gfun.create_realization_file(self.work_dir, self.lib_file, bmi_dir, self.forcing_provider, self.forcing_path, self.forcing_config_file, self.realization_file,
-                                     self.modules, self.time_period, rt_dict, self.output_dict, self.run_type)
+        self.output_config = gfun.create_realization_file(self.work_dir, self.lib_file, bmi_dir, self.forcing_provider, self.forcing_path, self.forcing_config_file, self.realization_file,
+                                                          self.modules, self.time_period, rt_dict, self.output_dict, self.calib_output_vars, self.run_type)
 
     def _write_region_realization(self):
         """
@@ -1631,6 +1639,12 @@ class RealizationBuilder:
         # items related to running from GUI
         for s1 in ['calibration_run_id', 'ngen_cerf', 'auth_token']:
             general_dict[s1] = self.conf2[s1]
+
+        # Set output variables
+        if self.valid_output_vars:
+            general_dict['valid_output_vars'] = self.output_config['output_variables']
+            general_dict['valid_output_headers'] = self.output_config['output_header_fields']
+            general_dict['valid_output_units'] = self.output_config['output_units']
 
         # Create calibration config file
         gfun.create_calib_config_file(self.conf2['calib_parameter_file'], self.modules, self.work_dir, general_dict, self.model_dict, self.calib_config_file)

@@ -2900,6 +2900,7 @@ def var_mapping(
         if output_dict['output_swe']:
             var_maps['output']['swe_out'] = 'sneqv'
             var_maps['output']['swe_out_header'] = 'SWE_mm'
+            var_maps['output']['swe_out_units'] = 'mm'
         else:
             var_maps['output']['swe_out'] = ''
     elif 'ueb' in modules:
@@ -2907,6 +2908,7 @@ def var_mapping(
         if output_dict['output_swe']:
             var_maps['output']['swe_out'] = 'SWE'
             var_maps['output']['swe_out_header'] = 'SWE_m'
+            var_maps['output']['swe_out_units'] = 'm'
         else:
             var_maps['output']['swe_out'] = ''
     elif 'noah' in modules:  # check noah last since it can also be included to provided ET
@@ -2914,11 +2916,13 @@ def var_mapping(
         if output_dict['output_swe']:
             var_maps['output']['swe_out'] = 'SNEQV'
             var_maps['output']['swe_out_header'] = 'SWE_mm'
+            var_maps['output']['swe_out_units'] = 'mm'
         else:
             var_maps['output']['swe_out'] = ''
     elif 'topmodel' in modules:
         if output_dict['output_swe']:
             var_maps['output']['swe_out'] = 'soil_water_table'
+            var_maps['output']['swe_out_units'] = 'm'
         else:
             var_maps['output']['swe_out'] = ''
     else:
@@ -2929,6 +2933,7 @@ def var_mapping(
         var_maps['output']['sm_out'] = ['soil_moisture_fraction', 'soil_moisture_profile']
         var_maps['output']['sm_out_header'] = ['sm_frac_' + str(output_dict['sm_frac_depth']) + 'm',
                                                'sm_profile_' + str(output_dict['sm_profile_depth']) + 'm']
+        var_maps['output']['sm_out_units'] = ['1', '1']
     else:
         var_maps['output']['sm_out'] = ''
 
@@ -3346,10 +3351,15 @@ def create_reg_realization_file(
                 if value:
                     output_config['output_variables'] = output_config['output_variables'] + var_maps['output']['sm_out']
                     output_config['output_header_fields'] = output_config['output_header_fields'] + var_maps['output']['sm_out_header']
-        if output_config['output_variables'] != []:
-            grp_configs['params']['output_variables'] = output_config['output_variables']
-        if output_config['output_header_fields'] != []:
-            grp_configs['params']['output_header_fields'] = output_config['output_header_fields']
+
+        output_vars = [
+            {"name": var, "header": hdr}
+            for var, hdr in zip(output_config['output_variables'], output_config['output_header_fields'])
+        ]
+        if output_vars != []:
+            grp_configs['params']['output_variables'] = output_vars
+        else:
+            grp_configs['params']['output_variables'] = []
 
         # determine the RR module in the current formulation
         rr_mod1 = [m1 for m1 in grp_mod if 'Rainfall_runoff' in settings.modules_all.loc[settings.modules_all['module'] == m1, 'process'].values[0]]
@@ -3419,6 +3429,7 @@ def create_realization_file(
         time_period: dict,
         rt_dict: dict,
         output_dict: dict,
+        calib_output_vars: bool,
         run_type: str
 ) -> None:
     """
@@ -3437,11 +3448,12 @@ def create_realization_file(
     time_period : simulation and evaluation time period
     rt_dict : routing model source file directory and configuration file
     output_dict: whether to output certain variables (currently SWE and soil moisture)
+    calib_output_vars: boolean flag for writing calibration output variables
     run_type: type of run (calib, regionalization, or default)
 
     Returns
     ----------
-    None
+    output_config: dictionary containing output variable configuration
     """
 
     # Create symlinks for libraries
@@ -3758,21 +3770,38 @@ def create_realization_file(
                          "main_output_variable": main_output_variable}}
 
     # Output section
-    output_config = {'output_variables': [], 'output_header_fields': []}
+    output_config = {'output_variables': [], 'output_header_fields': [], 'output_units': []}
     for key, value in output_dict.items():
         if key == 'output_swe' and var_maps['output']['swe_out'] != '':
             if value:
                 output_config['output_variables'] = output_config['output_variables'] + [var_maps['output']['swe_out']]
                 output_config['output_header_fields'] = output_config['output_header_fields'] + [var_maps['output']['swe_out_header']]
+                output_config['output_units'] = output_config['output_units'] + [var_maps['output']['swe_out_units']]
 
         elif key == 'output_sm' and var_maps['output']['sm_out'] != '':
             if value:
                 output_config['output_variables'] = output_config['output_variables'] + var_maps['output']['sm_out']
                 output_config['output_header_fields'] = output_config['output_header_fields'] + var_maps['output']['sm_out_header']
-    if output_config['output_variables'] != []:
-        gbmain['params']['output_variables'] = output_config['output_variables']
-    if output_config['output_header_fields'] != []:
-        gbmain['params']['output_header_fields'] = output_config['output_header_fields']
+                output_config['output_units'] = output_config['output_units'] + var_maps['output']['sm_out_units']
+
+    # Add precipitation to output_config
+    if output_dict['output_precip']:
+        output_config['output_variables'] = output_config['output_variables'] + ["QRAIN"]
+        output_config['output_header_fields'] = output_config['output_header_fields'] + ["rainrate"]
+        output_config['output_units'] = output_config['output_units'] + ["mm/s"]
+
+    # Write output variables section if requested, otherwise write empty section
+    if calib_output_vars:
+        output_vars = [
+            {"name": var, "header": hdr, "units": unit}
+            for var, hdr, unit in zip(output_config['output_variables'], output_config['output_header_fields'], output_config['output_units'])
+        ]
+        if output_vars != []:
+            gbmain['params']['output_variables'] = output_vars
+        else:
+            gbmain['params']['output_variables'] = []
+    else:
+        gbmain['params']['output_variables'] = []
 
     # determine the RR module in the current formulation
     rr_mod1 = [m1 for m1 in modules if 'Rainfall_runoff' in settings.modules_all.loc[settings.modules_all['module'] == m1, 'process'].values[0]]
@@ -3818,6 +3847,8 @@ def create_realization_file(
     with open(realization_file, 'w') as outfile:
         json.dump(g, outfile, indent=4, separators=(", ", ": "), sort_keys=False)
     logger.info(f'Realization file is created at {realization_file}')
+
+    return output_config
 
 
 def create_calib_config_file(
