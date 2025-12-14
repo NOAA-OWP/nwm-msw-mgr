@@ -999,20 +999,34 @@ class RealizationBuilder:
             logger.info(f"Crosswalk file created at: {self.walk_file}")
 
         # Read catchment parameter values from geopackage divide-attributes
+        attr_lyrname = "divide-attributes"
+        logger.info(f"Reading layer {repr(attr_lyrname)} from file: {repr(self.gpkg_file)}")
         try:
-            self.attr_file = gpd.read_file(self.gpkg_file, layer='divide-attributes')
+            self.attr_file = gpd.read_file(self.gpkg_file, layer=attr_lyrname)
             self.attr_file.set_index("divide_id", inplace=True)
         except Exception as e:
             logger.critical(f"Error while reading geopackage file: {e}")
             raise
 
         # Read catchment divide layer from hydrofabric
+        divides_lyrname = "divides"
+        logger.info(f"Reading layer {repr(divides_lyrname)} from file: {repr(self.gpkg_file)}")
         try:
-            self.divides_layer = gpd.read_file(self.gpkg_file, layer='divides')
+            self.divides_layer = gpd.read_file(self.gpkg_file, layer=divides_lyrname)
             self.catids = self.divides_layer['divide_id'].tolist()
         except Exception as e:
             logger.critical(f"Error while reading geopackage file: {e}")
             raise
+
+        # Assert records exist, assert equal lengths
+        if len(self.divides_layer) == 0:
+            msg = f"0 records in layer {repr(divides_lyrname)} from file: {repr(self.gpkg_file)}"
+            logger.critical(msg)
+            raise RuntimeError(msg)
+        if len(self.attr_file) != len(self.divides_layer):
+            msg = f"In file {repr(self.gpkg_file)}, layer {repr(attr_lyrname)} has {len(self.attr_file)} records but layer {repr(divides_lyrname)} has {len(self.divides_layer)} records (expected equality)"
+            logger.critical(msg)
+            raise RuntimeError(msg)
 
         # Update hydrofabic attribute names based on region and minor parameter value fixes
         self.attr_file = gfun.change_hydrofab_attr(self.attr_file, self.divides_layer)
