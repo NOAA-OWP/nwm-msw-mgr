@@ -209,11 +209,9 @@ class RealizationBuilder:
             for section_override, dict_override in self.config_overrides.model_dump().items():
                 if dict_override is None:
                     continue
-                configs.setdefault(section_override, {})
+                if (section_override not in configs) or (configs[section_override] is None):
+                    configs[section_override] = {}
                 for k, v in dict_override.items():
-                    main_logger.debug(f"Config overrides: will set [{section_override}] {k} = {v}")
-                    if k not in configs[section_override]:
-                        raise KeyError(f"Override key {k} not in Section {section_override}. Section keys: {list(configs[section_override].keys())}")
                     configs[section_override][k] = v
         else:
             configs = self.config_overrides.model_dump()
@@ -1001,20 +999,34 @@ class RealizationBuilder:
             logger.info(f"Crosswalk file created at: {self.walk_file}")
 
         # Read catchment parameter values from geopackage divide-attributes
+        attr_lyrname = "divide-attributes"
+        logger.info(f"Reading layer {repr(attr_lyrname)} from file: {repr(self.gpkg_file)}")
         try:
-            self.attr_file = gpd.read_file(self.gpkg_file, layer='divide-attributes')
+            self.attr_file = gpd.read_file(self.gpkg_file, layer=attr_lyrname)
             self.attr_file.set_index("divide_id", inplace=True)
         except Exception as e:
             logger.critical(f"Error while reading geopackage file: {e}")
             raise
 
         # Read catchment divide layer from hydrofabric
+        divides_lyrname = "divides"
+        logger.info(f"Reading layer {repr(divides_lyrname)} from file: {repr(self.gpkg_file)}")
         try:
-            self.divides_layer = gpd.read_file(self.gpkg_file, layer='divides')
+            self.divides_layer = gpd.read_file(self.gpkg_file, layer=divides_lyrname)
             self.catids = self.divides_layer['divide_id'].tolist()
         except Exception as e:
             logger.critical(f"Error while reading geopackage file: {e}")
             raise
+
+        # Assert records exist, assert equal lengths
+        if len(self.divides_layer) == 0:
+            msg = f"0 records in layer {repr(divides_lyrname)} from file: {repr(self.gpkg_file)}"
+            logger.critical(msg)
+            raise RuntimeError(msg)
+        if len(self.attr_file) != len(self.divides_layer):
+            msg = f"In file {repr(self.gpkg_file)}, layer {repr(attr_lyrname)} has {len(self.attr_file)} records but layer {repr(divides_lyrname)} has {len(self.divides_layer)} records (expected equality)"
+            logger.critical(msg)
+            raise RuntimeError(msg)
 
         # Update hydrofabic attribute names based on region and minor parameter value fixes
         self.attr_file = gfun.change_hydrofab_attr(self.attr_file, self.divides_layer)

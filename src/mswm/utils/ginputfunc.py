@@ -116,7 +116,13 @@ def change_hydrofab_attr(
     """
 
     # Retrieve vpu id from dfa
-    vpu = dfa['vpuid'].mode()[0]
+    vpu_fieldname = "vpuid"
+    vpu_series = dfa[vpu_fieldname]
+    if len(vpu_series) == 0:
+        msg = f"No records for dfa series {vpu_fieldname}"
+        logger.critical(msg)
+        raise RuntimeError(msg)
+    vpu = vpu_series.mode()[0]
 
     # Set attr names
     if vpu == 'hi' or vpu == 'ak':
