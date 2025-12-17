@@ -1,12 +1,7 @@
-# mswm
-
-
-
-## Name
-mswm - Model Setup Workflow Manager
+# nwm-msw-mgr - Model Setup Workflow Manager
 
 ## Description
-The Model Setup Workflow Manager generates realization and configuration filesfor running ngen in calibration, validation, and forecast modes. mswm can either be run from the command line or called directly by ngen model runs.
+The Model Setup Workflow Manager generates realization and configuration files for running ngen in calibration, validation, forecast, and regionalization modes. mswm can either be run from the command line or called directly by ngen model runs.
 
 ## Installation
 
@@ -14,7 +9,7 @@ The Model Setup Workflow Manager generates realization and configuration filesfo
 
 cd [NGEN_REG_ROOT]
 
-git clone -b development --recurse-submodules https://gitlab.sh.nextgenwaterprediction.com/NGWPC/nwm-ngen/mswm.git
+git clone -b development --recurse-submodules https://github.com/NGWPC/nwm-msw-mgr.git
 
 ### Build the environment
 
@@ -22,41 +17,72 @@ To run the program, one would need an environment for successfully running ngen.
 
 If you already have an environment for running ngen, you can use the same venv.
 
+1. source [VENV_ROOT]/env.ngen/bin/activate
+
 Once the venv is activated, run:
 
-1) cd mswm
-2) pip install .
+1. cd nwm-msw-mgr
+2. pip install .
 
 ## Usage
 
-The two primary functionalities of mswm, generating realization files to run ngen (`build\_inputs.py`) and editing validation realization files during ngen-cal iterations (`edit\_configs.py`), are orchestrated by `manager.py`. Users will most directly use mswm from the command line to create realization files for calibration and forecasting.
+The two primary functionalities of mswm, generating realization files to run ngen (`build_inputs.py`) and editing validation realization files during ngen-cal iterations (`edit_configs.py`), are orchestrated by `manager.py`. Users will most directly use mswm from the command line to create realization files for default parameters, calibration, forecasting, and regionalization runs of ngen.
+
+### Calibration
+The mswm.manager script in calibration mode takes two command line arguments:
+1. Command for calibration mode (build_calib)
+2. Path to the user generated input.config file
 
 To generate the model realization file and config_calib yaml file for a calibration run of ngen:
+1. python -m mswm.manager build_calib path/to/input.config
 
-1. source [VENV_ROOT]/env.ngen/bin/activate
-2. python -m mswm.manager build_calib ~/ngwpc/run_ngen/input.config
-3. python calibration.py ~/ngwpc/run_ngen/kge_DDS/noah_cfes/01123000/Input/01123000_config_calib.yaml
+Within Python scripts, calibration input files can be generated calling the build_calib realization function:
+1. from mswm.manager import build_calib
+2. build_calib(input_path="path/to/input.config")
 
-The mswm.manager script in calibration mode takes two command line arguments:
-1) Command for calibration mode (build_calib)
-2) Path to the user generated input.config file
+### Forecast
+The forecast mode of nwm-msw-mgr modifies files from an existing calibration run using nwm-cal-mgr for a forecast run of ngen.
 
-To generate the model realization file for a forecast run on ngen:
+The mswm.manager script in forecast mode takes five command line arguments:
+1. Command for forecast mode (build_fcst)
+2. Path to a user generated input_forecast.config file, which describes the desired forecast cycle and configuration
+3. Path to the config validation yaml file from a prior run of nwm-cal-mgr
+4. Relative path to the folder to be created for storing inputs/outputs from running ngen in nwm-fcst-mgr (ex: 'fcst_run1')
+5. Boolean flag to generate realization and bmi config files for a cold start period (True) or for the primary forecast period (False)
 
-1. source [VENV_ROOT]/env.ngen/bin/activate
-2. python -m mswm.manager build_fcst ~/ngwpc/run_ngen/kge_DDS/noah_cfes/01123000/Output/Validation_Run/01123000_config_valid_best.yaml ~/ngwpc/ngen-fcst/test_data/forcing.nc fcst_run1
-3. python ~/ngwpc/ngen-fcst/python/run_ngen_fcst.py ~/ngwpc/ngen-fcst/test_data/forcing.nc ~/ngwpc/run_ngen/kge_DDS/noah_cfes/01123000/Output/Validation_Run/01123000_config_valid_best.yaml fcst_run1
+To generate the model realization file and BMI config files for a forecast run of ngen from an existing calibration run:
+1. python -m mswm.manager build_fcst path/to/input_forecast.config path/to/Output/Validation_Run/01123000_config_valid_best.yaml fcst_run1 --use_cold_start
 
-The mswm.manager script in calibration mode takes two command line arguments:
-1) Command for forecast mode (build_fcst)
-2) Path to the config validation yaml file from a prior run of ngen-cal
-3) Path to the NetCDF forcing file or folder containing csv forcing files for all catchments in the basin
-4) Relative path to the folder to be created for storing inputs/outputs from running ngen, relative to the Output directory of the calibration run as indicated in the config yaml file. For example, if "fcst_run1" is the 4th argument, and "yaml_file" in the "general" section of the config file is '~/ngwpc/run_ngen/kge_DDS/noah_cfes/01123000/Output/Validation_Run/01123000_config_valid_best.yaml', then the new output directory to be created for the ngen-fcst run would be '~/ngwpc/run_ngen/kge_DDS/noah_cfes/01123000/Output/Forecast_Run/fcst_run1'
+Within Python scripts, forecast input files can be generated calling the build_fcst realization function:
+1. from mswm.manager import build_fcst
+2. build_fcst(input_path="path/to/input_forecast.config, valid_yaml="path/to/valid_best_yaml", fcst_run_name="fcst_run1", use_cold_start=False)
 
-The forecast realization file can also be used to run ngen directly from the command line:
+### Default Parameter Run
+The mswm.manager script in default parameter mode takes three command line arguments:
+1. Command for default parameter mode (build_default)
+2. Path to the user generated input.config file
+3. Optional cold start flag if user requests a forecast
 
-1. ~/ngwpc/ngen/cmake_build/ngen ~/s3/ngwpc-hydrofabric/2.2/CONUS/01123000/GEOPACKAGE/USGS/2025_Mar_14_21_14_37/gauge_01123000.gpkg 'all' ~/s3/ngwpc-hydrofabric/2.2/CONUS/01123000/GEOPACKAGE/USGS/2025_Mar_14_21_14_37/gauge_01123000.gpkg 'all' ~/ngwpc/run_ngen/kge_DDS/noah_cfes/01123000/Output/Forecast_Run/fcst_run1/01123000_realization_config_bmi_valid_best.json
+To generate the model realization file and BMI config files for a run of ngen with default catchment parameters using either historical or forecast forcings:
+1. python -m mswm.manager build_default path/to/input_default.config --use_cold_start
 
+Within Python scripts, default parameter input files can be generated calling the build_default realization function:
+1. from mswm.manager import build_default
+2. build_default(input_path="path/to/input.config", use_cold_start=False)
+
+### Regionalization
+To generate the model realization file and BMI config files for a regionalization run of ngen:
+1. python -m mswm.manager build_region path/to/input_regionalization.config
+
+The mswm.manager script in regionalization mode takes two command line arguments:
+1. Command for calibration mode (build_region)
+2. Path to the user generated input_regionalization.config file
+
+Note that the input.config file used for regionalization differs from that of the one used for calibration. Regionalization also requires formulation_assignment.csv and catchment_groups.csv files, which provide formulations, parameter values, and catchment assignments for each regionalization group (see example files in /example_inputs/regionalization/).
+
+Within Python scripts, regionalization input files can be generated calling the build_region realization function:
+1. from mswm.build_inputs import RealizationBuilder
+2. build_region(input_path="path/to/input_regionalization.config")
 
 ## Docker container
 
@@ -78,7 +104,7 @@ For people who want to make changes to your project, it's helpful to have some d
 You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
 
 ## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
+
 
 ## License
 For open source projects, say how it is licensed.

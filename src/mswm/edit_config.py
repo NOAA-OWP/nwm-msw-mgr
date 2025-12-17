@@ -22,7 +22,6 @@ logger = logging.getLogger(__name__)
 def create_valid_config_file(yaml_file: Path, valid_run_path: Path, valid_config_file: Path, valid_run_name: str) -> None:
     """
     Create configuration yaml file for valiation control and best runs.
-    Moved from model.py
 
     Parameters:
     ----------
@@ -48,7 +47,6 @@ def create_valid_config_file(yaml_file: Path, valid_run_path: Path, valid_config
 def create_valid_realization_file(agent: 'Agent', eval_params: 'EvaluationOptions', params: 'pd.DataFrame', valid_run_name: str) -> None:
     """
     Create model realization file for valiation control and best runs.
-    Moved from model.py
 
     Parameters:
     ----------
@@ -78,12 +76,13 @@ def create_valid_realization_file(agent: 'Agent', eval_params: 'EvaluationOption
         config_valid = json.load(fl)
 
     # Replace calib simulation time period with valid sumulation period
-    print(eval_params.evaluation_start)
-    print(eval_params._eval_range)
-    print(eval_params._full_eval_range)
-    print(eval_params._valid_range)
     config_valid['time']['start_time'] = datetime.strftime(eval_params._valid_range[0], '%Y-%m-%d %H:%M:%S')
     config_valid['time']['end_time'] = datetime.strftime(eval_params._valid_range[1], '%Y-%m-%d %H:%M:%S')
+
+    # Replace forcing engine config file path with validation path
+    if config_valid['global']['forcing']['provider'] == 'ForcingsEngineLumpedDataProvider':
+        fe_config = Path(config_valid['global']['forcing']['params']['init_config'])
+        config_valid['global']['forcing']['params']['init_config'] = fe_config.with_name(fe_config.stem + '_valid' + fe_config.suffix)
 
     # correct path for init_config for validation runs for modules with time periods info in these files
     # (currently Noah-OWP-Modular and UEB)
@@ -125,7 +124,7 @@ def create_valid_realization_file(agent: 'Agent', eval_params: 'EvaluationOption
 
     # Write realization file for validation run
     with open(config_valid_file, 'w') as outfile:
-        json.dump(config_valid, outfile, indent=4, separators=(", ", ": "), sort_keys=False)
+        json.dump(config_valid, outfile, indent=4, default=str, separators=(", ", ": "), sort_keys=False)
 
     # Write yaml configuration file for validation run
     create_valid_config_file(agent.yaml_file, agent.valid_path, config_valid_file, valid_run_name)
