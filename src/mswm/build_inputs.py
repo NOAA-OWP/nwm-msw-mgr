@@ -1152,11 +1152,13 @@ class RealizationBuilder:
                 self.output_dict[s1] = self.conf1[s1]
 
         # define depth (in meters) for output soil moisture
-        self.output_dict['sm_frac_depth'] = 0.4
-        self.output_dict['sm_profile_depth'] = 0.1
-        for s1 in ['sm_profile_depth', 'sm_frac_depth']:
-            if (self.conf1[s1] is not None) and (self.conf1[s1] != ''):
-                self.output_dict[s1] = float(self.conf1[s1])
+        val = self.conf1.get("sm_frac_depth")
+        self.output_dict["sm_frac_depth"] = 0.4 if val in (None, "") else float(val)
+        self.output_dict["sm_profile_depth"] = (
+            [float(v) for v in self.conf1["sm_profile_depth"]]
+            if "sm_profile_depth" in self.conf1 and self.conf1["sm_profile_depth"] is not None
+            else [0.1, 0.4, 1.0, 2.0]
+        )
 
         # Retrieve calib and valid output variable settings
         self.calib_output_vars = self.conf2.get('calib_output_vars')
@@ -1266,7 +1268,7 @@ class RealizationBuilder:
                         gfun.change_lstm_input(self.catids, self.conf3['lstm_parameter_dir'], mod_input_dir, bmi_dir)
                     elif m1 == 'smp' and self.output_dict['output_sm']:
                         # For SMP, the depth to output soil moisture may need to be adjusted
-                        self.output_dict['sm_profile_depth'] = gfun.change_smp_input(self.catids, self.modules, mod_input_dir, bmi_dir, self.run_type, self.output_dict['sm_frac_depth'],
+                        gfun.change_smp_input(self.catids, self.modules, mod_input_dir, bmi_dir, self.run_type, self.output_dict['sm_frac_depth'],
                                                                                      self.output_dict['sm_profile_depth'])
                     elif m1 == 'sft':
                         # Modify SFT inputs to ensure ice_fraction_scheme matches rainfall_runoff model
@@ -1418,7 +1420,7 @@ class RealizationBuilder:
                         gfun.change_lstm_input(cat_mod, self.conf3['lstm_parameter_dir'], mod_input_dir, bmi_dir)
                     elif m1 == "smp" and self.output_dict['output_sm']:
                         # For SMP, the depth to output soil moisture may need to be adjusted
-                        self.output_dict['sm_profile_depth'] = gfun.change_smp_input(cat_mod, form_cat, mod_input_dir, bmi_dir, self.run_type,
+                        gfun.change_smp_input(cat_mod, form_cat, mod_input_dir, bmi_dir, self.run_type,
                                                                                      self.output_dict['sm_frac_depth'], self.output_dict['sm_profile_depth'])
                     # Modify existing SFT inputs to match rainfall runoff model
                     elif m1 == "sft":
@@ -1657,6 +1659,7 @@ class RealizationBuilder:
             general_dict['valid_output_vars'] = self.output_config['output_variables']
             general_dict['valid_output_headers'] = self.output_config['output_header_fields']
             general_dict['valid_output_units'] = self.output_config['output_units']
+            general_dict["valid_output_index"] = self.output_config["output_index"]
 
         # Create calibration config file
         gfun.create_calib_config_file(self.conf2['calib_parameter_file'], self.modules, self.work_dir, general_dict, self.model_dict, self.calib_config_file)

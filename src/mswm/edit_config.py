@@ -65,6 +65,7 @@ def create_valid_realization_file(agent: 'Agent', eval_params: 'EvaluationOption
     valid_output_vars = general_dict.get('valid_output_vars', [])
     valid_output_headers = general_dict.get('valid_output_headers', [])
     valid_output_units = general_dict.get('valid_output_units', [])
+    valid_output_index = general_dict.get("valid_output_index", [])
 
     if valid_run_name == "valid_control":
         agent.model.update_config(0, params, path=Path(agent.valid_path))
@@ -108,10 +109,12 @@ def create_valid_realization_file(agent: 'Agent', eval_params: 'EvaluationOption
     # Add output variables to validation realization
     logger.info("Setting validation output variables")
     if len(valid_output_vars) != 0:
-        output_vars = [
-            {"name": var, "header": hdr, "units": unit}
-            for var, hdr, unit in zip(valid_output_vars, valid_output_headers, valid_output_units)
-        ]
+        output_vars = []
+        for var, hdr, unit, idx in zip(valid_output_vars, valid_output_headers, valid_output_units, valid_output_index):
+            entry = {"name": var, "header": hdr, "units": unit}
+            if idx != "0":  # only include index if it's not the default 0
+                entry["index"] = idx
+            output_vars.append(entry)
         config_valid['global']['formulations'][0]['params']['output_variables'] = output_vars
     else:
         config_valid['global']['formulations'][0]['params']['output_variables'] = []
