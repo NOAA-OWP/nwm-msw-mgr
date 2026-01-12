@@ -2868,10 +2868,19 @@ def var_mapping(
 
     # soil moisture fraction
     if 'smp' in modules and output_dict['output_sm']:
-        var_maps['output']['sm_out'] = ['soil_moisture_fraction', 'soil_moisture_profile']
-        var_maps['output']['sm_out_header'] = ['sm_frac_' + str(output_dict['sm_frac_depth']) + 'm',
-                                               'sm_profile_' + str(output_dict['sm_profile_depth']) + 'm']
-        var_maps['output']['sm_out_units'] = ['1', '1']
+        # for soil moisture fraction at specified depth
+        var_maps["output"]["sm_out"] = ["soil_moisture_fraction"]
+        var_maps["output"]["sm_out_header"] = ["sm_frac_" + str(output_dict["sm_frac_depth"]) + "m"]
+        var_maps["output"]["sm_out_units"] = ["1"]
+        var_maps["output"]["sm_out_index"] = ["0"]
+
+        # for soil moisture profile, create dictionary for each depth
+        depths = output_dict.get("sm_profile_depth", [])
+        for i, d in enumerate(depths):
+            var_maps["output"]["sm_out"].append("soil_moisture_profile")
+            var_maps["output"]["sm_out_header"].append(f"sm_profile_{float(d):g}m")
+            var_maps["output"]["sm_out_units"].append("m")
+            var_maps["output"]["sm_out_index"].append(str(i))
     else:
         var_maps['output']['sm_out'] = ''
 
