@@ -1272,7 +1272,7 @@ class RealizationBuilder:
                                                                                      self.output_dict['sm_profile_depth'])
                     elif m1 == 'sft':
                         # Modify SFT inputs to ensure ice_fraction_scheme matches rainfall_runoff model
-                        gfun.change_sft_input(self.catids, modules1, mod_input_dir, bmi_dir, self.run_type)
+                        gfun.change_sft_input(self.catids, modules1, mod_input_dir, bmi_dir, self.run_type,self.output_dict['sm_profile_depth'])
                     else:
                         # Create symbolic link
                         logger.info(f'{m2}: create symlink from {bmi_dir} to {mod_input_dir}')
@@ -1445,7 +1445,7 @@ class RealizationBuilder:
                                 scheme_form = [self.cat_to_form[cat] for cat in scheme_cat]
 
                         # Create SFT inputs
-                        gfun.change_sft_input(scheme_cat, scheme_form, mod_input_dir, bmi_dir, self.run_type)
+                        gfun.change_sft_input(scheme_cat, scheme_form, mod_input_dir, bmi_dir, self.run_type, self.output_dict['sm_profile_depth'])
 
                     else:
                         # Create symbolic link to catchments with formulation

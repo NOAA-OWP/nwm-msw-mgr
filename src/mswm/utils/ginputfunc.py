@@ -1925,6 +1925,7 @@ def change_sft_input(
         input_dir: Union[str, Path],
         bmi_dir: Union[str, Path],
         run_type: str,
+        sm_profile_depth: List[float] = [0.1, 0.4, 1.0, 2.0],
 ) -> None:
     """ Create BMI configuration file for soil freeze and thaw module, and soil moisture profiles
 
@@ -1935,6 +1936,7 @@ def change_sft_input(
     input_dir: directory for writing sft bmi configuration files
     bmi_dir : directory containing bmi configuration files
     run_type: type of run (calib, regionalization, or default)
+    sm_profile_depth: soil moisture profile depth values
 
     Returns
     ----------
