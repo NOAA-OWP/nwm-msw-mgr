@@ -1152,11 +1152,13 @@ class RealizationBuilder:
                 self.output_dict[s1] = self.conf1[s1]
 
         # define depth (in meters) for output soil moisture
-        self.output_dict['sm_frac_depth'] = 0.4
-        self.output_dict['sm_profile_depth'] = 0.1
-        for s1 in ['sm_profile_depth', 'sm_frac_depth']:
-            if (self.conf1[s1] is not None) and (self.conf1[s1] != ''):
-                self.output_dict[s1] = float(self.conf1[s1])
+        val = self.conf1.get("sm_frac_depth")
+        self.output_dict["sm_frac_depth"] = 0.4 if val in (None, "") else float(val)
+        self.output_dict["sm_profile_depth"] = (
+            [float(v) for v in self.conf1["sm_profile_depth"]]
+            if "sm_profile_depth" in self.conf1 and self.conf1["sm_profile_depth"] is not None
+            else [0.1, 0.4, 1.0, 2.0]
+        )
 
         # Retrieve calib and valid output variable settings
         self.calib_output_vars = self.conf2.get('calib_output_vars')
@@ -1266,11 +1268,11 @@ class RealizationBuilder:
                         gfun.change_lstm_input(self.catids, self.conf3['lstm_parameter_dir'], mod_input_dir, bmi_dir)
                     elif m1 == 'smp' and self.output_dict['output_sm']:
                         # For SMP, the depth to output soil moisture may need to be adjusted
-                        self.output_dict['sm_profile_depth'] = gfun.change_smp_input(self.catids, self.modules, mod_input_dir, bmi_dir, self.run_type, self.output_dict['sm_frac_depth'],
+                        gfun.change_smp_input(self.catids, self.modules, mod_input_dir, bmi_dir, self.run_type, self.output_dict['sm_frac_depth'],
                                                                                      self.output_dict['sm_profile_depth'])
                     elif m1 == 'sft':
                         # Modify SFT inputs to ensure ice_fraction_scheme matches rainfall_runoff model
-                        gfun.change_sft_input(self.catids, modules1, mod_input_dir, bmi_dir, self.run_type)
+                        gfun.change_sft_input(self.catids, modules1, mod_input_dir, bmi_dir, self.run_type,self.output_dict['sm_profile_depth'])
                     else:
                         # Create symbolic link
                         logger.info(f'{m2}: create symlink from {bmi_dir} to {mod_input_dir}')
@@ -1311,7 +1313,16 @@ class RealizationBuilder:
                 elif m1 == 'sft':
                     sft_dir = os.path.join(self.input_dir, 'sft_input')
                     smp_dir = os.path.join(self.input_dir, 'smp_input')
-                    gfun.create_sft_smp_input(self.catids, self.modules, self.attr_file, sft_dir, smp_dir, self.run_type)
+                    gfun.create_sft_smp_input(
+                        self.catids,
+                        self.modules,
+                        self.attr_file,
+                        sft_dir,
+                        smp_dir,
+                        self.run_type,
+                        self.output_dict["sm_profile_depth"],
+                        self.output_dict["sm_frac_depth"],
+                    )                    
                 elif m1 == 'smp':
                     continue
                 elif m1 == 'lasam':
@@ -1418,7 +1429,7 @@ class RealizationBuilder:
                         gfun.change_lstm_input(cat_mod, self.conf3['lstm_parameter_dir'], mod_input_dir, bmi_dir)
                     elif m1 == "smp" and self.output_dict['output_sm']:
                         # For SMP, the depth to output soil moisture may need to be adjusted
-                        self.output_dict['sm_profile_depth'] = gfun.change_smp_input(cat_mod, form_cat, mod_input_dir, bmi_dir, self.run_type,
+                        gfun.change_smp_input(cat_mod, form_cat, mod_input_dir, bmi_dir, self.run_type,
                                                                                      self.output_dict['sm_frac_depth'], self.output_dict['sm_profile_depth'])
                     # Modify existing SFT inputs to match rainfall runoff model
                     elif m1 == "sft":
@@ -1434,7 +1445,7 @@ class RealizationBuilder:
                                 scheme_form = [self.cat_to_form[cat] for cat in scheme_cat]
 
                         # Create SFT inputs
-                        gfun.change_sft_input(scheme_cat, scheme_form, mod_input_dir, bmi_dir, self.run_type)
+                        gfun.change_sft_input(scheme_cat, scheme_form, mod_input_dir, bmi_dir, self.run_type, self.output_dict['sm_profile_depth'])
 
                     else:
                         # Create symbolic link to catchments with formulation
@@ -1495,7 +1506,16 @@ class RealizationBuilder:
                             scheme_form = [self.cat_to_form[cat] for cat in scheme_cat]
 
                             # Create SFT/SMP inputs
-                            gfun.create_sft_smp_input(scheme_cat, scheme_form, self.attr_file, sft_dir, smp_dir, self.run_type)
+                            gfun.create_sft_smp_input(
+                                scheme_cat,
+                                scheme_form,
+                                self.attr_file,
+                                sft_dir,
+                                smp_dir,
+                                self.run_type,
+                                self.output_dict["sm_profile_depth"],
+                                self.output_dict["sm_fraction_depth"],
+                            )
 
                 # Skip smp, inputs created in tandem with sft
                 elif m1 == 'smp':
@@ -1657,6 +1677,7 @@ class RealizationBuilder:
             general_dict['valid_output_vars'] = self.output_config['output_variables']
             general_dict['valid_output_headers'] = self.output_config['output_header_fields']
             general_dict['valid_output_units'] = self.output_config['output_units']
+            general_dict["valid_output_index"] = self.output_config["output_index"]
 
         # Create calibration config file
         gfun.create_calib_config_file(self.conf2['calib_parameter_file'], self.modules, self.work_dir, general_dict, self.model_dict, self.calib_config_file)
