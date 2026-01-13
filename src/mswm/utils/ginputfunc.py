@@ -778,6 +778,8 @@ def create_sft_smp_input(
         sft_dir: Union[str, Path],
         smp_dir: Union[str, Path],
         run_type: str,
+        sm_profile_depth: List[float] = [0.1, 0.4, 1.0, 2.0],
+        sm_fraction_depth: float = 0.4,
 ) -> None:
     """ Create BMI configuration file for soil freeze and thaw module, and soil moisture profiles
 
@@ -789,6 +791,8 @@ def create_sft_smp_input(
     sft_dir : directory for writing sft bmi configuration files
     smp_dir : directory for writing smp bmi configuration files
     run_type: type of run (calib, regionalization, or default)
+    sm_profile_depth: list of soil moisture profile depths
+    sm_fraction_depth: depth at which soil moisture fraction is defined
 
     Returns
     ----------
@@ -831,7 +835,7 @@ def create_sft_smp_input(
                    'soil_params.satpsi=' + str(dfa.loc[catID]['geom_mean.psisat_soil_layers_stag=1']),
                    'soil_params.quartz=' + str(dfa.loc[catID]['quartz']),
                    'ice_fraction_scheme=' + icefscheme,
-                   'soil_z=0.1,0.3,1.0,2.0[m]',
+                   "soil_z=" + ",".join(f"{float(depth):g}" for depth in sm_profile_depth) + "[m]",
                    'soil_temperature=' + ','.join([str(mtemp)] * 4) + '[K]'
                    ]
 
@@ -845,8 +849,8 @@ def create_sft_smp_input(
                    'soil_params.smcmax=' + str(dfa.loc[catID]['mean.smcmax_soil_layers_stag=1']),
                    'soil_params.b=' + str(dfa.loc[catID]['mode.bexp_soil_layers_stag=1']),
                    'soil_params.satpsi=' + str(dfa.loc[catID]['geom_mean.psisat_soil_layers_stag=1']),
-                   'soil_z=0.1,0.3,1.0,2.0[m]',
-                   'soil_moisture_fraction_depth=0.4[m]']
+                   "soil_z=" + ",".join(f"{float(depth):g}" for depth in sm_profile_depth) + "[m]",
+                   "soil_moisture_fraction_depth=" + f"{float(sm_fraction_depth):g}" + "[m]"]
 
         if 'cfes' in mods or 'cfex' in mods:
             smp_lst += ['soil_storage_model=conceptual', 'soil_storage_depth=2.0']
@@ -1982,6 +1986,20 @@ def change_sft_input(
             lines1[idx[0]] = f'ice_fraction_scheme={icefscheme}\n'
         else:
             lines1.append(f'ice_fraction_scheme={icefscheme}\n')
+
+        # Find index of soil_z line and update soil_z based on sm_profile_depth
+        idx = [i for i, s in enumerate(lines0) if "soil_z" in s]
+        str_soil_z = ",".join([str(d) for d in sm_profile_depth]) + "[m]"
+        if len(idx) == 0:
+            lines1 = lines1.append(f"soil_z={str_soil_z}\n")
+        elif len(idx) == 1:
+            lines1[idx[0]] = f"soil_z={str_soil_z}\n"
+        else:
+            try:
+                raise Exception(f"More than one entry found for soil_z in config file: {param_file0}")
+            except Exception as e:
+                logger.critical(e)
+                raise
 
         # Save to new parameter file
         with open(param_file, 'w') as outfile:

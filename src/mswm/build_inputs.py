@@ -1313,7 +1313,16 @@ class RealizationBuilder:
                 elif m1 == 'sft':
                     sft_dir = os.path.join(self.input_dir, 'sft_input')
                     smp_dir = os.path.join(self.input_dir, 'smp_input')
-                    gfun.create_sft_smp_input(self.catids, self.modules, self.attr_file, sft_dir, smp_dir, self.run_type)
+                    gfun.create_sft_smp_input(
+                        self.catids,
+                        self.modules,
+                        self.attr_file,
+                        sft_dir,
+                        smp_dir,
+                        self.run_type,
+                        self.output_dict["sm_profile_depth"],
+                        self.output_dict["sm_frac_depth"],
+                    )                    
                 elif m1 == 'smp':
                     continue
                 elif m1 == 'lasam':
@@ -1497,7 +1506,16 @@ class RealizationBuilder:
                             scheme_form = [self.cat_to_form[cat] for cat in scheme_cat]
 
                             # Create SFT/SMP inputs
-                            gfun.create_sft_smp_input(scheme_cat, scheme_form, self.attr_file, sft_dir, smp_dir, self.run_type)
+                            gfun.create_sft_smp_input(
+                                scheme_cat,
+                                scheme_form,
+                                self.attr_file,
+                                sft_dir,
+                                smp_dir,
+                                self.run_type,
+                                self.output_dict["sm_profile_depth"],
+                                self.output_dict["sm_fraction_depth"],
+                            )
 
                 # Skip smp, inputs created in tandem with sft
                 elif m1 == 'smp':
