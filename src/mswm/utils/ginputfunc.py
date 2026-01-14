@@ -1876,7 +1876,7 @@ def change_smp_input(
 
         # set soil_moisture_fraction_depth to sm_frac_depth (m), and soil_z to sm_profile_depth (m)
         strs1 = ["soil_moisture_fraction_depth", "soil_z"]
-        strs2 = [sm_frac_depth + "[m]", ",".join([str(d) for d in sm_profile_depth]) + "[m]"]
+        strs2 = [str(sm_frac_depth) + "[m]", ",".join([str(d) for d in sm_profile_depth]) + "[m]"]
         for str1, str2 in zip(strs1, strs2):
             idx = [i for i, s in enumerate(lines0) if str1 in s]
             if len(idx) == 0:
