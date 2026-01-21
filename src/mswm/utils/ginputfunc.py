@@ -116,7 +116,13 @@ def change_hydrofab_attr(
     """
 
     # Retrieve vpu id from dfa
-    vpu = dfa['vpuid'].mode()[0]
+    vpu_fieldname = "vpuid"
+    vpu_series = dfa[vpu_fieldname]
+    if len(vpu_series) == 0:
+        msg = f"No records for dfa series {vpu_fieldname}"
+        logger.critical(msg)
+        raise RuntimeError(msg)
+    vpu = vpu_series.mode()[0]
 
     # Set attr names
     if vpu == 'hi' or vpu == 'ak':
@@ -772,6 +778,8 @@ def create_sft_smp_input(
         sft_dir: Union[str, Path],
         smp_dir: Union[str, Path],
         run_type: str,
+        sm_profile_depth: List[float] = [0.1, 0.4, 1.0, 2.0],
+        sm_fraction_depth: float = 0.4,
 ) -> None:
     """ Create BMI configuration file for soil freeze and thaw module, and soil moisture profiles
 
@@ -783,6 +791,8 @@ def create_sft_smp_input(
     sft_dir : directory for writing sft bmi configuration files
     smp_dir : directory for writing smp bmi configuration files
     run_type: type of run (calib, regionalization, or default)
+    sm_profile_depth: list of soil moisture profile depths
+    sm_fraction_depth: depth at which soil moisture fraction is defined
 
     Returns
     ----------
@@ -825,7 +835,7 @@ def create_sft_smp_input(
                    'soil_params.satpsi=' + str(dfa.loc[catID]['geom_mean.psisat_soil_layers_stag=1']),
                    'soil_params.quartz=' + str(dfa.loc[catID]['quartz']),
                    'ice_fraction_scheme=' + icefscheme,
-                   'soil_z=0.1,0.3,1.0,2.0[m]',
+                   "soil_z=" + ",".join(f"{float(depth):g}" for depth in sm_profile_depth) + "[m]",
                    'soil_temperature=' + ','.join([str(mtemp)] * 4) + '[K]'
                    ]
 
@@ -839,8 +849,8 @@ def create_sft_smp_input(
                    'soil_params.smcmax=' + str(dfa.loc[catID]['mean.smcmax_soil_layers_stag=1']),
                    'soil_params.b=' + str(dfa.loc[catID]['mode.bexp_soil_layers_stag=1']),
                    'soil_params.satpsi=' + str(dfa.loc[catID]['geom_mean.psisat_soil_layers_stag=1']),
-                   'soil_z=0.1,0.3,1.0,2.0[m]',
-                   'soil_moisture_fraction_depth=0.4[m]']
+                   "soil_z=" + ",".join(f"{float(depth):g}" for depth in sm_profile_depth) + "[m]",
+                   "soil_moisture_fraction_depth=" + f"{float(sm_fraction_depth):g}" + "[m]"]
 
         if 'cfes' in mods or 'cfex' in mods:
             smp_lst += ['soil_storage_model=conceptual', 'soil_storage_depth=2.0']
@@ -1069,7 +1079,7 @@ def create_ueb_input(
         if time_period['run_time_period'][run_name][0] and time_period['run_time_period'][run_name][1]:
             # Date
             startdate = time_period['run_time_period'][run_name][0]
-            startdate = datetime.datetime.strptime(startdate, "%Y-%m-%d %H:%M:%S") + datetime.timedelta(hours=1)
+            startdate = datetime.datetime.strptime(startdate, "%Y-%m-%d %H:%M:%S")
             startdate = startdate.strftime("%Y%m%d%H%M")
             enddate = datetime.datetime.strptime(time_period['run_time_period'][run_name][1], "%Y-%m-%d %H:%M:%S").strftime("%Y%m%d%H%M")
             for catID in catids:
@@ -1812,15 +1822,15 @@ def change_lasam_input(
 
 
 def change_smp_input(
-        catids: List[str],
-        modules: Union[List[str], List[List[str]]],
-        input_dir: Union[str, Path],
-        bmi_dir: Union[str, Path],
-        run_type: str,
-        sm_frac_depth: float = 0.4,
-        sm_profile_depth: float = 0.1,
-) -> float:
-    """ copy existing config files for smp and change soil moisture depths as needed
+    catids: List[str],
+    modules: Union[List[str], List[List[str]]],
+    input_dir: Union[str, Path],
+    bmi_dir: Union[str, Path],
+    run_type: str,
+    sm_frac_depth: float = 0.4,
+    sm_profile_depth: List[float] = [0.1, 0.4, 1.0, 2.0],
+):
+    """Copy existing config files for smp and change soil moisture depths as needed.
 
     Parameters
     ----------
@@ -1830,14 +1840,9 @@ def change_smp_input(
     bmi_dir: directory for existing config files
     run_type: type of run (calib, regionalization, or default)
     sm_frac_depth: depth (m) at which to output soil moisture fraction
-    sm_profile_depth: depth (m) at which to output soil moisture (from the first soil layer)
-
-    Returns
-    ----------
-    sm_profile_depth, since it may be changed here to soil_z[0]
+    sm_profile_depth: list of depths (m) at which to output soil moisture
 
     """
-
     # create input directory for storing new config files
     os.makedirs(input_dir, exist_ok=True)
 
@@ -1846,7 +1851,6 @@ def change_smp_input(
 
     # loop through all catchments
     for i in range(len(catids)):
-
         catID = catids[i]
 
         # Retrieve modules for regionalization
@@ -1870,80 +1874,21 @@ def change_smp_input(
             lines0 = f.readlines()
         lines1 = copy.deepcopy(lines0)
 
-        # adjust soil_moisture_fraction_depth if needed
-        str1 = "soil_moisture_fraction_depth"
-        idx = [i for i, s in enumerate(lines0) if str1 in s]
-        if len(idx) == 0:
-            lines1 = lines1.append(f'{str1}={sm_frac_depth}[m]\n')
-        elif len(idx) == 1:
-            lines1[idx[0]] = f'{str1}={sm_frac_depth}[m]\n'
-        else:
-            try:
-                raise Exception(f'More than one entry found for {str1} in config file: {config_file0}')
-            except Exception as e:
-                logger.critical(e)
-                raise
-
-        # read soil depths for different layers (currently SMP is limited to 4 layers only)
-        idx = [i for i, s in enumerate(lines0) if "soil_z" in s]
-        if len(idx) != 1:
-            try:
-                raise Exception(f'No entry or more than one entry found for "soil_z" in config file: {config_file0}')
-            except Exception as e:
-                logger.critical(e)
-                raise
-        depths = lines1[idx[0]].split("=")[1].split("[")[0].split(',')
-        depths = list(map(float, depths))
-
-        # make sure depths are in ascending order (since they are accumulative)
-        is_ascending = all(earlier <= later for earlier, later in zip(depths, depths[1:]))
-        if not is_ascending:
-            try:
-                raise ValueError(f'Accumulative soil layer depths in soil_z in {config_file0} must be in ascending order: {depths}')
-            except ValueError as e:
-                logger.critical(e)
-                raise
-
-        # convert depths to meters if needed
-        unit1 = lines1[idx[0]].split("=")[1].split("[")[1].split(']')[0].lower()
-        if unit1 == 'm':
-            pass
-        elif unit1 == "cm":
-            depths = [d / 100 for d in depths]
-        elif unit1 == "mm":
-            depths = [d / 1000 for d in depths]
-        else:
-            try:
-                raise ValueError(f'Unit {unit1} is not supported for soil_z in {config_file0}; supported units are m, mm, and cm')
-            except ValueError as e:
-                logger.critical(e)
-                raise
-
-        # adjust soil_z for soil_moisture_fraction_depth
-        if not any(value == sm_frac_depth for value in depths):
-            depths = depths[::-1]
-            for i1, d1 in enumerate(depths):
-                if d1 < sm_frac_depth:
-                    depths[i1] = sm_frac_depth
-                    break
-            depths = depths[::-1]
-            if catID == catids[0]:
-                logger.info(f'soil_z in {config_file0} is adjusted to include {str1} {sm_frac_depth}[m]')
-
-        # adjust 1st element of soil_z for soil_moisture_profile output depth (soil_moisture_profile from SMP is an array and
-        # currently ngen can only output the first element of arrays)
-        if sm_profile_depth != depths[0]:
-            if sm_profile_depth > depths[1]:
-                if catID == catids[0]:
-                    logger.warning(
-                        f'sm_profile_depth ({sm_profile_depth}m) is greater than soil_z[1] in {config_file0}; output soil moisture at soil_z[0]({depths[0]}m) instead')
+        # set soil_moisture_fraction_depth to sm_frac_depth (m), and soil_z to sm_profile_depth (m)
+        strs1 = ["soil_moisture_fraction_depth", "soil_z"]
+        strs2 = [str(sm_frac_depth) + "[m]", ",".join([str(d) for d in sm_profile_depth]) + "[m]"]
+        for str1, str2 in zip(strs1, strs2):
+            idx = [i for i, s in enumerate(lines0) if str1 in s]
+            if len(idx) == 0:
+                lines1 = lines1.append(f"{str1}={str2}\n")
+            elif len(idx) == 1:
+                lines1[idx[0]] = f"{str1}={str2}\n"
             else:
-                depths[0] = sm_profile_depth
-                if catID == catids[0]:
-                    logger.info(f'soil_z[0] in {config_file0} reset to {sm_profile_depth} to output soil moisture value properly')
-
-        list_depth = ",".join(list(map(str, depths)))
-        lines1[idx[0]] = f'soil_z={list_depth}[m]\n'
+                try:
+                    raise Exception(f"More than one entry found for {str1} in config file: {config_file0}")
+                except Exception as e:
+                    logger.critical(e)
+                    raise
 
         # Add soil_storage_model if missing from BMI config file
         if not any('soil_storage_model' in line for line in lines1):
@@ -1974,15 +1919,13 @@ def change_smp_input(
         with open(config_file, 'w') as outfile:
             outfile.writelines(lines1)
 
-    return depths[0]
-
-
 def change_sft_input(
         catids: List[str],
         modules: Union[List[str], List[List[str]]],
         input_dir: Union[str, Path],
         bmi_dir: Union[str, Path],
         run_type: str,
+        sm_profile_depth: List[float] = [0.1, 0.4, 1.0, 2.0],
 ) -> None:
     """ Create BMI configuration file for soil freeze and thaw module, and soil moisture profiles
 
@@ -1993,6 +1936,7 @@ def change_sft_input(
     input_dir: directory for writing sft bmi configuration files
     bmi_dir : directory containing bmi configuration files
     run_type: type of run (calib, regionalization, or default)
+    sm_profile_depth: soil moisture profile depth values
 
     Returns
     ----------
@@ -2044,6 +1988,20 @@ def change_sft_input(
             lines1[idx[0]] = f'ice_fraction_scheme={icefscheme}\n'
         else:
             lines1.append(f'ice_fraction_scheme={icefscheme}\n')
+
+        # Find index of soil_z line and update soil_z based on sm_profile_depth
+        idx = [i for i, s in enumerate(lines0) if "soil_z" in s]
+        str_soil_z = ",".join([str(d) for d in sm_profile_depth]) + "[m]"
+        if len(idx) == 0:
+            lines1 = lines1.append(f"soil_z={str_soil_z}\n")
+        elif len(idx) == 1:
+            lines1[idx[0]] = f"soil_z={str_soil_z}\n"
+        else:
+            try:
+                raise Exception(f"More than one entry found for soil_z in config file: {param_file0}")
+            except Exception as e:
+                logger.critical(e)
+                raise
 
         # Save to new parameter file
         with open(param_file, 'w') as outfile:
@@ -2900,6 +2858,7 @@ def var_mapping(
         if output_dict['output_swe']:
             var_maps['output']['swe_out'] = 'sneqv'
             var_maps['output']['swe_out_header'] = 'SWE_mm'
+            var_maps['output']['swe_out_units'] = 'mm'
         else:
             var_maps['output']['swe_out'] = ''
     elif 'ueb' in modules:
@@ -2907,6 +2866,7 @@ def var_mapping(
         if output_dict['output_swe']:
             var_maps['output']['swe_out'] = 'SWE'
             var_maps['output']['swe_out_header'] = 'SWE_m'
+            var_maps['output']['swe_out_units'] = 'm'
         else:
             var_maps['output']['swe_out'] = ''
     elif 'noah' in modules:  # check noah last since it can also be included to provided ET
@@ -2914,11 +2874,13 @@ def var_mapping(
         if output_dict['output_swe']:
             var_maps['output']['swe_out'] = 'SNEQV'
             var_maps['output']['swe_out_header'] = 'SWE_mm'
+            var_maps['output']['swe_out_units'] = 'mm'
         else:
             var_maps['output']['swe_out'] = ''
     elif 'topmodel' in modules:
         if output_dict['output_swe']:
             var_maps['output']['swe_out'] = 'soil_water_table'
+            var_maps['output']['swe_out_units'] = 'm'
         else:
             var_maps['output']['swe_out'] = ''
     else:
@@ -2926,9 +2888,19 @@ def var_mapping(
 
     # soil moisture fraction
     if 'smp' in modules and output_dict['output_sm']:
-        var_maps['output']['sm_out'] = ['soil_moisture_fraction', 'soil_moisture_profile']
-        var_maps['output']['sm_out_header'] = ['sm_frac_' + str(output_dict['sm_frac_depth']) + 'm',
-                                               'sm_profile_' + str(output_dict['sm_profile_depth']) + 'm']
+        # for soil moisture fraction at specified depth
+        var_maps["output"]["sm_out"] = ["soil_moisture_fraction"]
+        var_maps["output"]["sm_out_header"] = ["sm_frac_" + str(output_dict["sm_frac_depth"]) + "m"]
+        var_maps["output"]["sm_out_units"] = ["1"]
+        var_maps["output"]["sm_out_index"] = ["0"]
+
+        # for soil moisture profile, create dictionary for each depth
+        depths = output_dict.get("sm_profile_depth", [])
+        for i, d in enumerate(depths):
+            var_maps["output"]["sm_out"].append("soil_moisture_profile")
+            var_maps["output"]["sm_out_header"].append(f"sm_profile_{float(d):g}m")
+            var_maps["output"]["sm_out_units"].append("m")
+            var_maps["output"]["sm_out_index"].append(str(i))
     else:
         var_maps['output']['sm_out'] = ''
 
@@ -3346,10 +3318,15 @@ def create_reg_realization_file(
                 if value:
                     output_config['output_variables'] = output_config['output_variables'] + var_maps['output']['sm_out']
                     output_config['output_header_fields'] = output_config['output_header_fields'] + var_maps['output']['sm_out_header']
-        if output_config['output_variables'] != []:
-            grp_configs['params']['output_variables'] = output_config['output_variables']
-        if output_config['output_header_fields'] != []:
-            grp_configs['params']['output_header_fields'] = output_config['output_header_fields']
+
+        output_vars = [
+            {"name": var, "header": hdr}
+            for var, hdr in zip(output_config['output_variables'], output_config['output_header_fields'])
+        ]
+        if output_vars != []:
+            grp_configs['params']['output_variables'] = output_vars
+        else:
+            grp_configs['params']['output_variables'] = []
 
         # determine the RR module in the current formulation
         rr_mod1 = [m1 for m1 in grp_mod if 'Rainfall_runoff' in settings.modules_all.loc[settings.modules_all['module'] == m1, 'process'].values[0]]
@@ -3419,6 +3396,7 @@ def create_realization_file(
         time_period: dict,
         rt_dict: dict,
         output_dict: dict,
+        calib_output_vars: bool,
         run_type: str
 ) -> None:
     """
@@ -3437,11 +3415,12 @@ def create_realization_file(
     time_period : simulation and evaluation time period
     rt_dict : routing model source file directory and configuration file
     output_dict: whether to output certain variables (currently SWE and soil moisture)
+    calib_output_vars: boolean flag for writing calibration output variables
     run_type: type of run (calib, regionalization, or default)
 
     Returns
     ----------
-    None
+    output_config: dictionary containing output variable configuration
     """
 
     # Create symlinks for libraries
@@ -3758,21 +3737,47 @@ def create_realization_file(
                          "main_output_variable": main_output_variable}}
 
     # Output section
-    output_config = {'output_variables': [], 'output_header_fields': []}
+    output_config = {"output_variables": [], "output_header_fields": [], "output_units": [], "output_index": []}
     for key, value in output_dict.items():
-        if key == 'output_swe' and var_maps['output']['swe_out'] != '':
+        if key == "output_swe" and var_maps["output"]["swe_out"] != "":
             if value:
-                output_config['output_variables'] = output_config['output_variables'] + [var_maps['output']['swe_out']]
-                output_config['output_header_fields'] = output_config['output_header_fields'] + [var_maps['output']['swe_out_header']]
+                output_config["output_variables"].append(var_maps["output"]["swe_out"])
+                output_config["output_header_fields"].append(var_maps["output"]["swe_out_header"])
+                output_config["output_units"].append(var_maps["output"]["swe_out_units"])
+                output_config["output_index"].append(var_maps["output"].get("swe_out_index", "0"))
 
-        elif key == 'output_sm' and var_maps['output']['sm_out'] != '':
+        elif key == "output_sm" and var_maps["output"]["sm_out"] != "":
             if value:
-                output_config['output_variables'] = output_config['output_variables'] + var_maps['output']['sm_out']
-                output_config['output_header_fields'] = output_config['output_header_fields'] + var_maps['output']['sm_out_header']
-    if output_config['output_variables'] != []:
-        gbmain['params']['output_variables'] = output_config['output_variables']
-    if output_config['output_header_fields'] != []:
-        gbmain['params']['output_header_fields'] = output_config['output_header_fields']
+                for i in range(len(var_maps["output"]["sm_out"])):
+                    output_config["output_variables"].append(var_maps["output"]["sm_out"][i])
+                    output_config["output_header_fields"].append(var_maps["output"]["sm_out_header"][i])
+                    output_config["output_units"].append(var_maps["output"]["sm_out_units"][i])
+                    output_config["output_index"].append(var_maps["output"]["sm_out_index"][i])
+
+    # Add precipitation to output_config
+    if output_dict['output_precip']:
+        output_config['output_variables'] = output_config['output_variables'] + ["QRAIN"]
+        output_config['output_header_fields'] = output_config['output_header_fields'] + ["rainrate"]
+        output_config['output_units'] = output_config['output_units'] + ["mm/s"]
+        output_config["output_index"] = output_config["output_index"] + ["0"]
+
+    # Write output variables section if requested, otherwise write empty section
+    if calib_output_vars:
+        output_vars = []
+        for var, hdr, unit, idx in zip(
+            output_config["output_variables"],
+            output_config["output_header_fields"],
+            output_config["output_units"],
+            output_config["output_index"],
+        ):
+            entry = {"name": var, "header": hdr, "units": unit}
+            if idx != "0":  # only include index if it's not the default 0
+                entry["index"] = idx
+            output_vars.append(entry)
+
+        gbmain["params"]["output_variables"] = output_vars if output_vars else []
+    else:
+        gbmain['params']['output_variables'] = []
 
     # determine the RR module in the current formulation
     rr_mod1 = [m1 for m1 in modules if 'Rainfall_runoff' in settings.modules_all.loc[settings.modules_all['module'] == m1, 'process'].values[0]]
@@ -3818,6 +3823,8 @@ def create_realization_file(
     with open(realization_file, 'w') as outfile:
         json.dump(g, outfile, indent=4, separators=(", ", ": "), sort_keys=False)
     logger.info(f'Realization file is created at {realization_file}')
+
+    return output_config
 
 
 def create_calib_config_file(

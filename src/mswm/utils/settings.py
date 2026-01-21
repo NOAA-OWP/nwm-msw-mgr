@@ -1,5 +1,8 @@
 import pandas as pd
 
+DEFAULT_DATETIME_FORMAT = "%Y-%m-%d %H:%M:%S"
+
+
 # information about all modules currently supported in ngen-cal
 # Column 1: module name
 # Column 2: name used by the UI (API/GUI/CLI)
