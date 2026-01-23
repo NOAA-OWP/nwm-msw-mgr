@@ -226,7 +226,7 @@ class ForcingConfig(StrictBaseModel):
     forcing_configuration: Optional[str] = None
     cycle_datetime: Optional[str] = None
     cold_start_datetime: Optional[str] = None
-    global_domain: Optional[str] = None
+    global_domain: Optional[str] = "CONUS"
 
     # Check optional fields that depend on forcing_provider
     @model_validator(mode="after")

@@ -540,7 +540,7 @@ class RealizationBuilder:
         self.forcing_configuration = self.forcingSec.get('forcing_configuration', None)
         self.forcing_template_dir = self.forcingSec.get('forcing_template_dir', None)
         self.root_dir = self.forcingSec.get('root_dir', None)
-        self.global_domain = self.forcingSec.get('global_domain', None)
+        self.global_domain = self.forcingSec.get('global_domain', "CONUS")
 
         # Retrieve cold_start_time
         self.cold_start_datetime = self.forcingSec.get('cold_start_datetime', None)
