@@ -540,6 +540,7 @@ class RealizationBuilder:
         self.forcing_configuration = self.forcingSec.get('forcing_configuration', None)
         self.forcing_template_dir = self.forcingSec.get('forcing_template_dir', None)
         self.root_dir = self.forcingSec.get('root_dir', None)
+        self.global_domain = self.forcingSec.get('global_domain', None)
 
         # Retrieve cold_start_time
         self.cold_start_datetime = self.forcingSec.get('cold_start_datetime', None)
@@ -1109,7 +1110,7 @@ class RealizationBuilder:
                                                 self.forcing_config_file, self.use_cold_start, self.cold_start_datetime)
             else:
                 # Update historical dynamic parameters in forcing engine configuration file
-                gfun.update_hist_forcing_config(self.time_period, self.root_dir, self.forcing_template, gpkg_file, self.forcing_config_dir, self.forcing_config_file, self.run_type)
+                gfun.update_hist_forcing_config(self.time_period, self.root_dir, self.forcing_template, gpkg_file, self.forcing_config_dir, self.forcing_config_file, self.run_type, self.global_domain)
 
             logger.info(f"Configured BMI forcing engine: {self.forcing_config_file}")
 
