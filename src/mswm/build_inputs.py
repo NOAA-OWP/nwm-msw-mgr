@@ -1008,7 +1008,7 @@ class RealizationBuilder:
             logger.info(f"Reprojecting gpkg to a new EPSG:4326 file via cmd: {' '.join(cmd)}")
             try:
                 subprocess.check_call(cmd)
-            except OSError as e:
+            except Exception as e:
                 msg = f"Failed to reproject gpkg via cmd: {' '.join(cmd)}: {e}"
                 logger.critical(msg)
                 raise RuntimeError(msg) from e
