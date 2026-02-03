@@ -18,6 +18,7 @@ import yaml
 from collections import defaultdict
 from pydantic import ValidationError, validate_call
 import shutil
+import subprocess
 
 from mswm.utils import ginputfunc as gfun
 from mswm.utils import settings
@@ -540,6 +541,7 @@ class RealizationBuilder:
         self.forcing_configuration = self.forcingSec.get('forcing_configuration', None)
         self.forcing_template_dir = self.forcingSec.get('forcing_template_dir', None)
         self.root_dir = self.forcingSec.get('root_dir', None)
+        self.global_domain = self.forcingSec.get('global_domain', "CONUS")
 
         # Retrieve cold_start_time
         self.cold_start_datetime = self.forcingSec.get('cold_start_datetime', None)
@@ -960,6 +962,12 @@ class RealizationBuilder:
             logger.critical(f"Failed to create symlink: {symlink_path} -> {exe_path}: {e}")
             raise
 
+    @staticmethod
+    def file_crs_epsg(file_name: str) -> int:
+        logger.debug(f"Getting EPSG code of: {file_name}")
+        gdf = gpd.read_file(file_name)
+        return gdf.crs.to_epsg()
+
     def _extract_hydrofabric(self):
         """
         Extract hydrofabric geopackage and form catchment, nexus, and crosswalk files
@@ -986,12 +994,24 @@ class RealizationBuilder:
                 logger.error(f"Failed to remove existing {self.cat_file}: {e}")
                 raise
 
-        try:
-            os.symlink(self.gpkg_file, self.cat_file)
-            logger.info(f'Symlink created from {self.gpkg_file} to {self.cat_file}')
-        except OSError as e:
-            logger.critical(f"Failed to create symlink: {self.gpkg_file} -> {self.cat_file}: {e}")
-            raise
+        if self.file_crs_epsg(self.gpkg_file) in (4326, 5070):
+            try:
+                os.symlink(self.gpkg_file, self.cat_file)
+                logger.info(f'Symlink created from {self.gpkg_file} to {self.cat_file}')
+            except OSError as e:
+                msg = f"Failed to create symlink: {self.gpkg_file} -> {self.cat_file}: {e}"
+                logger.critical(msg)
+                raise RuntimeError(msg) from e
+        else:
+            # TODO implement either a temporary reprojected file per job (to save space), or a permanent global set of reprojected files (to save time)
+            cmd = ["ogr2ogr", "-overwrite", "-f", "GPKG", "-t_srs", "EPSG:4326", self.cat_file, self.gpkg_file]
+            logger.info(f"Reprojecting gpkg to a new EPSG:4326 file via cmd: {' '.join(cmd)}")
+            try:
+                subprocess.check_call(cmd)
+            except Exception as e:
+                msg = f"Failed to reproject gpkg via cmd: {' '.join(cmd)}: {e}"
+                logger.critical(msg)
+                raise RuntimeError(msg) from e
 
         # Create crosswalk file between catchments and gages for calibration run
         if self.run_type == 'calibration':
@@ -1109,7 +1129,7 @@ class RealizationBuilder:
                                                 self.forcing_config_file, self.use_cold_start, self.cold_start_datetime)
             else:
                 # Update historical dynamic parameters in forcing engine configuration file
-                gfun.update_hist_forcing_config(self.time_period, self.root_dir, self.forcing_template, gpkg_file, self.forcing_config_dir, self.forcing_config_file, self.run_type)
+                gfun.update_hist_forcing_config(self.time_period, self.root_dir, self.forcing_template, gpkg_file, self.forcing_config_dir, self.forcing_config_file, self.run_type, self.global_domain)
 
             logger.info(f"Configured BMI forcing engine: {self.forcing_config_file}")
 
@@ -1575,8 +1595,8 @@ class RealizationBuilder:
         rt_dict = {"routing": {"t_route_config_file_with_path": routing_config_file}}
 
         # Write realization file
-        gfun.create_reg_realization_file(self.work_dir, self.lib_file, bmi_dir, self.forcing_provider, self.forcing_path, self.forcing_config_file, self.realization_file,
-                                         self.time_period, rt_dict, self.output_dict, self.cat_to_grp, self.grp_to_form, self.grp_params)
+        self.output_config = gfun.create_reg_realization_file(self.work_dir, self.lib_file, bmi_dir, self.forcing_provider, self.forcing_path, self.forcing_config_file, self.realization_file,
+                                                              self.time_period, rt_dict, self.output_dict, {}, self.run_type, self.cat_to_grp, self.grp_to_form, self.grp_params)
 
     def _write_fcst_realization(self):
         """
@@ -1604,7 +1624,7 @@ class RealizationBuilder:
         Write parallel processing partition file
         """
         self.part_file = gfun.create_partition_file(self.parallelSec['partition_generator_exe'],
-                                                    self.gpkg_file,
+                                                    self.cat_file,
                                                     self.parallelSec['nprocs'],
                                                     self.work_dir,
                                                     self.basin) if self.parallelSec else None
