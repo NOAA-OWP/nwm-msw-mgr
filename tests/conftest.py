@@ -1,0 +1,111 @@
+"""
+Fixtures for msw-mgr end-to-end tests
+"""
+
+import os
+import pytest
+from pathlib import Path
+
+from mswm.utils.input_configuration import (
+    InputConfig,
+    GeneralConfig,
+    ForcingConfig,
+    DataFileConfig,
+    CalibConfig,
+    RegionConfig,
+    ParallelConfig,
+)
+
+# Set paths to test data
+test_data_dir = Path(__file__).parent / "data"
+test_gpkg = test_data_dir / "hydrofabric.gpkg"
+test_calib_params = test_data_dir / "calib_params"
+
+
+@pytest.fixture
+def tmp_work_dir(tmp_path):
+    """Temporary directory that serves as main_dir for test run"""
+    return str(tmp_path)
+
+
+@pytest.fixture
+def dummy_files(tmp_work_dir):
+    """"Create dummy library, ngen, and partitionGenerator files expected by msw-mgr"""
+    libs = {
+        "libsurfacebmi.so": "noah_owp_modular_lib",
+        "libcfebmi.so": "cfe_lib",
+        "libslothmodel.so": "sloth_lib",
+    }
+
+    # Create dummy libraries
+    for name in libs:
+        Path(tmp_work_dir, name).touch()
+
+    # Create dummy ngen executable
+    Path(tmp_work_dir, "ngen").touch()
+
+    # Create partition generator file
+    Path(tmp_work_dir, "partitionGenerator")
+
+    return libs
+
+
+def _make_calib_input_config(tmp_work_dir):
+    """Build an InputConfig pydantic object for a calibration run with noah-owp-modular and cfe-s"""
+    general = GeneralConfig(
+        basin="01123000",
+        run_type="calibration",
+        models="noah-owp-modular, cfe-s",
+        formulation="noah_cfes",
+        main_dir=tmp_work_dir,
+    )
+    forcing = ForcingConfig(
+        forcing_provider="bmi",
+        forcing_template_dir=str(test_data_dir),
+        root_dir=tmp_work_dir,
+        forcing_configuration="aorc",
+    )
+    datafile = DataFileConfig(
+        hydrofab_file=str(test_gpkg),
+        ngen_exe_file=os.path.join(tmp_work_dir, "ngen"),
+        noah_owp_modular_lib=os.path.join(tmp_work_dir, "libsurfacebmi.so"),
+        cfe_lib=os.path.join(tmp_work_dir, "libcfebmi.so"),
+        sloth_lib=os.path.join(tmp_work_dir, "libslothmodel.so"),
+        noah_parameter_dir=str(Path("/nwm-msw-mgr/module_parameter_files/noah-owp-modular"))
+    )
+    calibration = CalibConfig(
+        optimization_algorithm="dds",
+        objective_function="kge",
+        start_iteration=0,
+        number_iteration=2,
+        restart=0,
+        calib_start_period="2015-10-01 00:00:00",
+        calib_end_period="2017-09-30 23:00:00",
+        calib_eval_start_period="2016-10-01 00:00:00",
+        calib_eval_end_period="2017-09-30 23:00:00",
+        valid_start_period="2014-10-01 00:00:00",
+        valid_end_period="2017-09-30 23:00:00",
+        valid_eval_start_period="2015-10-01 00:00:00",
+        valid_eval_end_period="2016-09-30 23:00:00",
+        full_eval_start_period="2015-10-01 00:00:00",
+        full_eval_end_period="2017-09-30 23:00:00",
+        save_output_iter=0,
+        save_plot_iter=0,
+        save_plot_iter_freq=1,
+        streamflow_threshold=3.88,
+        station_name="Test Gauge",
+        ngen_cerf=False,
+        calib_parameter_file=str(test_calib_params)
+    )
+    parallel = ParallelConfig(
+        parallel_ngen_exe=os.path.join(tmp_work_dir, "ngen"),
+        partition_generator_exe=os.path.join(tmp_work_dir, "partitionGenerator"),
+        nprocs=2,
+    )
+    return InputConfig(
+        General=general,
+        Forcing=forcing,
+        DataFile=datafile,
+        Calibration=calibration,
+        Parallel=parallel,
+    )
