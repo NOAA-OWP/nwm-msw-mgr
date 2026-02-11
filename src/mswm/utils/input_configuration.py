@@ -4,7 +4,8 @@ This module contains Pydantic classes to validate input.config files for the MSW
 @author: Jeff Wade
 """
 
-from pydantic import BaseModel, model_validator, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic_core.core_schema import ValidationInfo
 from pathlib import Path
 from typing import Optional, Literal, Union
 
@@ -38,11 +39,61 @@ class GeneralConfig(StrictBaseModel):
     main_dir: str
     start_period: Optional[str] = None
     end_period: Optional[str] = None
+    output_precip: Optional[bool] = None
     output_swe: Optional[bool] = None
     output_sm: Optional[bool] = None
-    sm_profile_depth: Optional[float] = None
-    sm_frac_depth: Optional[float] = None
+    sm_profile_depth: Optional[list[float] | str] = Field(default_factory=lambda: [0.1, 0.4, 1.0, 2.0])
+    sm_frac_depth: Optional[float] = 0.4
     is_aet_rootzone: Optional[Union[int, bool, str]] = None
+
+    @field_validator("sm_profile_depth", mode="before")
+    @classmethod
+    def check_sm_profile_depth(cls, val, info: ValidationInfo):
+        """Validate sm_profile_depth input.
+        Must be a list of 4 monotonically increasing float values, with the last value equal to 2.0.
+        If None, set to default values [0.1, 0.4, 1.0, 2.0].
+        """
+        if info.data.get("output_sm") is not True:
+            return None
+
+        if val is None:
+            return [0.1, 0.4, 1.0, 2.0]
+        if isinstance(val, str):
+            val = [float(x) for x in val.split(",")]
+        if not isinstance(val, list) or len(val) != 4:
+            raise ValueError("sm_profile_depth must be a list of 4 values.")
+        for v in val:
+            if not isinstance(v, (float, int)):
+                raise ValueError("sm_profile_depth must be a list of float values.")
+        if not all(earlier < later for earlier, later in zip(val, val[1:])):
+            raise ValueError("sm_profile_depth values must be monotonically increasing (since it is accumualtive).")
+        if val[-1] != 2.0:
+            msg = f"The last value of sm_profile_depth is {val[-1]}, but it must be 2.0 m."
+            raise ValueError(msg)
+
+        return val
+
+    @field_validator("sm_frac_depth", mode="before")
+    @classmethod
+    def check_sm_frac_depth(cls, val, info: ValidationInfo):
+        """Validate sm_frac_depth input.
+        Must be a float value corresponding to one of the sm_profile_depth values.
+        If None, set to default value (0.4).
+        """
+        if info.data.get("output_sm") is not True:
+            return None
+
+        if val is None:
+            return 0.4
+        if isinstance(val, str):
+            val = float(val)
+        if not isinstance(val, (float, int)):
+            raise ValueError("sm_frac_depth must be a float value.")
+        sm_profile_depth = info.data.get("sm_profile_depth", [0.1, 0.4, 1.0, 2.0])
+        if val not in sm_profile_depth:
+            raise ValueError("sm_frac_depth must correspond to one of the sm_profile_depth values.")
+
+        return val
 
     # Normalize is_aet_rootzone values
     @field_validator('is_aet_rootzone')
@@ -92,6 +143,8 @@ class CalibConfig(StrictBaseModel):
     start_iteration: Optional[int] = None
     number_iteration: Optional[int] = None
     restart: Optional[int] = None
+    calib_output_vars: Optional[bool] = None
+    valid_output_vars: Optional[bool] = None
     calib_start_period: str
     calib_end_period: str
     calib_eval_start_period: str
@@ -173,6 +226,7 @@ class ForcingConfig(StrictBaseModel):
     forcing_configuration: Optional[str] = None
     cycle_datetime: Optional[str] = None
     cold_start_datetime: Optional[str] = None
+    global_domain: Optional[str] = "CONUS"
 
     # Check optional fields that depend on forcing_provider
     @model_validator(mode="after")

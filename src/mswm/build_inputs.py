@@ -4,6 +4,7 @@ This module contains functions to manage the initial creation of configuration f
 @author: Jeffrey Wade, Xia Feng
 """
 
+import copy
 from pathlib import Path
 import os
 import logging
@@ -15,8 +16,9 @@ import pandas as pd
 import json
 import yaml
 from collections import defaultdict
-from pydantic import ValidationError
+from pydantic import ValidationError, validate_call
 import shutil
+import subprocess
 
 from mswm.utils import ginputfunc as gfun
 from mswm.utils import settings
@@ -32,25 +34,93 @@ if not main_logger.hasHandlers():
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S"
+        datefmt=settings.DEFAULT_DATETIME_FORMAT,
     )
 
 
 class RealizationBuilder:
+    """
+    This class reads a .conf file from disk (input_path) during calls to method `build_*_realization()`.
+    Optionally, the configurations can be taken from config_overrides, if provided.
 
-    def __init__(self, input_path: str, valid_yaml: str | None = None, use_cold_start: bool = False, forcing_path: str | None = None, fcst_run_name: str | None = None):
+    `config_overrides` (class argument and property): InputConfig
+        When this is provided as an argument to class construction, it is used instead of
+        reading configuration from disk, and `config_overrides_mode__amend` is set to False.
+        
+        This can also be provided after class construction, in order to cause the configuration to be
+        updated per-section, per-key, using the overrides, rather than fully replaced.
 
-        self.input_path = Path(input_path)
+    `config_overrides_mode__amend` (property): bool
+        When this is True, then the overrides from `config_overrides` are applied per-section, per-key,
+        rather than wholesale replacing the configurations read from disk.
+
+        When `config_overrides` are provided during class instantiation, this property is set to False (overrides will fully replace configuration, no aspect of configuration from disk will be used).
+        When `config_overrides` are not provided during class instantiation, this property is set to True (overrides will amend configuration read from disk).
+        This property can be changed after instantiating this class, before calling one of the `build_*_realization()` methods.
+    """
+
+    def __init__(self, input_path: str | None = None, valid_yaml: str | None = None, use_cold_start: bool = False, forcing_path: str | None = None, fcst_run_name: str | None = None, config_overrides: InputConfig | None = None):
+
+        # Private attributes controlled by public properties.
+        self._config_overrides: InputConfig | None
+        self._config_overrides_mode__amend: bool
+
+        if config_overrides:
+            if input_path:
+                raise ValueError(f"Must provide `input_path` or `config_overrides` (both were provided)")
+            self.input_path = None
+            self.config_overrides = config_overrides
+            self.config_overrides_mode__amend = False
+
+        elif input_path:
+            if config_overrides:
+                raise ValueError(f"Must provide `input_path` or `config_overrides` (both were provided)")
+            self.input_path = Path(input_path)
+            self.config_overrides = None
+            self.config_overrides_mode__amend = True
+
+        else:
+            raise ValueError(f"Must provide `input_path` or `config_overrides`")
+
         self.valid_yaml = Path(valid_yaml) if valid_yaml else None
+
         self.use_cold_start = use_cold_start
         self.forcing_path = Path(forcing_path) if forcing_path else None
         self.fcst_run_name = fcst_run_name if fcst_run_name else None
 
-    def _load_config(self):
+        # Initialize this to empty dict so that config override has a target even when input_path is not used
+        self.input_configs = {}
+        main_logger.info(f"Initialized RealizationBuilder with {input_path}")
+
+    @property
+    def config_overrides(self):
+        return self._config_overrides
+
+    @config_overrides.setter
+    @validate_call
+    def config_overrides(self, new: InputConfig | None):
+        self._config_overrides = new
+
+    @property
+    def config_overrides_mode__amend(self):
+        return self._config_overrides_mode__amend
+
+    @config_overrides_mode__amend.setter
+    def config_overrides_mode__amend(self, new: bool):
+        self._config_overrides_mode__amend = new
+
+    def __load_config(self):
         """
         Read input.config file
         """
         import configparser
+
+        if self.input_path is None:
+            main_logger.debug(f"self.input_path is None")
+            if self.config_overrides is None:
+                raise ValueError(f"self.input_path = {self.input_path} and self.config_overrides = {self.config_overrides}")
+            return
+
         # Confirm input file exists
         self.input_path = Path(self.input_path).absolute()
         if not self.input_path.exists():
@@ -84,7 +154,10 @@ class RealizationBuilder:
                 main_logger.critical(e)
                 raise
 
-    def _validate_config(self):
+        self.__validate_config()
+
+
+    def __validate_config(self):
         """
         Validate input.config file using Pydantic (input_configuration.py)
         """
@@ -99,10 +172,55 @@ class RealizationBuilder:
 
         # Validate input.config structure and variables using Pydantic
         try:
-            self.input_configs = InputConfig(**configs).model_dump()
+            model = InputConfig(**configs)
         except ValidationError as e:
             main_logger.critical(f"Input.config Pydantic validation failed: {self.input_path}{e}")
             raise
+
+        self.input_configs_class = model
+        self.input_configs = model.model_dump()
+
+    def __override_config(self) -> None:
+        """
+        Override the current config in-memory, either partially or in full.
+
+        Variable Class Attributes Used as Parameters
+        ----------
+        self.config_overrides : InputConfig
+            If None, this method does nothing.
+
+        self.config_overrides_mode__amend : bool
+            If True, then the individual keys from `overrides` will replace individual keys
+            from the existing config dictionary `self.input_configs`, but keys which are missing
+            from `overrides` will be ignored (will not be deleted from `self.input_configs`).
+                Use case: iterating over a list of forecast types without altering the start time.
+
+            If False, then the `overrides` object will be used wholly as-is, fully replacing
+            the existing config dictionary.  Therefore `overrides` must be a complete configuration in this case.
+                Use case: building a full configuration in memory
+        """
+        if not self.config_overrides:
+            main_logger.info(f"self.config_overrides = {self.config_overrides}, will not apply overrides")
+            return
+        
+        main_logger.info(f"Will apply config overrides with self.config_overrides_mode__amend={self.config_overrides_mode__amend}")
+
+        if self.config_overrides_mode__amend:
+            configs = copy.deepcopy(self.input_configs)
+            for section_override, dict_override in self.config_overrides.model_dump().items():
+                if dict_override is None:
+                    continue
+                if (section_override not in configs) or (configs[section_override] is None):
+                    configs[section_override] = {}
+                for k, v in dict_override.items():
+                    configs[section_override][k] = v
+        else:
+            configs = self.config_overrides.model_dump()
+
+        model = InputConfig(**configs)
+        main_logger.info(f"Applying config overrides")
+        self.input_configs_class = model
+        self.input_configs = model.model_dump()
 
     def _load_yaml(self):
         """
@@ -423,6 +541,7 @@ class RealizationBuilder:
         self.forcing_configuration = self.forcingSec.get('forcing_configuration', None)
         self.forcing_template_dir = self.forcingSec.get('forcing_template_dir', None)
         self.root_dir = self.forcingSec.get('root_dir', None)
+        self.global_domain = self.forcingSec.get('global_domain', "CONUS")
 
         # Retrieve cold_start_time
         self.cold_start_datetime = self.forcingSec.get('cold_start_datetime', None)
@@ -437,7 +556,7 @@ class RealizationBuilder:
                 self.cycle_hour = self.forcingSec.get('cycle_hour')
 
                 # Construct cycle date and cycle hour
-                cycle_dt = datetime.strptime(cycle_datetime, "%Y-%m-%d %H:%M:%S")
+                cycle_dt = datetime.strptime(cycle_datetime, settings.DEFAULT_DATETIME_FORMAT)
                 self.cycle_date = cycle_dt.strftime("%Y-%m-%d")
                 self.cycle_hour = cycle_dt.strftime("%H") + "z"
 
@@ -510,7 +629,7 @@ class RealizationBuilder:
                 time_vals = []
                 for i, time_str in enumerate(times):
                     try:
-                        time_vals.append(datetime.strptime(time_str.strip(), "%Y-%m-%d %H:%M:%S"))
+                        time_vals.append(datetime.strptime(time_str.strip(), settings.DEFAULT_DATETIME_FORMAT))
                     except ValueError:
                         errors.append(f"Invalid datetime format: {outer_key}: {run_type}: {time_str}")
                 if time_vals[0] >= time_vals[1]:
@@ -843,6 +962,12 @@ class RealizationBuilder:
             logger.critical(f"Failed to create symlink: {symlink_path} -> {exe_path}: {e}")
             raise
 
+    @staticmethod
+    def file_crs_epsg(file_name: str) -> int:
+        logger.debug(f"Getting EPSG code of: {file_name}")
+        gdf = gpd.read_file(file_name)
+        return gdf.crs.to_epsg()
+
     def _extract_hydrofabric(self):
         """
         Extract hydrofabric geopackage and form catchment, nexus, and crosswalk files
@@ -869,12 +994,24 @@ class RealizationBuilder:
                 logger.error(f"Failed to remove existing {self.cat_file}: {e}")
                 raise
 
-        try:
-            os.symlink(self.gpkg_file, self.cat_file)
-            logger.info(f'Symlink created from {self.gpkg_file} to {self.cat_file}')
-        except OSError as e:
-            logger.critical(f"Failed to create symlink: {self.gpkg_file} -> {self.cat_file}: {e}")
-            raise
+        if self.file_crs_epsg(self.gpkg_file) in (4326, 5070):
+            try:
+                os.symlink(self.gpkg_file, self.cat_file)
+                logger.info(f'Symlink created from {self.gpkg_file} to {self.cat_file}')
+            except OSError as e:
+                msg = f"Failed to create symlink: {self.gpkg_file} -> {self.cat_file}: {e}"
+                logger.critical(msg)
+                raise RuntimeError(msg) from e
+        else:
+            # TODO implement either a temporary reprojected file per job (to save space), or a permanent global set of reprojected files (to save time)
+            cmd = ["ogr2ogr", "-overwrite", "-f", "GPKG", "-t_srs", "EPSG:4326", self.cat_file, self.gpkg_file]
+            logger.info(f"Reprojecting gpkg to a new EPSG:4326 file via cmd: {' '.join(cmd)}")
+            try:
+                subprocess.check_call(cmd)
+            except Exception as e:
+                msg = f"Failed to reproject gpkg via cmd: {' '.join(cmd)}: {e}"
+                logger.critical(msg)
+                raise RuntimeError(msg) from e
 
         # Create crosswalk file between catchments and gages for calibration run
         if self.run_type == 'calibration':
@@ -882,20 +1019,34 @@ class RealizationBuilder:
             logger.info(f"Crosswalk file created at: {self.walk_file}")
 
         # Read catchment parameter values from geopackage divide-attributes
+        attr_lyrname = "divide-attributes"
+        logger.info(f"Reading layer {repr(attr_lyrname)} from file: {repr(self.gpkg_file)}")
         try:
-            self.attr_file = gpd.read_file(self.gpkg_file, layer='divide-attributes')
+            self.attr_file = gpd.read_file(self.gpkg_file, layer=attr_lyrname)
             self.attr_file.set_index("divide_id", inplace=True)
         except Exception as e:
             logger.critical(f"Error while reading geopackage file: {e}")
             raise
 
         # Read catchment divide layer from hydrofabric
+        divides_lyrname = "divides"
+        logger.info(f"Reading layer {repr(divides_lyrname)} from file: {repr(self.gpkg_file)}")
         try:
-            self.divides_layer = gpd.read_file(self.gpkg_file, layer='divides')
+            self.divides_layer = gpd.read_file(self.gpkg_file, layer=divides_lyrname)
             self.catids = self.divides_layer['divide_id'].tolist()
         except Exception as e:
             logger.critical(f"Error while reading geopackage file: {e}")
             raise
+
+        # Assert records exist, assert equal lengths
+        if len(self.divides_layer) == 0:
+            msg = f"0 records in layer {repr(divides_lyrname)} from file: {repr(self.gpkg_file)}"
+            logger.critical(msg)
+            raise RuntimeError(msg)
+        if len(self.attr_file) != len(self.divides_layer):
+            msg = f"In file {repr(self.gpkg_file)}, layer {repr(attr_lyrname)} has {len(self.attr_file)} records but layer {repr(divides_lyrname)} has {len(self.divides_layer)} records (expected equality)"
+            logger.critical(msg)
+            raise RuntimeError(msg)
 
         # Update hydrofabic attribute names based on region and minor parameter value fixes
         self.attr_file = gfun.change_hydrofab_attr(self.attr_file, self.divides_layer)
@@ -978,7 +1129,7 @@ class RealizationBuilder:
                                                 self.forcing_config_file, self.use_cold_start, self.cold_start_datetime)
             else:
                 # Update historical dynamic parameters in forcing engine configuration file
-                gfun.update_hist_forcing_config(self.time_period, self.root_dir, self.forcing_template, gpkg_file, self.forcing_config_dir, self.forcing_config_file, self.run_type)
+                gfun.update_hist_forcing_config(self.time_period, self.root_dir, self.forcing_template, gpkg_file, self.forcing_config_dir, self.forcing_config_file, self.run_type, self.global_domain)
 
             logger.info(f"Configured BMI forcing engine: {self.forcing_config_file}")
 
@@ -1011,22 +1162,32 @@ class RealizationBuilder:
         """
         Set SWE and Soil Moisture output variables
         """
-        # whether to output SWE or soil moisture (default to False)
+        # whether to output SWE, soil moisture, or precip (default to False)
         self.output_dict = dict()
-        for s1 in ['output_swe', 'output_sm']:
+        for s1 in ['output_swe', 'output_sm', 'output_precip']:
             if (s1 not in self.conf1.keys()) or (self.conf1[s1] is None) or (self.conf1[s1] == ''):
-                self.output_dict[s1] = False
+                # Default output_precip to True if not specified
+                self.output_dict[s1] = True if s1 == 'output_precip' else False
             else:
                 self.output_dict[s1] = self.conf1[s1]
 
         # define depth (in meters) for output soil moisture
-        self.output_dict['sm_frac_depth'] = 0.4
-        self.output_dict['sm_profile_depth'] = 0.1
-        for s1 in ['sm_profile_depth', 'sm_frac_depth']:
-            if (self.conf1[s1] is not None) and (self.conf1[s1] != ''):
-                self.output_dict[s1] = float(self.conf1[s1])
+        val = self.conf1.get("sm_frac_depth")
+        self.output_dict["sm_frac_depth"] = 0.4 if val in (None, "") else float(val)
+        self.output_dict["sm_profile_depth"] = (
+            [float(v) for v in self.conf1["sm_profile_depth"]]
+            if "sm_profile_depth" in self.conf1 and self.conf1["sm_profile_depth"] is not None
+            else [0.1, 0.4, 1.0, 2.0]
+        )
 
-        logger.info("Set SWE and SM output variables")
+        # Retrieve calib and valid output variable settings
+        self.calib_output_vars = self.conf2.get('calib_output_vars')
+        self.valid_output_vars = self.conf2.get('valid_output_vars')
+
+        self.calib_output_vars = False if self.calib_output_vars is None else self.calib_output_vars
+        self.valid_output_vars = True if self.valid_output_vars is None else self.valid_output_vars
+
+        logger.info("Set output variables")
 
     def _update_fcst_realization(self):
         """
@@ -1127,11 +1288,11 @@ class RealizationBuilder:
                         gfun.change_lstm_input(self.catids, self.conf3['lstm_parameter_dir'], mod_input_dir, bmi_dir)
                     elif m1 == 'smp' and self.output_dict['output_sm']:
                         # For SMP, the depth to output soil moisture may need to be adjusted
-                        self.output_dict['sm_profile_depth'] = gfun.change_smp_input(self.catids, self.modules, mod_input_dir, bmi_dir, self.run_type, self.output_dict['sm_frac_depth'],
+                        gfun.change_smp_input(self.catids, self.modules, mod_input_dir, bmi_dir, self.run_type, self.output_dict['sm_frac_depth'],
                                                                                      self.output_dict['sm_profile_depth'])
                     elif m1 == 'sft':
                         # Modify SFT inputs to ensure ice_fraction_scheme matches rainfall_runoff model
-                        gfun.change_sft_input(self.catids, modules1, mod_input_dir, bmi_dir, self.run_type)
+                        gfun.change_sft_input(self.catids, modules1, mod_input_dir, bmi_dir, self.run_type,self.output_dict['sm_profile_depth'])
                     else:
                         # Create symbolic link
                         logger.info(f'{m2}: create symlink from {bmi_dir} to {mod_input_dir}')
@@ -1172,7 +1333,16 @@ class RealizationBuilder:
                 elif m1 == 'sft':
                     sft_dir = os.path.join(self.input_dir, 'sft_input')
                     smp_dir = os.path.join(self.input_dir, 'smp_input')
-                    gfun.create_sft_smp_input(self.catids, self.modules, self.attr_file, sft_dir, smp_dir, self.run_type)
+                    gfun.create_sft_smp_input(
+                        self.catids,
+                        self.modules,
+                        self.attr_file,
+                        sft_dir,
+                        smp_dir,
+                        self.run_type,
+                        self.output_dict["sm_profile_depth"],
+                        self.output_dict["sm_frac_depth"],
+                    )                    
                 elif m1 == 'smp':
                     continue
                 elif m1 == 'lasam':
@@ -1279,7 +1449,7 @@ class RealizationBuilder:
                         gfun.change_lstm_input(cat_mod, self.conf3['lstm_parameter_dir'], mod_input_dir, bmi_dir)
                     elif m1 == "smp" and self.output_dict['output_sm']:
                         # For SMP, the depth to output soil moisture may need to be adjusted
-                        self.output_dict['sm_profile_depth'] = gfun.change_smp_input(cat_mod, form_cat, mod_input_dir, bmi_dir, self.run_type,
+                        gfun.change_smp_input(cat_mod, form_cat, mod_input_dir, bmi_dir, self.run_type,
                                                                                      self.output_dict['sm_frac_depth'], self.output_dict['sm_profile_depth'])
                     # Modify existing SFT inputs to match rainfall runoff model
                     elif m1 == "sft":
@@ -1295,7 +1465,7 @@ class RealizationBuilder:
                                 scheme_form = [self.cat_to_form[cat] for cat in scheme_cat]
 
                         # Create SFT inputs
-                        gfun.change_sft_input(scheme_cat, scheme_form, mod_input_dir, bmi_dir, self.run_type)
+                        gfun.change_sft_input(scheme_cat, scheme_form, mod_input_dir, bmi_dir, self.run_type, self.output_dict['sm_profile_depth'])
 
                     else:
                         # Create symbolic link to catchments with formulation
@@ -1356,7 +1526,16 @@ class RealizationBuilder:
                             scheme_form = [self.cat_to_form[cat] for cat in scheme_cat]
 
                             # Create SFT/SMP inputs
-                            gfun.create_sft_smp_input(scheme_cat, scheme_form, self.attr_file, sft_dir, smp_dir, self.run_type)
+                            gfun.create_sft_smp_input(
+                                scheme_cat,
+                                scheme_form,
+                                self.attr_file,
+                                sft_dir,
+                                smp_dir,
+                                self.run_type,
+                                self.output_dict["sm_profile_depth"],
+                                self.output_dict["sm_fraction_depth"],
+                            )
 
                 # Skip smp, inputs created in tandem with sft
                 elif m1 == 'smp':
@@ -1397,8 +1576,8 @@ class RealizationBuilder:
         rt_dict = {"routing": {"t_route_config_file_with_path": routing_config_file}}
 
         # Write realization file
-        gfun.create_realization_file(self.work_dir, self.lib_file, bmi_dir, self.forcing_provider, self.forcing_path, self.forcing_config_file, self.realization_file,
-                                     self.modules, self.time_period, rt_dict, self.output_dict, self.run_type)
+        self.output_config = gfun.create_realization_file(self.work_dir, self.lib_file, bmi_dir, self.forcing_provider, self.forcing_path, self.forcing_config_file, self.realization_file,
+                                                          self.modules, self.time_period, rt_dict, self.output_dict, self.calib_output_vars, self.run_type)
 
     def _write_region_realization(self):
         """
@@ -1416,8 +1595,8 @@ class RealizationBuilder:
         rt_dict = {"routing": {"t_route_config_file_with_path": routing_config_file}}
 
         # Write realization file
-        gfun.create_reg_realization_file(self.work_dir, self.lib_file, bmi_dir, self.forcing_provider, self.forcing_path, self.forcing_config_file, self.realization_file,
-                                         self.time_period, rt_dict, self.output_dict, self.cat_to_grp, self.grp_to_form, self.grp_params)
+        self.output_config = gfun.create_reg_realization_file(self.work_dir, self.lib_file, bmi_dir, self.forcing_provider, self.forcing_path, self.forcing_config_file, self.realization_file,
+                                                              self.time_period, rt_dict, self.output_dict, {}, self.run_type, self.cat_to_grp, self.grp_to_form, self.grp_params)
 
     def _write_fcst_realization(self):
         """
@@ -1445,7 +1624,7 @@ class RealizationBuilder:
         Write parallel processing partition file
         """
         self.part_file = gfun.create_partition_file(self.parallelSec['partition_generator_exe'],
-                                                    self.gpkg_file,
+                                                    self.cat_file,
                                                     self.parallelSec['nprocs'],
                                                     self.work_dir,
                                                     self.basin) if self.parallelSec else None
@@ -1513,6 +1692,13 @@ class RealizationBuilder:
         for s1 in ['calibration_run_id', 'ngen_cerf', 'auth_token']:
             general_dict[s1] = self.conf2[s1]
 
+        # Set output variables
+        if self.valid_output_vars:
+            general_dict['valid_output_vars'] = self.output_config['output_variables']
+            general_dict['valid_output_headers'] = self.output_config['output_header_fields']
+            general_dict['valid_output_units'] = self.output_config['output_units']
+            general_dict["valid_output_index"] = self.output_config["output_index"]
+
         # Create calibration config file
         gfun.create_calib_config_file(self.conf2['calib_parameter_file'], self.modules, self.work_dir, general_dict, self.model_dict, self.calib_config_file)
 
@@ -1521,8 +1707,7 @@ class RealizationBuilder:
         Replicate functionality of create_input.py, saving calibration realization file to output_path and formatting other input files
         Returns output path to realization and calib_config files
         """
-        self._load_config()
-        self._validate_config()
+        self.load_config_apply_overrides()
         self._parse_config()
         self._create_input_dir()
         self._init_log()
@@ -1557,8 +1742,7 @@ class RealizationBuilder:
         """
         Creating regionalization realization file from formulation_assignment file generated by regionalization
         """
-        self._load_config()
-        self._validate_config()
+        self.load_config_apply_overrides()
         self._parse_config()
         self._create_input_dir()
         self._init_log()
@@ -1592,12 +1776,20 @@ class RealizationBuilder:
 
         logger.info("Regionalization run set up successfully")
 
+    def load_config_apply_overrides(self):
+        """Load the config file from disk and apply overrides.
+        If config overrides are applied with amend = False, then skip reading the config file."""
+        if self.config_overrides and (not self.config_overrides_mode__amend):
+            logging.info(f"Skipping load of config file since overrides will replace entire config (no amend)")
+        else:
+            self.__load_config()
+        self.__override_config()
+
     def build_fcst_realization(self):
         """
         Replicate functionality of ngen-fcst, creating realization file from validation yaml file and formatting other input files
         """
-        self._load_config()
-        self._validate_config()
+        self.load_config_apply_overrides()
         self._load_yaml()
         self._create_fcst_dir()
         self._init_log()
@@ -1621,8 +1813,7 @@ class RealizationBuilder:
         """
         Create realization and BMI config files using default parameter values for each catchment
         """
-        self._load_config()
-        self._validate_config()
+        self.load_config_apply_overrides()
         self._parse_config()
         self._create_input_dir()
         self._init_log()
