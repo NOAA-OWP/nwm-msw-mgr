@@ -1,0 +1,64 @@
+"""Tests for CLI argument parsing"""
+
+import pytest
+from unittest.mock import patch, MagicMock
+
+from mswm.manager import main
+
+
+class TestCLI:
+    """Verify the CLI parses arguments and uses correct build functions"""
+
+    @patch("mswm.manager.build_default")
+    def test_build_default(self, mock_build):
+        """build_default command dispatches to build_default()"""
+        with patch("sys.argv", ["mswm", "build_default", "/path/to/config.conf"]):
+            main()
+        mock_build.assert_called_once_with("/path/to/config.conf", False)
+
+    @patch("mswm.manager.build_default")
+    def test_build_default_with_cold_start(self, mock_build):
+        """build_default --use_cold_start sets cold start flag"""
+        with patch("sys.argv", ["mswm", "build_default", "/path/to/config.conf", "--use_cold_start"]):
+            main()
+        mock_build.assert_called_once_with("/path/to/config.conf", True)
+
+    @patch("mswm.manager.build_calib")
+    def test_build_calib(self, mock_build):
+        """build_calib command dispatches to build_calib()"""
+        with patch("sys.argv", ["mswm", "build_calib", "/path/to/config.conf"]):
+            main()
+        mock_build.assert_called_once_with("/path/to/config.conf")
+
+    @patch("mswm.manager.build_region")
+    def test_build_region(self, mock_build):
+        """build_region command dispatches to build_region()"""
+        with patch("sys.argv", ["mswm", "build_region", "/path/to/config.conf"]):
+            main()
+        mock_build.assert_called_once_with("/path/to/config.conf")
+
+    @patch("mswm.manager.build_fcst")
+    def test_build_fcst(self, mock_build):
+        """build_fcst command dispatches to build_fcst()"""
+        with patch("sys.argv", ["mswm", "build_fcst", "/path/to/config.conf", "/path/valid_yaml", "run_1"]):
+            main()
+        mock_build.assert_called_once_with("/path/to/config.conf", "/path/valid_yaml", "run_1", False)
+
+    @patch("mswm.manager.build_fcst")
+    def test_build_fcst_with_cold_start(self, mock_build):
+        """build_fcst --use_cold_start sets cold start flag"""
+        with patch("sys.argv", ["mswm", "build_fcst", "/path/to/config.conf", "/path/valid_yaml", "run_1", "--use_cold_start"]):
+            main()
+        mock_build.assert_called_once_with("/path/to/config.conf", "/path/valid_yaml", "run_1", True)
+
+    def test_no_subcommand(self):
+        """Missing subcommand should cause system exit"""
+        with patch("sys.argv", ["mswm"]):
+            with pytest.raises(SystemExit):
+                main()
+
+    def test_invalid_subcommand(self):
+        """Invalid subcommand should cause system exit"""
+        with patch("sys.argv", ["mswm", "build_invalid"]):
+            with pytest.raises(SystemExit):
+                main()
