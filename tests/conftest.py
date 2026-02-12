@@ -18,9 +18,10 @@ from mswm.utils.input_configuration import (
 
 # Set paths to test data
 test_data_dir = Path(__file__).parent / "data"
-test_gpkg = test_data_dir / "hydrofabric.gpkg"
+test_gpkg = test_data_dir / "hydrofabric" / "hydrofabric.gpkg"
 test_calib_params = test_data_dir / "calib_params"
 test_region_dir = test_data_dir / "regionalization"
+test_forcing_configs = test_data_dir / "forcing_configs"
 
 
 @pytest.fixture
@@ -65,7 +66,7 @@ def _make_calib_input_config(tmp_work_dir):
     )
     forcing = ForcingConfig(
         forcing_provider="bmi",
-        forcing_template_dir=str(test_data_dir),
+        forcing_template_dir=str(test_forcing_configs),
         root_dir=tmp_work_dir,
         forcing_configuration="aorc",
     )
@@ -132,7 +133,7 @@ def _make_region_input_config(tmp_work_dir):
     )
     forcing = ForcingConfig(
         forcing_provider="bmi",
-        forcing_template_dir=str(test_data_dir),
+        forcing_template_dir=str(test_forcing_configs),
         root_dir=tmp_work_dir,
         forcing_configuration="aorc",
     )
@@ -159,4 +160,19 @@ def _make_region_input_config(tmp_work_dir):
         DataFile=datafile,
         Regionalization=region,
         Parallel=parallel,
+    )
+
+
+def _make_fcst_input_config(tmp_work_dir):
+    """Build an InputConfig pydantic object for a forecast run"""
+    forcing = ForcingConfig(
+        forcing_provider="bmi",
+        forcing_template_dir=str(test_forcing_configs),
+        root_dir=tmp_work_dir,
+        forcing_configuration="short_range",
+        cycle_datetime="2025-09-01 00:00:00",
+        cold_start_datetime="2025-08-01 00:00:00",
+    )
+    return InputConfig(
+        Forcing=forcing,
     )
