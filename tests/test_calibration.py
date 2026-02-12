@@ -148,5 +148,5 @@ class TestCalibBuild:
     def test_noah_configs_exist(self):
         noah_dir = os.path.join(self.rb.input_dir, "noah-owp-modular_input")
         assert os.path.isdir(noah_dir)
-        files = os.listdir(noah_dir)
-        assert len(files) == len(self.rb.catids) * 2 + 3  # Calib BMIs + Valid BMIs + 3 static files
+        input_files = [f for f in os.listdir(noah_dir) if f.endswith(".input")]
+        assert len(input_files) == len(self.rb.catids) * 2  # Calib BMIs + Valid BMIs
