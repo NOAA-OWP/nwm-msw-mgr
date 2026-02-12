@@ -1736,7 +1736,13 @@ def validate_topoflow_glacier(gpkg_file: str) -> dict:
 
     # Count number of catchments with glacier percent >= 50%
     glacier_thresh = 50
-    glacier_cat = (attr_df['glacier_percent'] >= glacier_thresh).sum()
+    if "glacier_percent" in attr_df.columns:
+        glacier_cat = (attr_df['glacier_percent'] >= glacier_thresh).sum()
+    else:
+        return {
+            'result': False,
+            'message': "'glacier_percent' column not found in geopackage attributes."
+        }
 
     # Return json message for Topoflow-Glacier applicability
     if glacier_cat >= 1:
