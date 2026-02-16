@@ -675,7 +675,7 @@ class RealizationBuilder:
     @staticmethod
     def file_crs_epsg(file_name: str) -> int:
         logger.debug(f"Getting EPSG code of: {file_name}")
-        gdf = gpd.read_file(file_name)
+        gdf = gpd.read_file(file_name, layer="divides")
         return gdf.crs.to_epsg()
 
     def _extract_hydrofabric(self):
