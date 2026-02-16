@@ -977,23 +977,6 @@ def create_ueb_input(
             lat = dfa.loc[catID]['centroid_y']
             lon = dfa.loc[catID]['centroid_x']
 
-            # # TODO: SET MONTHLY TEMPERATURE RANGES AND STD ATMOSPHERIC PRESSURE
-            # # TODO: CHECK DEFAULT SITEVARS AGAINST UEB
-            # THIS IS HOW ICEFABRIC CALCULATES ATMOSPHERE: standard_atm_pressure=round(Atmosphere(row_dict[attr_names.ELEVATION.value]).pressure[0], 4)
-            # lines[18] = f"{cat_ipe['standard_atm_pressure']}\n"
-            # lines[57] = f"{cat_ipe['jan_temp_range']}\n"
-            # lines[60] = f"{cat_ipe['feb_temp_range']}\n"
-            # lines[63] = f"{cat_ipe['mar_temp_range']}\n"
-            # lines[66] = f"{cat_ipe['apr_temp_range']}\n"
-            # lines[69] = f"{cat_ipe['may_temp_range']}\n"
-            # lines[72] = f"{cat_ipe['jun_temp_range']}\n"
-            # lines[75] = f"{cat_ipe['jul_temp_range']}\n"
-            # lines[78] = f"{cat_ipe['aug_temp_range']}\n"
-            # lines[81] = f"{cat_ipe['sep_temp_range']}\n"
-            # lines[84] = f"{cat_ipe['oct_temp_range']}\n"
-            # lines[87] = f"{cat_ipe['nov_temp_range']}\n"
-            # lines[90] = f"{cat_ipe['dec_temp_range']}\n"
-
             temp_file = Path(param_dir_source, 'ueb_sitevars.dat').resolve(strict=True)
             with open(temp_file) as f:
                 lines = f.readlines()
