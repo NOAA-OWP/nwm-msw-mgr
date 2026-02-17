@@ -108,7 +108,8 @@ def call_icefabric_gpkg(
         basin: str,
         domain: str,
         output_dir: str,
-        environment: str
+        environment: str,
+        source: str,
 ) -> str:
     """ Query icefabric API for geopackage
 
@@ -120,6 +121,7 @@ def call_icefabric_gpkg(
     domain: string of name of gage domain
     output_dir: location to save gpkg
     environment: environment for icefabric API ('test' or 'oe')
+    source: hydrofabric version ('hf' or 'nhf')
 
     Returns
     ----------
@@ -141,13 +143,23 @@ def call_icefabric_gpkg(
     except KeyError:
         raise ValueError(f"Invalid domain: '{domain}. Valid options are {list(domain_mappings.keys())}")
 
+    # Check source value
+    if source not in ('hf', 'nhf'):
+        raise ValueError(f"Invalid source: '{source}'. Valid options are 'hf' and 'nhf'")
+
+    # Check environment value
+    if environment not in ('test', 'oe'):
+        raise ValueError(f"Invalid environment: '{environment}'. Valid options are 'test' and 'oe'")
+
     # Set base endpoint
     url = f"http://edfs.{environment}.nextgenwaterprediction.com:8000/v1/hydrofabric/gages-{basin}/gpkg"
 
     # Build query parameters
     params = {"id_type": "hl_uri",
               "domain": domain,
-              "layers": ["divides", "divide-attributes", "flowpaths", "flowpath-attributes", "flowpath-attributes-ml", "network", "nexus", "hydrolocations", "pois"]}
+              "layers": ["divides", "divide-attributes", "flowpaths", "flowpath-attributes", "flowpath-attributes-ml", "network", "nexus", "hydrolocations", "pois"],
+              "source": source,
+              }
 
     # Set output file path
     gpkg_fp = os.path.join(output_dir, f"gauge_{basin}.gpkg")
