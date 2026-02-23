@@ -1086,7 +1086,9 @@ def create_sac_input(
                       'pfree ' + str(params_df.loc[catID]['PFREE']),
                       'riva 0.000',
                       'side 0.0000',
-                      'rserv 0.3000']
+                      'rserv 0.3000',
+                      'giuh_ordinates 0.06,0.51,0.28,0.12,0.03'
+                      ]
 
         input_file = os.path.join(sac_input_dir, 'sac-init-' + catID + '.namelist.input')
         param_file = os.path.join(sac_input_dir, 'sac_params-' + catID + '.txt')
