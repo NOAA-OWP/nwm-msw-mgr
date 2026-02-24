@@ -1,0 +1,40 @@
+Input Control file
+Prec: Precipitation  (always required)
+3   
+0
+Ta: Air temperature  (always required)
+3  
+0
+Tmin: Min Air temperature 
+2
+0
+Tmax: Max Air temperature  
+2
+0
+v: Wind speed   (always required)
+3
+1
+RH: Relative Humidity   (always required)
+3
+40
+Vp: Air vapor pressure   
+2
+0.5
+AP: Air pressure   (always required)
+3
+74000			//press Pressure Time 3
+Qsi: Incoming shortwave(kJ/m2/hr)   (only required if irad=1 or 2)
+3
+0             
+Qli: Long wave radiation(kJ/m2/hr)
+3
+0
+Qnet: Net radiation(kJ/m2/hr)   (only required if irad=3)
+2  
+0
+Qg: Ground heat flux   (kJ/m2/hr)        
+2
+0 		    
+Snowalb: Snow albedo (0-1).  (only required if ireadalb=1) The albedo of the snow surface to be used when the internal albedo calculations are to be overridden
+2
+0.6
