@@ -2224,7 +2224,8 @@ def update_hist_forcing_config(
         forcing_config_dir: Path,
         forcing_config_file: Path,
         run_type: str,
-        global_domain: str
+        global_domain: str,
+        static_data_dir: str,
 ) -> None:
     """ update bmi forcing engine config yaml file for historical forcing
 
@@ -2237,6 +2238,8 @@ def update_hist_forcing_config(
     forcing_config_dir: directory path for forcing config file
     forcing_config_dir: output path for forcing config file
     run_type: type of run (calib, regionalization, or default)
+    global_domain: global domain name for historical runs
+    static_data_dir: directory for static data files (e.g. geogrid) for historical runs
 
     Returns
     ----------
@@ -2269,7 +2272,9 @@ def update_hist_forcing_config(
     # Replace {root_dir} and {gage} placeholders in forcing config
     vars = {'{root_dir}': root_dir,
             '{gage}': gpkg_name,
-            '{global_domain}': global_domain}
+            '{global_domain}': global_domain,
+            '{static_data_dir}': static_data_dir,
+            }
     forcing_template = replace_forcing_placeholders(forcing_template, vars)
     forcing_template['Geopackage'] = gpkg_file
 
