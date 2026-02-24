@@ -2629,12 +2629,8 @@ def create_reg_realization_file(
 
             # variable name mapping section
             pet_in = "water_potential_evaporation_flux"
-            pcp_in = name_prcp.get(forcing_provider)
+            pcp_in = name_prcp.get('csv')
             var_maps = var_mapping(grp_mod, pet_in, pcp_in, output_dict)
-
-            # Add additional precip mapping for bmi regionalization
-            if forcing_provider == 'bmi':
-                var_maps['input'][name_prcp.get('csv')] = name_prcp.get(forcing_provider)
 
             # module output variable for input to t-route
             main_output_variable = "Q_OUT"
@@ -2654,12 +2650,8 @@ def create_reg_realization_file(
 
             # variable name mapping section
             pet_in = "water_potential_evaporation_flux"
-            pcp_in = name_prcp.get(forcing_provider)
+            pcp_in = name_prcp.get('csv')
             var_maps = var_mapping(grp_mod, pet_in, pcp_in, output_dict)
-
-            # Add additional precip mapping for bmi regionalization
-            if forcing_provider == 'bmi':
-                var_maps['input'][name_prcp.get('csv')] = name_prcp.get(forcing_provider)
 
             # module output variable for input to t-route
             main_output_variable = "Qout"
@@ -2852,10 +2844,6 @@ def create_reg_realization_file(
             pcp_in = "precipitation_rate"
             var_maps = var_mapping(grp_mod, pet_in, pcp_in, output_dict)
 
-            # Add additional precip mapping for bmi regionalization
-            if forcing_provider == 'bmi':
-                var_maps['input'][name_prcp.get('csv')] = name_prcp.get(forcing_provider)
-
             # module output variable for input to t-route
             main_output_variable = "total_discharge"
 
@@ -2910,8 +2898,6 @@ def create_reg_realization_file(
             # variable name mapping section
             variables_names_map = dict()
             variables_names_map["streamflow_cms"] = "channel_water_x-section__volume_flow_rate"
-            variables_names_map[name_prcp.get('csv')] = name_prcp.get(forcing_provider)
-            # variables_names_map["atmosphere_water__precipitation_leq-volume_flux"] = name_prcp.get(forcing_provider)
 
             var_maps = dict()
             var_maps['input'] = variables_names_map
@@ -2930,6 +2916,7 @@ def create_reg_realization_file(
                 var_maps['input'][name_sw.get('csv')] = name_sw.get(forcing_provider)
                 var_maps['input'][name_pressure.get('csv')] = name_pressure.get(forcing_provider)
                 var_maps['input'][name_Q2.get('csv')] = name_Q2.get(forcing_provider)
+                var_maps['input'][name_prcp.get('csv')] = name_prcp.get(forcing_provider)
                 var_maps['input'][name_temp.get('csv')] = name_temp.get(forcing_provider)
                 var_maps['input'][name_xwind.get('csv')] = name_xwind.get(forcing_provider)
                 var_maps['input'][name_ywind.get('csv')] = name_ywind.get(forcing_provider)
@@ -3176,7 +3163,7 @@ def create_realization_file(
 
         # variable name mapping section
         pet_in = "water_potential_evaporation_flux"
-        pcp_in = name_prcp.get(forcing_provider)
+        pcp_in = name_prcp.get('csv')
         var_maps = var_mapping(modules, pet_in, pcp_in, output_dict)
 
         # module output variable for input to t-route
@@ -3195,7 +3182,7 @@ def create_realization_file(
 
         # variable name mapping section
         pet_in = "water_potential_evaporation_flux"
-        pcp_in = name_prcp.get(forcing_provider)
+        pcp_in = name_prcp.get('csv')
         var_maps = var_mapping(modules, pet_in, pcp_in, output_dict)
 
         # module output variable for input to t-route
