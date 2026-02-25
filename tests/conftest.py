@@ -57,6 +57,7 @@ def _make_calib_input_config(tmp_work_dir):
     general = GeneralConfig(
         basin="01123000",
         run_type="calibration",
+        domain="conus",
         models="noah-owp-modular, cfe-s",
         formulation="noah_cfes",
         main_dir=tmp_work_dir,
@@ -123,6 +124,7 @@ def _make_region_input_config(tmp_work_dir):
     general = GeneralConfig(
         basin="01123000",
         run_type="regionalization",
+        domain="conus",
         formulation="region",
         main_dir=tmp_work_dir,
         start_period="2015-10-01 00:00:00",
