@@ -1,11 +1,11 @@
 """
-This module creates a SetupManager to manage the modification of configuration files for individual ngen runs
+This module creates a Setup Manager to manage the modification of configuration files for individual ngen runs
 
 @author: Jeffrey Wade
 """
 
 import argparse
-from mswm.build_inputs import RealizationBuilder
+from mswm.build_inputs import RealizationBuilder, validate_topoflow_glacier
 
 
 def build_default(input_path: str, use_cold_start: bool = False):
@@ -40,8 +40,15 @@ def build_region(input_path: str):
     rb.build_region_realization()
 
 
-def main():
+def validate_topo(gpkg_file: str):
+    """
+    Validate Topoflow-Glacier applicability by checking glacier coverage in basin catchments
+    """
+    result = validate_topoflow_glacier(gpkg_file)
+    print(result)
 
+
+def main():
     # Create command line parser
     parser = argparse.ArgumentParser(prog="mswm",
                                      description="Model Setup Workflow Manager command-line")
@@ -67,6 +74,10 @@ def main():
     build_fcst_sub.add_argument("fcst_run_name", help="Name of the folder to be created for storing inputs/outputs from running ngen")
     build_fcst_sub.add_argument("--use_cold_start", action="store_true", help="Enable cold start flag when passed")
 
+    # subcomman: validate_topoflow
+    validate_topo_sub = subparser.add_parser("validate_topoflow_glacier", help="Validate Topoflow-Glacier applicability for a basin")
+    validate_topo_sub.add_argument("gpkg_file", help="Path to geopackage file")
+
     args = parser.parse_args()
 
     # Parser logic
@@ -78,6 +89,8 @@ def main():
         build_region(args.input_path)
     elif args.command == "build_fcst":
         build_fcst(args.input_path, args.valid_yaml, args.fcst_run_name, args.use_cold_start)
+    elif args.command == "validate_topoflow_glacier":
+        validate_topo(args.gpkg_file)
     else:
         raise ValueError(f"Unexpected mswm command: {args.command}")
 

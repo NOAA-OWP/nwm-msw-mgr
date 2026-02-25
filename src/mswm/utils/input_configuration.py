@@ -33,6 +33,8 @@ class GeneralConfig(StrictBaseModel):
     Input.config general section requirement
     """
     basin: str
+    domain: str
+    environment: Literal["test", "oe"] = 'test'
     run_type: Literal["default", "calibration", "regionalization"]
     models: Optional[str] = None
     formulation: Optional[str] = None
@@ -242,8 +244,8 @@ class ForcingConfig(StrictBaseModel):
                 raise ValueError("`forcing_configuration` must be specified for a run using bmi forcing provider.")
             else:
                 if self.forcing_configuration not in valid_configs:
-                    raise ValueError(f"Invalid `forcing_configuration` value: '{self.forcing_configuration}'."
-                                    f"Valid options are: {', '.join(valid_configs)}.")
+                    raise ValueError(f"Invalid `forecast_configuration` value: '{self.forcing_configuration}'."
+                                     f"Valid options are: {', '.join(valid_configs)}.")
 
         # forcing template dir required if forcing_provider is csv
         if self.forcing_provider == 'bmi' and self.forcing_template_dir is None:
@@ -262,21 +264,7 @@ class DataFileConfig(StrictBaseModel):
     """
     obs_dir: Optional[str] = None
     nwmretro_file: Optional[str] = None
-    hydrofab_file: str
-    topoflow_bmi_dir: Optional[str] = None
-    noah_owp_modular_bmi_dir: Optional[str] = None
-    snow_17_bmi_dir: Optional[str] = None
-    ueb_bmi_dir: Optional[str] = None
-    pet_bmi_dir: Optional[str] = None
-    smp_bmi_dir: Optional[str] = None
-    sft_bmi_dir: Optional[str] = None
-    cfe_s_bmi_dir: Optional[str] = None
-    cfe_x_bmi_dir: Optional[str] = None
-    topmodel_bmi_dir: Optional[str] = None
-    sac_sma_bmi_dir: Optional[str] = None
-    lasam_bmi_dir: Optional[str] = None
-    lstm_bmi_dir: Optional[str] = None
-    t_route_bmi_dir: Optional[str] = None
+    hydrofab_file: Optional[str] = None
     noah_parameter_dir: Optional[str] = None
     ueb_parameter_dir: Optional[str] = None
     lasam_parameter_dir: Optional[str] = None
