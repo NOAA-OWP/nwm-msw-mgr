@@ -2145,7 +2145,9 @@ def replace_forcing_placeholders(
     # Replace placeholders if string contains format pattern
     elif isinstance(obj, str):
         for placeholder, value in vars.items():
-            obj = obj.replace(placeholder, value)
+            # only replace if value is not None
+            if value is not None:
+                obj = obj.replace(placeholder, str(value))
         return obj
 
     else:
@@ -2225,7 +2227,7 @@ def update_hist_forcing_config(
         forcing_config_file: Path,
         run_type: str,
         global_domain: str,
-        static_data_dir: str,
+        forcing_static_dir: str,
 ) -> None:
     """ update bmi forcing engine config yaml file for historical forcing
 
@@ -2239,7 +2241,7 @@ def update_hist_forcing_config(
     forcing_config_dir: output path for forcing config file
     run_type: type of run (calib, regionalization, or default)
     global_domain: global domain name for historical runs
-    static_data_dir: directory for static data files (e.g. geogrid) for historical runs
+    forcing_static_dir: directory for static data files (e.g. geogrid) for historical runs
 
     Returns
     ----------
@@ -2273,7 +2275,7 @@ def update_hist_forcing_config(
     vars = {'{root_dir}': root_dir,
             '{gage}': gpkg_name,
             '{global_domain}': global_domain,
-            '{static_data_dir}': static_data_dir,
+            '{forcing_static_dir}': forcing_static_dir,
             }
     forcing_template = replace_forcing_placeholders(forcing_template, vars)
     forcing_template['Geopackage'] = gpkg_file
