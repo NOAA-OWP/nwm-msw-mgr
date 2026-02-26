@@ -4,7 +4,7 @@ This module contains Pydantic classes to validate input.config files for the MSW
 @author: Jeff Wade
 """
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator, AliasChoices
 from pydantic_core.core_schema import ValidationInfo
 from pathlib import Path
 from typing import Optional, Literal, Union
@@ -46,7 +46,6 @@ class GeneralConfig(StrictBaseModel):
     output_sm: Optional[bool] = None
     sm_profile_depth: Optional[list[float] | str] = Field(default_factory=lambda: [0.1, 0.4, 1.0, 2.0])
     sm_frac_depth: Optional[float] = 0.4
-    is_aet_rootzone: Optional[Union[int, bool, str]] = None
 
     @field_validator("sm_profile_depth", mode="before")
     @classmethod
@@ -97,17 +96,6 @@ class GeneralConfig(StrictBaseModel):
 
         return val
 
-    # Normalize is_aet_rootzone values
-    @field_validator('is_aet_rootzone')
-    def norm_is_aet_rootzone(cls, val):
-        if val is None:
-            return None
-        if val in ('1', 1, True, "true", "True"):
-            return 1
-        if val in ('0', 0, False, "false", "False"):
-            return 0
-        raise ValueError(f"Invalid value set for is_aet_rootzone: {val}")
-
     # Check optional fields that depend on run_type
     @model_validator(mode="after")
     def check_required_fields(self):
@@ -120,6 +108,26 @@ class GeneralConfig(StrictBaseModel):
             raise ValueError("`start_period` and `end_period` must be specified for regionalization runs.")
 
         return self
+
+
+class ModulePropertiesConfig(StrictBaseModel):
+    """
+    Input.config module properties section requirement
+    """
+    cfe_aet_rootzone: Optional[Union[int, bool, str]] = Field(None, validation_alias=AliasChoices("cfe-s.aet_rootzone", "cfe-x.aet_rootzone", "cfe.aet_rootzone"))
+    pet_method: Optional[int] = Field(None, alias="pet.method")
+
+    # Normalize is_aet_rootzone values
+    @field_validator('cfe_aet_rootzone')
+    def norm_aet_rootzone(cls, val):
+        if val is None:
+            return None
+        if val in ('1', 1, True, "true", "True"):
+            return 1
+        if val in ('0', 0, False, "false", "False"):
+            return 0
+        raise ValueError(f"Invalid value set for cfe.aet_rootzone: {val}")
+
 
 
 class RegionConfig(StrictBaseModel):
@@ -300,6 +308,7 @@ class InputConfig(StrictBaseModel):
     Class to organize input.config section requirements
     """
     General: Optional[GeneralConfig] = None
+    ModuleProperties: Optional[ModulePropertiesConfig] = None
     Regionalization: Optional[RegionConfig] = None
     Calibration: Optional[CalibConfig] = None
     Forcing: Optional[ForcingConfig] = None
