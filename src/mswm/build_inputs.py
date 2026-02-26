@@ -905,7 +905,7 @@ class RealizationBuilder:
                 modules = modules + ['troute']
 
             # make sure SMP, SFT, SAC-SMA, and LASAM are paired with Noah-OWP-Modular
-            if any(m in modules for m in ('smp', 'sft', 'sac', 'lasam')) and 'noah' not in self.modules:
+            if any(m in modules for m in ('smp', 'sft', 'sac', 'lasam')) and 'noah' not in modules:
                 try:
                     raise ValueError("NOAH-OWP-Modular required to supply inputs for SMP, SFT, SAC-SMA, and LASAM. Add NOAH-OWP-Modular to formulation.")
                 except ValueError as e:
