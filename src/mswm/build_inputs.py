@@ -480,6 +480,10 @@ class RealizationBuilder:
         self.aet_rootzone = self.module_prop.get("cfe_aet_rootzone") if self.module_prop else 0
         self.pet_method = self.module_prop.get("pet_method") if self.module_prop else None
 
+        # Debug statements for module properties (to be removed)
+        print(f"aet_rootzone: {self.aet_rootzone}")
+        print(f"pet_method: {self.pet_method}")
+
         # Load run_type specific config section or empty dict for default
         run_key = (self.run_type or "").capitalize()
         self.conf2 = self.input_configs.get(run_key, {})

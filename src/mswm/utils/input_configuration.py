@@ -114,8 +114,8 @@ class ModulePropertiesConfig(StrictBaseModel):
     """
     Input.config module properties section requirement
     """
-    cfe_aet_rootzone: Optional[Union[int, bool, str]] = Field(None, validation_alias=AliasChoices("cfe-s.aet_rootzone", "cfe-x.aet_rootzone", "cfe.aet_rootzone"))
-    pet_method: Optional[int] = Field(None, alias="pet.method")
+    cfe_aet_rootzone: Optional[Union[int, bool, str]] = Field(None, validation_alias=AliasChoices("cfe-s_aet_rootzone", "cfe-x_aet_rootzone", "cfe_aet_rootzone"))
+    pet_method: Optional[int] = None
 
     # Normalize is_aet_rootzone values
     @field_validator('cfe_aet_rootzone')
@@ -127,7 +127,6 @@ class ModulePropertiesConfig(StrictBaseModel):
         if val in ('0', 0, False, "false", "False"):
             return 0
         raise ValueError(f"Invalid value set for cfe.aet_rootzone: {val}")
-
 
 
 class RegionConfig(StrictBaseModel):
