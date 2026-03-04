@@ -9,6 +9,7 @@ from pathlib import Path
 from mswm.utils.input_configuration import (
     InputConfig,
     GeneralConfig,
+    ModulePropertiesConfig,
     ForcingConfig,
     DataFileConfig,
     CalibConfig,
@@ -65,6 +66,9 @@ def _make_calib_input_config(tmp_work_dir):
         output_swe=True,
         output_sm=True,
     )
+    module_properties = ModulePropertiesConfig(
+        cfe_aet_rootzone=1
+    )
     forcing = ForcingConfig(
         forcing_provider="bmi",
         forcing_template_dir=str(test_forcing_configs),
@@ -112,6 +116,7 @@ def _make_calib_input_config(tmp_work_dir):
     )
     return InputConfig(
         General=general,
+        ModuleProperties=module_properties,
         Forcing=forcing,
         DataFile=datafile,
         Calibration=calibration,

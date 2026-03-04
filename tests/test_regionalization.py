@@ -73,9 +73,9 @@ class TestRegionBuild:
         assert self.rb.grp_params["noah"]["gage1"]["MP"] == 9
         assert self.rb.grp_params["noah"]["gage2"]["MP"] == 9
 
-    def test_grp_is_aet_rootzone(self):
-        assert self.rb.grp_is_aet_rootzone["gage1"] == 1
-        assert self.rb.grp_is_aet_rootzone["gage2"] == 0
+    def test_grp_aet_rootzone(self):
+        assert self.rb.grp_aet_rootzone["gage1"] == 1
+        assert self.rb.grp_aet_rootzone["gage2"] == 0
 
     # Time periods
     def test_calib_time_period(self):
