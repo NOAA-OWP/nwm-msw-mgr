@@ -468,7 +468,8 @@ def create_cfe_input(
         dfa: gpd.GeoDataFrame,
         cfe_input_dir: Union[str, Path],
         run_type: str,
-        is_aet_rootzone: Union[int, dict]
+        is_aet_rootzone: Union[int, dict],
+        sm_profile_depth: List[float] = [0.1, 0.4, 1.0, 2.0],
 ) -> None:
     """ Create BMI initial configuration file for CFE with Schaake or Xianjiang infiltration and runoff scheme
 
@@ -480,6 +481,7 @@ def create_cfe_input(
     cfe_input_dir: directory to save configuration files
     run_type: type of run (calib, regionalization, or default)
     is_aet_rootzone: flag for CFE rootzone option
+    sm_profile_depth = list of soil moisture profile depths
 
     Returns
     ----------
@@ -494,7 +496,7 @@ def create_cfe_input(
         mods = modules
         if 'cfex' in mods:
             scheme = 'Xinanjiang'
-        rootzone_flag = is_aet_rootzone
+        rootzone_flag = is_aet_rootzone if 'smp' in mods else 0
 
     # Create bmi config files
     for i in range(len(catids)):
@@ -506,7 +508,7 @@ def create_cfe_input(
             mods = modules[i]
             if ('cfex' in mods):
                 scheme = 'Xinanjiang'
-            rootzone_flag = is_aet_rootzone[catID]
+            rootzone_flag = is_aet_rootzone[catID] if 'smp' in mods else 0
 
         # Set sft coupling
         if 'sft' in mods:
@@ -550,7 +552,7 @@ def create_cfe_input(
         if rootzone_flag == 1:
             f.write("%s" % ("is_aet_rootzone=1\n"))
             f.write("%s" % ("max_rootzone_layer=2[m]\n"))
-            f.write("%s" % ("soil_layer_depths=0.1,0.4,1.0,2.0[m]\n"))
+            f.write("%s" % ("soil_layer_depths=" + ",".join(f"{float(depth):g}" for depth in sm_profile_depth) + "[m]\n"))
 
         # add the new parameters for cfex
         if scheme == 'Xinanjiang':
@@ -1358,6 +1360,7 @@ def create_pet_input(
         catids: List[str],
         dfa: gpd.GeoDataFrame,
         pet_input_dir: str,
+        pet_method: int | None = None,
 ) -> None:
     """ Create BMI configuration file for pet
 
@@ -1366,6 +1369,7 @@ def create_pet_input(
     catids : catchment IDs in the basin
     dfa: dataframe containing model parameter attributes
     pet_input_dir : directory for the pet input files
+    pet_method: integer (1-5) correponding to PET method to be used
 
     Returns
     ----------
@@ -1374,13 +1378,25 @@ def create_pet_input(
     """
     os.makedirs(pet_input_dir, exist_ok=True)
 
+    # PET Methods
+    # 1: energy balance method
+    # 2: aerodynamic method
+    # 3: combination method, which combines 1 & 2.
+    # 4: Priestley-Taylor method, which assumes the ratio between 1 & 2, and only calculates 1.
+    # 5: Penman-Monteith method, which requires a value of canopy resistance term, and does not rely on 1 or 2.
+
+    # Set default pet_method
+    if pet_method is None:
+        pet_method = 5
+        logger.info("No PET method supplied, defaulting to Penman-Monteith method")
+
     # Set PET parameters for catchment
     base_config = ['verbose=0',
-                   'pet_method=5',  # TODO: Where would this value be supplied in the inputs?
+                   f'pet_method={pet_method}',
                    'forcing_file=BMI',
                    'run_unit_tests=0',
-                   'yes_aorc=1',  # TODO: How should we handle yes_aorc?
-                   'yes_wrf=0',  # TODO: Is this being used by the BMI?
+                   'yes_aorc=1',
+                   'yes_wrf=0',
                    'wind_speed_measurement_height_m=10.0',
                    'humidity_measurement_height_m=10.0',
                    'vegetation_height_m=0.12',
@@ -1390,7 +1406,7 @@ def create_pet_input(
                    'surface_longwave_emissivity=1.0',
                    'surface_shortwave_albedo=0.22',
                    'time_step_size_s=3600',
-                   'shortwave_radiation_provided=0']
+                   'shortwave_radiation_provided=1']
 
     for catID in catids:
 
@@ -2421,6 +2437,9 @@ def var_mapping(
     # PET
     if 'noah' in modules and 'pet' not in modules:
         var_maps['input'][pet_in] = "EVAPOTRANS"
+
+    if 'pet' in modules and ('sac' in modules or 'lasam' in modules):
+        var_maps['input'][pet_in] = "water_potential_evaporation_flux"
 
     # snowmelt
     if 'snow17' in modules:

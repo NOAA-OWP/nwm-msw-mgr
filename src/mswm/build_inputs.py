@@ -475,6 +475,15 @@ class RealizationBuilder:
         self.environment = self.conf1.get("environment") if self.conf1 else None
         self.basin = self.conf1['basin'] if self.conf1 else None
 
+        # Retrieve module properties inputs
+        self.module_prop = self.input_configs.get("ModuleProperties")
+        self.aet_rootzone = self.module_prop.get("cfe_aet_rootzone") if self.module_prop else 0
+        self.pet_method = self.module_prop.get("pet_method") if self.module_prop else None
+
+        # Debug statements for module properties (to be removed)
+        print(f"aet_rootzone: {self.aet_rootzone}")
+        print(f"pet_method: {self.pet_method}")
+
         # Load run_type specific config section or empty dict for default
         run_key = (self.run_type or "").capitalize()
         self.conf2 = self.input_configs.get(run_key, {})
@@ -806,6 +815,14 @@ class RealizationBuilder:
                 logger.critical(e)
                 raise
 
+        # make sure that PET is paired with Noah-OWP-Modular until precipitation outputs are resolved
+        if 'pet' in self.modules and 'noah' not in self.modules:
+            try:
+                raise ValueError("The formulation does not produce the required precipitation outputs. Add NOAH-OWP-Modular to formulation.")
+            except ValueError as e:
+                logger.critical(e)
+                raise
+
         # rearrange modules in order of hydrologic processes
         self.modules = [m1 for m1 in settings.modules_all['module'] if m1 in self.modules]
 
@@ -816,9 +833,6 @@ class RealizationBuilder:
             if smp_index > sft_index:
                 self.modules.remove("smp")
                 self.modules.insert(sft_index, "smp")
-
-        # Retrieve is_aet_rootzone flag for cfe
-        self.is_aet_rootzone = self.conf1.get('is_aet_rootzone') or 0
 
         # If Topoflow-glacier in modules,validate glacier coverage and create grouped realizations
         if 'topoflow-glacier' in self.modules:
@@ -846,9 +860,9 @@ class RealizationBuilder:
                                    'group_2': nontopo_cats}
 
                 # If CFE in modules, retrieve is_aet_rootzone flag
-                self.grp_is_aet_rootzone = {}
-                self.grp_is_aet_rootzone['group_1'] = self.is_aet_rootzone
-                self.grp_is_aet_rootzone['group_2'] = 0
+                self.grp_aet_rootzone = {}
+                self.grp_aet_rootzone['group_1'] = self.aet_rootzone
+                self.grp_aet_rootzone['group_2'] = 0
 
                 logger.info(f"Final list of modules in formulation: 'group1': {mod_notopo}, 'group2': ['topoflow-glacier']")
 
@@ -859,7 +873,7 @@ class RealizationBuilder:
         """
         logger.info(f"Available module names: {settings.modules_all['name_ui'].tolist()}")
         self.grp_to_form = {}
-        self.grp_is_aet_rootzone = {}
+        self.grp_aet_rootzone = {}
 
         for idx, row in self.reg_df.iterrows():
             modules0 = [x.replace(" ", "") for x in re.split(' ', row['formulation'])]
@@ -906,7 +920,15 @@ class RealizationBuilder:
             # make sure SMP, SFT, SAC-SMA, and LASAM are paired with Noah-OWP-Modular
             if any(m in modules for m in ('smp', 'sft', 'sac', 'lasam')) and 'noah' not in self.modules:
                 try:
-                    raise ValueError("NOAH-OWP-Modular required to supply inputs for SMP, SFT, SAC-SMA, and LASAM. Add NOAH-OWP-Modular to formulation.")
+                    raise ValueError(f"NOAH-OWP-Modular required to supply inputs for SMP, SFT, SAC-SMA, and LASAM. Add NOAH-OWP-Modular to formulation for {row['gage_id']}.")
+                except ValueError as e:
+                    logger.critical(e)
+                    raise
+
+            # make sure that PET is paired with Noah-OWP-Modular until precipitation outputs are resolved
+            if 'pet' in modules and 'noah' not in modules:
+                try:
+                    raise ValueError(f"The formulation does not produce the required precipitation outputs. Add NOAH-OWP-Modular to formulation for {row['gage_id']}.")
                 except ValueError as e:
                     logger.critical(e)
                     raise
@@ -922,11 +944,11 @@ class RealizationBuilder:
                     modules.remove("smp")
                     modules.insert(sft_index, "smp")
 
-            # If CFE in modules, retrieve is_aet_rootzone flag
-            self.grp_is_aet_rootzone[row['gage_id']] = 0
+            # If CFE in modules, retrieve aet_rootzone flag
+            self.grp_aet_rootzone[row['gage_id']] = 0
             if any(m in modules for m in ['cfes', 'cfex']):
                 if 'is_aet_rootzone' in self.reg_df.columns:
-                    self.grp_is_aet_rootzone[row['gage_id']] = row['is_aet_rootzone']
+                    self.grp_aet_rootzone[row['gage_id']] = row['is_aet_rootzone']
 
             # Store with regionalization group id
             self.grp_to_form[row['gage_id']] = modules
@@ -975,7 +997,7 @@ class RealizationBuilder:
 
     def _map_cat_to_grp(self):
         """
-        Map catchments to formulation groups and assign is_aet_rootzone flags for cfe
+        Map catchments to formulation groups and assign aet_rootzone flags for cfe
         """
         # Relate catchments and their groups
         if hasattr(self, 'grp_to_cat') and self.grp_to_cat:
@@ -985,7 +1007,7 @@ class RealizationBuilder:
                 for cat in cats:
                     self.cat_to_grp[cat] = grp
                     # Assign aet_rootzone flags for cfe
-                    self.cat_to_aet_rootzone[cat] = self.grp_is_aet_rootzone.get(grp, 0)
+                    self.cat_to_aet_rootzone[cat] = self.grp_aet_rootzone.get(grp, 0)
 
     def _map_cat_to_form(self):
         """
@@ -1277,7 +1299,7 @@ class RealizationBuilder:
 
             # Create BMI config files from scratch if paths not provided
             if m1 in ['cfes', 'cfex']:
-                gfun.create_cfe_input(cat_mod, mod_all, self.attr_file, mod_input_dir, self.run_type, self.is_aet_rootzone)
+                gfun.create_cfe_input(cat_mod, mod_all, self.attr_file, mod_input_dir, self.run_type, self.aet_rootzone, self.output_dict['sm_profile_depth'])
             elif m1 == 'topmodel':
                 gfun.create_topmodel_input(cat_mod, self.attr_file, mod_input_dir)
             elif m1 == 'ueb':
@@ -1285,7 +1307,7 @@ class RealizationBuilder:
             elif m1 == 'snow17':
                 gfun.create_snow17_input(cat_mod, self.attr_file, self.conf3[m2.replace("-", "_") + '_parameter_dir'], mod_input_dir)
             elif m1 == "pet":
-                gfun.create_pet_input(cat_mod, self.attr_file, mod_input_dir)
+                gfun.create_pet_input(cat_mod, self.attr_file, mod_input_dir, self.pet_method)
             elif m1 == "sac":
                 gfun.create_sac_input(cat_mod, self.attr_file, self.conf3[m1 + '_parameter_dir'], mod_input_dir)
             elif m1 == 'noah':
@@ -1358,7 +1380,7 @@ class RealizationBuilder:
 
             # Create BMI config files from scratch if paths not provided
             if m1 in ['cfes', 'cfex']:
-                gfun.create_cfe_input(cat_mod, form_cat, self.attr_file, mod_input_dir, self.run_type, self.cat_to_aet_rootzone)
+                gfun.create_cfe_input(cat_mod, form_cat, self.attr_file, mod_input_dir, self.run_type, self.cat_to_aet_rootzone, self.output_dict['sm_profile_depth'])
             elif m1 == 'topmodel':
                 gfun.create_topmodel_input(cat_mod, self.attr_file, mod_input_dir)
             elif m1 == 'ueb':
@@ -1366,7 +1388,7 @@ class RealizationBuilder:
             elif m1 == 'snow17':
                 gfun.create_snow17_input(cat_mod, self.attr_file, self.conf3[m2.replace("-", "_") + '_parameter_dir'], mod_input_dir)
             elif m1 == "pet":
-                gfun.create_pet_input(cat_mod, self.attr_file, mod_input_dir)
+                gfun.create_pet_input(cat_mod, self.attr_file, mod_input_dir, self.pet_method)
             elif m1 == "sac":
                 gfun.create_sac_input(cat_mod, self.attr_file, self.conf3[m1 + '_parameter_dir'], mod_input_dir)
             elif m1 == 'noah':
