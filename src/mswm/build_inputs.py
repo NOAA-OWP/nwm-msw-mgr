@@ -549,6 +549,7 @@ class RealizationBuilder:
         self.forcing_template_dir = self.forcingSec.get('forcing_template_dir', None)
         self.root_dir = self.forcingSec.get('root_dir', None)
         self.global_domain = self.forcingSec.get('global_domain', "CONUS")
+        self.forcing_static_dir = self.forcingSec.get('forcing_static_dir', None)
 
         # Retrieve cold_start_time
         self.cold_start_datetime = self.forcingSec.get('cold_start_datetime', None)
@@ -914,7 +915,7 @@ class RealizationBuilder:
                 modules = modules + ['troute']
 
             # make sure SMP, SFT, SAC-SMA, and LASAM are paired with Noah-OWP-Modular
-            if any(m in modules for m in ('smp', 'sft', 'sac', 'lasam')) and 'noah' not in self.modules:
+            if any(m in modules for m in ('smp', 'sft', 'sac', 'lasam')) and 'noah' not in modules:
                 try:
                     raise ValueError(f"NOAH-OWP-Modular required to supply inputs for SMP, SFT, SAC-SMA, and LASAM. Add NOAH-OWP-Modular to formulation for {row['gage_id']}.")
                 except ValueError as e:
@@ -1168,7 +1169,7 @@ class RealizationBuilder:
                                                 self.forcing_config_file, self.use_cold_start, self.cold_start_datetime)
             else:
                 # Update historical dynamic parameters in forcing engine configuration file
-                gfun.update_hist_forcing_config(self.time_period, self.root_dir, self.forcing_template, gpkg_file, self.forcing_config_dir, self.forcing_config_file, self.run_type, self.global_domain)
+                gfun.update_hist_forcing_config(self.time_period, self.root_dir, self.forcing_template, gpkg_file, self.forcing_config_dir, self.forcing_config_file, self.run_type, self.global_domain, self.forcing_static_dir)
 
             logger.info(f"Configured BMI forcing engine: {self.forcing_config_file}")
 
