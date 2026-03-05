@@ -1306,7 +1306,7 @@ class RealizationBuilder:
             elif m1 == "pet":
                 gfun.create_pet_input(cat_mod, self.attr_file, mod_input_dir, self.pet_method)
             elif m1 == "sac":
-                gfun.create_sac_input(cat_mod, self.attr_file, self.conf3[m1 + '_parameter_dir'], mod_input_dir)
+                gfun.create_sac_input(cat_mod, self.attr_file, self.conf3[m2.replace("-", "_") + '_parameter_dir'], mod_input_dir)
             elif m1 == 'noah':
                 gfun.create_noah_input(cat_mod, self.time_period, self.attr_file, self.conf3[m1 + '_parameter_dir'], mod_input_dir, self.run_type)
             elif m1 == 'lstm':
@@ -1387,7 +1387,7 @@ class RealizationBuilder:
             elif m1 == "pet":
                 gfun.create_pet_input(cat_mod, self.attr_file, mod_input_dir, self.pet_method)
             elif m1 == "sac":
-                gfun.create_sac_input(cat_mod, self.attr_file, self.conf3[m1 + '_parameter_dir'], mod_input_dir)
+                gfun.create_sac_input(cat_mod, self.attr_file, self.conf3[m2.replace("-", "_") + '_parameter_dir'], mod_input_dir)
             elif m1 == 'noah':
                 gfun.create_noah_input(cat_mod, self.time_period, self.attr_file, self.conf3[m1 + '_parameter_dir'], mod_input_dir, self.run_type)
             elif m1 == 'lstm':
