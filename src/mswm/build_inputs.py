@@ -787,7 +787,7 @@ class RealizationBuilder:
                 raise
 
         # add sloth if CFE, LASAM, Topmodel is selected
-        if (any(x in self.modules for x in ['cfes', 'cfex', 'lasam'])) or ('topmodel' in self.modules and 'smp' in self.modules) and 'sloth' not in self.modules:
+        if (any(x in self.modules for x in ['cfes', 'cfex', 'lasam'])) or ('topmodel' in self.modules and 'smp' in self.modules) or ('sac' in self.modules and 'smp' in self.modules) and 'sloth' not in self.modules:
             logger.info("CFE, LASAM, or SMP/Topmodel is used in the formulation. SLOTH added to module list")
             self.modules = ['sloth'] + self.modules
 

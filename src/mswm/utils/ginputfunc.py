@@ -788,7 +788,7 @@ def create_sft_smp_input(
                    'soil_z=' + ",".join(f"{float(depth):g}" for depth in sm_profile_depth) + "[m]",
                    'soil_moisture_fraction_depth=' + str(sm_frac_depth) + '[m]']
 
-        if 'cfes' in mods or 'cfex' in mods:
+        if 'cfes' in mods or 'cfex' in mods or 'sac' in mods:
             smp_lst += ['soil_storage_model=conceptual', 'soil_storage_depth=2.0']
         elif 'topmodel' in mods:
             smp_lst += ['soil_storage_model=TopModel', 'water_table_based_method=flux_based']
@@ -2801,6 +2801,15 @@ def create_reg_realization_file(
                     "soil_moisture_wetting_fronts(1,double,1,node)": 0.0,
                     "soil_depth_wetting_fronts(1,double,1,node)": 0.0,
                     "num_wetting_fronts(1,int,1,node)": 1}
+            elif 'sac' in grp_mod and 'smp' in grp_mod:
+                model_params = {
+                    "soil_moisture_wetting_fronts(1,double,1,node)": 0.0,
+                    "soil_thickness_layered(1,double,1,node)": 0.0,
+                    "soil_depth_wetting_fronts(1,double,m,node)": 0.0,
+                    "num_wetting_fronts(1,int,1,node)": 1.0,
+                    "Qb_topmodel(1,double,m h^-1,node)": 0.0,
+                    "Qv_topmodel(1,double,m h^-1,node)": 0.0,
+                    "global_deficit(1,double,m,node)": 0.0}
             elif 'lasam' in grp_mod:
                 if 'sft' not in grp_mod:
                     model_params = {"soil_temperature_profile(1,double,K,node)": 275.15}
@@ -3333,6 +3342,15 @@ def create_realization_file(
                 "soil_moisture_wetting_fronts(1,double,1,node)": 0.0,
                 "soil_depth_wetting_fronts(1,double,1,node)": 0.0,
                 "num_wetting_fronts(1,int,1,node)": 1}
+        elif 'sac' in modules and 'smp' in modules:
+            model_params = {
+                "soil_moisture_wetting_fronts(1,double,1,node)": 0.0,
+                "soil_thickness_layered(1,double,1,node)": 0.0,
+                "soil_depth_wetting_fronts(1,double,m,node)": 0.0,
+                "num_wetting_fronts(1,int,1,node)": 1.0,
+                "Qb_topmodel(1,double,m h^-1,node)": 0.0,
+                "Qv_topmodel(1,double,m h^-1,node)": 0.0,
+                "global_deficit(1,double,m,node)": 0.0}
         elif 'lasam' in modules:
             if 'sft' not in modules:
                 model_params = {"soil_temperature_profile(1,double,K,node)": 275.15}
