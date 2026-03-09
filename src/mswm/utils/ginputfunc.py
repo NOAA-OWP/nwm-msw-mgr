@@ -2112,6 +2112,7 @@ def create_fcst_times(
 
     # Convert cycle date and hour to datetime
     cycle_dt = datetime.datetime.strptime(cycle_date, "%Y-%m-%d").replace(hour=int(cycle_hour.replace("z", "")))
+    cs_dt = datetime.datetime.strptime(cold_start_datetime, "%Y-%m-%d %H:%M:%S") if cold_start_datetime else None
 
     # Retrieve AnAFlag
     ana_flag = forcing_template['AnAFlag']
@@ -2119,7 +2120,7 @@ def create_fcst_times(
     # Construct start and end times for cold start period
     if use_cold_start is True:
 
-        fcst_start = cold_start_datetime
+        fcst_start = datetime.datetime.strftime(cs_dt + datetime.timedelta(hours=1), "%Y-%m-%d %H:%M:%S")
         fcst_end = datetime.datetime.strftime(cycle_dt, "%Y-%m-%d %H:%M:%S")
 
     # Construct start and end times based on forecast cycle
@@ -2127,15 +2128,16 @@ def create_fcst_times(
 
         # Retrieve forecast input horizon from config file
         forcing_horizon = int(forcing_template['ForecastInputHorizons'][0] / 60)
+        start_delta = 1
 
-        fcst_start = datetime.datetime.strftime(cycle_dt, "%Y-%m-%d %H:%M:%S")
+        fcst_start = datetime.datetime.strftime(cycle_dt + datetime.timedelta(hours=start_delta), "%Y-%m-%d %H:%M:%S")
         fcst_end = datetime.datetime.strftime(cycle_dt + datetime.timedelta(hours=forcing_horizon), "%Y-%m-%d %H:%M:%S")
 
     # Construct start and end times based on analysis cycle
     elif ana_flag == 1:
 
         # Retrieve analysis lookback from config file
-        forcing_lookback = int(forcing_template['LookBack'] / 60)
+        forcing_lookback = int(forcing_template['LookBack'] / 60) - 1
 
         fcst_start = datetime.datetime.strftime(cycle_dt - datetime.timedelta(hours=forcing_lookback), "%Y-%m-%d %H:%M:%S")
         fcst_end = datetime.datetime.strftime(cycle_dt, "%Y-%m-%d %H:%M:%S")
