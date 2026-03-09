@@ -1,5 +1,8 @@
 # nwm-msw-mgr - Model Setup Workflow Manager
 
+[![Tests](https://github.com/robgpita/nwm-msw-mgr/actions/workflows/test.yml/badge.svg)](https://github.com/robgpita/nwm-msw-mgr/actions/workflows/test.yml)
+[![codecov](https://codecov.io/gh/robgpita/nwm-msw-mgr/graph/badge.svg)](https://codecov.io/gh/robgpita/nwm-msw-mgr)
+
 ## Description
 The Model Setup Workflow Manager generates realization and configuration files for running ngen in calibration, validation, forecast, and regionalization modes. mswm can either be run from the command line or called directly from Python scripts.
 
