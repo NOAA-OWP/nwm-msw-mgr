@@ -2692,7 +2692,8 @@ def create_reg_realization_file(
                                         "library_file": lib_mod['sac'],
                                         "init_config": os.path.join(bmi_dir['sac'], 'sac-init-' + '{{id}}.namelist.input'),
                                         "allow_exceed_end_time": True, "fixed_time_step": False, "uses_forcing_file": False,
-                                        "main_output_variable": "tci"}}
+                                        "main_output_variable": "tci_giuh",
+                                        "registration_function": "register_bmi_sac"}}
             if grp_params.get('sac', {}).get(grp):
                 model_configs['sac']['params']['model_params'] = grp_params['sac'][grp]
 
@@ -2703,7 +2704,7 @@ def create_reg_realization_file(
             var_maps['input']['tair'] = name_temp.get(forcing_provider)
 
             # module output variable for input to t-route
-            main_output_variable = "tci"
+            main_output_variable = "tci_giuh"
 
         # snow17
         if 'snow17' in grp_mod:
@@ -2853,6 +2854,10 @@ def create_reg_realization_file(
                     "Qb_topmodel": "land_surface_water__baseflow_volume_flux",
                     "Qv_topmodel": "soil_water_root-zone_unsat-zone_top__recharge_volume_flux",
                     "global_deficit": "soil_water__domain_volume_deficit"}
+            elif 'sac' in grp_mod:
+                model_configs['smp']['params']["variables_names_map"] = {
+                    "soil_storage": "uzsmc",
+                    "soil_storage_change": "uzsmc_ch"}
 
         # lasam
         if 'lasam' in grp_mod:
@@ -3224,7 +3229,8 @@ def create_realization_file(
                                     "library_file": lib_mod['sac'],
                                     "init_config": os.path.join(bmi_dir['sac'], 'sac-init-{{id}}.namelist.input'),
                                     "allow_exceed_end_time": True, "fixed_time_step": False, "uses_forcing_file": False,
-                                    "main_output_variable": "tci",
+                                    "main_output_variable": "tci_giuh",
+                                    "registration_function": "register_bmi_sac"
                                 }}
 
         # variable name mapping section
@@ -3234,7 +3240,7 @@ def create_realization_file(
         var_maps['input']['tair'] = name_temp.get(forcing_provider)
 
         # module output variable for input to t-route
-        main_output_variable = "tci"
+        main_output_variable = "tci_giuh"
 
     # snow17
     if 'snow17' in modules:
@@ -3380,6 +3386,10 @@ def create_realization_file(
                 "Qb_topmodel": "land_surface_water__baseflow_volume_flux",
                 "Qv_topmodel": "soil_water_root-zone_unsat-zone_top__recharge_volume_flux",
                 "global_deficit": "soil_water__domain_volume_deficit"}
+        elif 'sac' in modules:
+            model_configs['smp']['params']["variables_names_map"] = {
+                "soil_storage": "uzsmc",
+                "soil_storage_change": "uzsmc_ch"}
 
     # lasam
     if 'lasam' in modules:
