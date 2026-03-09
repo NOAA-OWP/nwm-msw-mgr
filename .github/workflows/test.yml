@@ -33,13 +33,4 @@ jobs:
 
       - name: Run tests with coverage
         run: |
-          pytest tests/ -v --cov=mswm --cov-report=xml --cov-report=term-missing
-
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
-        if: matrix.python-version == '3.11'
-        continue-on-error: true
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          file: ./coverage.xml
-          fail_ci_if_error: false
+          pytest tests/ -v --cov=mswm --cov-report=term-missing
