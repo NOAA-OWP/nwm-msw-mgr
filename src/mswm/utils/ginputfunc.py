@@ -115,8 +115,6 @@ def call_icefabric_gpkg(
 
     Parameters
     ----------
-    mod: module name string
-    all_mod: list of all modules in the formulation
     basin: basin name string
     domain: string of name of gage domain
     output_dir: location to save gpkg
@@ -152,7 +150,7 @@ def call_icefabric_gpkg(
         raise ValueError(f"Invalid environment: '{environment}'. Valid options are 'test' and 'oe'")
 
     # Set base endpoint
-    url = f"http://edfs.{environment}.nextgenwaterprediction.com:8000/v1/hydrofabric/gages-{basin}/gpkg"
+    url = f"http://edfs.{environment}.nextgenwaterprediction.com{':8000' if environment == 'test' else ''}/v1/hydrofabric/gages-{basin}/gpkg"
 
     # Build query parameters
     params = {"id_type": "hl_uri",
