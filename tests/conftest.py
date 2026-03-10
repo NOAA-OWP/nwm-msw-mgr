@@ -5,6 +5,7 @@ Fixtures for msw-mgr end-to-end tests
 import os
 import pytest
 from pathlib import Path
+import mswm
 
 from mswm.utils.input_configuration import (
     InputConfig,
@@ -55,6 +56,10 @@ def dummy_files(tmp_work_dir):
 
 def _make_calib_input_config(tmp_work_dir):
     """Build an InputConfig pydantic object for a calibration run with noah-owp-modular and cfe-s"""
+    # Get package root for parameter files
+    pkg_root = Path(mswm.__file__).parent
+    noah_parameter_dir = str(pkg_root / "module_parameter_files" / "noah-owp-modular")
+
     general = GeneralConfig(
         basin="01123000",
         run_type="calibration",
@@ -81,7 +86,7 @@ def _make_calib_input_config(tmp_work_dir):
         noah_owp_modular_lib=os.path.join(tmp_work_dir, "libsurfacebmi.so"),
         cfe_lib=os.path.join(tmp_work_dir, "libcfebmi.so"),
         sloth_lib=os.path.join(tmp_work_dir, "libslothmodel.so"),
-        noah_parameter_dir=str(Path("/nwm-msw-mgr/module_parameter_files/noah-owp-modular"))
+        noah_parameter_dir=noah_parameter_dir
     )
     calibration = CalibConfig(
         optimization_algorithm="dds",
@@ -126,6 +131,10 @@ def _make_calib_input_config(tmp_work_dir):
 
 def _make_region_input_config(tmp_work_dir):
     """Build an InputConfig pydantic object for a regionalization run"""
+    # Get package root for parameter files
+    pkg_root = Path(mswm.__file__).parent
+    noah_parameter_dir = str(pkg_root / "module_parameter_files" / "noah-owp-modular")
+
     general = GeneralConfig(
         basin="01123000",
         run_type="regionalization",
@@ -150,7 +159,7 @@ def _make_region_input_config(tmp_work_dir):
         noah_owp_modular_lib=os.path.join(tmp_work_dir, "libsurfacebmi.so"),
         cfe_lib=os.path.join(tmp_work_dir, "libcfebmi.so"),
         sloth_lib=os.path.join(tmp_work_dir, "libslothmodel.so"),
-        noah_parameter_dir=str(Path("/nwm-msw-mgr/module_parameter_files/noah-owp-modular"))
+        noah_parameter_dir=noah_parameter_dir
     )
     region = RegionConfig(
         form_assign_file=os.path.join(test_region_dir, "formulation_assignment.csv"),
