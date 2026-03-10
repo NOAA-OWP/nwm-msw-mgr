@@ -1,0 +1,36 @@
+name: Tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: 'pip'
+
+      - name: Install GDAL system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gdal-bin libgdal-dev
+
+      - name: Install Python package with test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[test]"
+
+      - name: Run tests with coverage
+        run: |
+          pytest tests/ -v --cov=mswm --cov-report=term-missing
