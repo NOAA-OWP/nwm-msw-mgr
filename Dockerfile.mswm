@@ -1,5 +1,8 @@
-#FROM ngen-int:latest
-FROM ngen:latest
+# syntax=docker/dockerfile:1.4
+
+ARG NGEN_IMAGE_TAG=latest
+#FROM ngen-int:${NGEN_IMAGE_TAG}
+FROM ghcr.io/ngwpc/ngen:${NGEN_IMAGE_TAG}
 
 WORKDIR /ngen-app/mswm/
 
