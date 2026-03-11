@@ -2536,16 +2536,8 @@ def var_mapping(
             var_maps['output']['swe_out_units'] = 'mm'
         else:
             var_maps['output']['swe_out'] = ''
-
-    # TODO: soil_water_table doesn't seem like the correct SWE variable for Topmodel?
-    # elif 'topmodel' in modules:
-    #     if output_dict['output_swe']:
-    #         var_maps['output']['swe_out'] = 'soil_water_table'
-    #         var_maps['output']['swe_out_units'] = 'm'
-    #     else:
-    #         var_maps['output']['swe_out'] = ''
-    # else:
-    #     var_maps['output']['swe_out'] = ''
+    else:
+        var_maps['output']['swe_out'] = ''
 
     # soil moisture fraction
     if 'smp' in modules and output_dict['output_sm']:
@@ -2700,8 +2692,6 @@ def create_reg_realization_file(
             if grp_params.get('noah', {}).get(grp):
                 model_configs['noah']['params']['model_params'] = grp_params['noah'][grp]
 
-            precip_output = 'QRAIN'
-
         # cfe or cfex
         if 'cfes' in grp_mod or 'cfex' in grp_mod:
             m1 = 'cfes' if 'cfes' in grp_mod else 'cfex'
@@ -2724,6 +2714,9 @@ def create_reg_realization_file(
             # module output variable for input to t-route
             main_output_variable = "Q_OUT"
 
+            # precipitation output variable
+            precip_output = "atmosphere_water__liquid_equivalent_precipitation_rate_out"
+
         # topmodel
         if 'topmodel' in grp_mod:
             model_configs['topmodel'] = {"name": "bmi_c",
@@ -2744,6 +2737,9 @@ def create_reg_realization_file(
 
             # module output variable for input to t-route
             main_output_variable = "Qout"
+
+            # precipitation output variable
+            precip_output = "atmosphere_water__liquid_equivalent_precipitation_rate_out"
 
         # sac-sma
         if 'sac' in grp_mod:
@@ -2766,6 +2762,9 @@ def create_reg_realization_file(
 
             # module output variable for input to t-route
             main_output_variable = "tci_giuh"
+
+            # precipitation output variable
+            precip_output = "precip_out"
 
         # snow17
         if 'snow17' in grp_mod:
@@ -2950,6 +2949,9 @@ def create_reg_realization_file(
             # module output variable for input to t-route
             main_output_variable = "total_discharge"
 
+            # precipitation output variable
+            precip_output = "precipitation_rate_out"
+
         if 'lstm' in grp_mod:
             model_configs['lstm'] = {"name": "bmi_python",
                                      "params": {"python_type": "lstm.bmi_lstm.bmi_LSTM",
@@ -2973,6 +2975,7 @@ def create_reg_realization_file(
             var_maps['output']['swe_out'] = ''
             var_maps['output']['sm_out'] = ''
 
+            # precipitation output variable
             precip_output = 'precipitation_rate'
 
             # Add additional mapping for bmi regionalization
@@ -3024,7 +3027,7 @@ def create_reg_realization_file(
                 var_maps['input'][name_xwind.get('csv')] = name_xwind.get(forcing_provider)
                 var_maps['input'][name_ywind.get('csv')] = name_ywind.get(forcing_provider)
 
-            # Set precipitation output variable
+            # precipitation output variable
             precip_output = 'precipitation_rate'
 
             if grp_params.get('topoflow-glacier', {}).get(grp):
@@ -3062,8 +3065,8 @@ def create_reg_realization_file(
         # Add precipitation to output_config
         if output_dict['output_precip']:
             output_config['output_variables'] = output_config['output_variables'] + [precip_output]
-            output_config['output_header_fields'] = output_config['output_header_fields'] + ["rainrate"]
-            output_config['output_units'] = output_config['output_units'] + ["mm/s"]
+            output_config['output_header_fields'] = output_config['output_header_fields'] + ["rainmelt"]
+            output_config['output_units'] = output_config['output_units'] + ["mm/hr"]
             output_config["output_index"] = output_config["output_index"] + ["0"]
 
         # Write output variables section if requested, otherwise write empty section
@@ -3250,8 +3253,6 @@ def create_realization_file(
                                                                     "SOLDN": name_sw.get(forcing_provider),
                                                                     "SFCPRS": name_pressure.get(forcing_provider)}}}
 
-        precip_output = 'QRAIN'
-
     # cfe or cfex
     if 'cfes' in modules or 'cfex' in modules:
         m1 = 'cfes' if 'cfes' in modules else 'cfex'
@@ -3272,6 +3273,9 @@ def create_realization_file(
         # module output variable for input to t-route
         main_output_variable = "Q_OUT"
 
+        # precipitation output variable
+        precip_output = "atmosphere_water__liquid_equivalent_precipitation_rate_out"
+
     # topmodel
     if 'topmodel' in modules:
         model_configs['topmodel'] = {"name": "bmi_c",
@@ -3290,6 +3294,9 @@ def create_realization_file(
 
         # module output variable for input to t-route
         main_output_variable = "Qout"
+
+        # precipitation output variable
+        precip_output = "atmosphere_water__liquid_equivalent_precipitation_rate_out"
 
     # sac-sma
     if 'sac' in modules:
@@ -3311,6 +3318,9 @@ def create_realization_file(
 
         # module output variable for input to t-route
         main_output_variable = "tci_giuh"
+
+        # precipitation output variable
+        precip_output = "precip_out"
 
     # snow17
     if 'snow17' in modules:
@@ -3489,6 +3499,9 @@ def create_realization_file(
         # module output variable for input to t-route
         main_output_variable = "total_discharge"
 
+        # precipitation output variable
+        precip_output = "precipitation_rate_out"
+
     if 'lstm' in modules:
         model_configs['lstm'] = {"name": "bmi_python",
                                  "params": {"python_type": "lstm.bmi_lstm.bmi_LSTM",
@@ -3525,6 +3538,8 @@ def create_realization_file(
 
         # module output variable for input to t-route
         main_output_variable = "land_surface_water__runoff_depth"
+
+        # precipitation output variable
         precip_output = "precipitation_rate"
 
     # Combine configurations
@@ -3556,8 +3571,8 @@ def create_realization_file(
     # Add precipitation to output_config
     if output_dict['output_precip']:
         output_config['output_variables'] = output_config['output_variables'] + [precip_output]
-        output_config['output_header_fields'] = output_config['output_header_fields'] + ["rainrate"]
-        output_config['output_units'] = output_config['output_units'] + ["mm/s"]
+        output_config['output_header_fields'] = output_config['output_header_fields'] + ["rainmelt"]
+        output_config['output_units'] = output_config['output_units'] + ["mm/hr"]
         output_config["output_index"] = output_config["output_index"] + ["0"]
 
     # Write output variables section if requested, otherwise write empty section
