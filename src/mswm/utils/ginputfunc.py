@@ -1888,7 +1888,7 @@ def update_troute(
 
     # compute number of time steps and max_loop_size
     try:
-        start_time = pd.to_datetime(real_config['time']['start_time'], format="%Y-%m-%d %H:%M:%S")
+        start_time = pd.to_datetime(real_config['time']['start_time'], format="%Y-%m-%d %H:%M:%S") - pd.Timedelta(hours=1)
         end_time = pd.to_datetime(real_config['time']['end_time'], format="%Y-%m-%d %H:%M:%S")
         nts = len(pd.date_range(start=start_time, end=end_time, freq='5min')) - 1
     except Exception as e:
