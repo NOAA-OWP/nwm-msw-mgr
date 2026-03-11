@@ -172,18 +172,17 @@ def call_icefabric_gpkg(
             resp.raise_for_status()
             with open(gpkg_fp, "wb") as f:
                 f.write(resp.content)
-            # logger.info(f"Saved geopackage file from Icefabric API to {gpkg_fp}")
             print(f"Saved geopackage file from Icefabric API to {gpkg_fp}")
+    except httpx.TimeoutException as e:
+        print(f"Icefabric API call timed out for {basin} gpkg. Request URL: {url}, params: {params}, {e}")
+        raise
     except httpx.HTTPStatusError as e:
-        print(f"Icefabric API call gages-{basin} gpkg failed: {e}")
-        # logger.critical(f"Icefabric API call gages-{basin} gpkg failed: {e}")
+        print(f"Icefabric API call {basin} gpkg failed. Request URL: {url}, params: {params}, {e}")
         raise
     except ValueError:
-        # logger.critical(f"Icefabric API call did not return valid results for gpkg: gauge_{basin}")
-        print(f"Icefabric API call did not return valid results for gpkg: gauge_{basin}")
+        print(f"Icefabric API call did not return valid results for gpkg: {basin}.")
         raise
     except (OSError, IOError) as e:
-        # logger.critical(f"Failed to write gpkg file: {e}")
         print(f"Failed to write gpkg file: {e}")
         raise
 
