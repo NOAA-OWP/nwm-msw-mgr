@@ -262,7 +262,7 @@ class ForcingConfig(StrictBaseModel):
         # root dir required if forcing_provider is csv
         if self.forcing_provider == 'bmi' and self.root_dir is None:
             raise ValueError("`root_dir` must be specified for a run using bmi forcing provider.")
-        
+
         # forcing_static_dir required if forcing_provider is bmi and forcing_configuration is nwm
         if self.forcing_provider == 'bmi' and self.forcing_configuration == 'nwm' and self.forcing_static_dir is None:
             raise ValueError("`forcing_static_dir` must be specified for a run using bmi forcing provider with nwm forcing configuration.")

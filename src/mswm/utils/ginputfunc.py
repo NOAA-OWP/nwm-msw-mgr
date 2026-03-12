@@ -1888,7 +1888,7 @@ def update_troute(
 
     # compute number of time steps and max_loop_size
     try:
-        start_time = pd.to_datetime(real_config['time']['start_time'], format="%Y-%m-%d %H:%M:%S")
+        start_time = pd.to_datetime(real_config['time']['start_time'], format="%Y-%m-%d %H:%M:%S") - pd.Timedelta(hours=1)
         end_time = pd.to_datetime(real_config['time']['end_time'], format="%Y-%m-%d %H:%M:%S")
         nts = len(pd.date_range(start=start_time, end=end_time, freq='5min')) - 1
     except Exception as e:
@@ -2112,6 +2112,7 @@ def create_fcst_times(
 
     # Convert cycle date and hour to datetime
     cycle_dt = datetime.datetime.strptime(cycle_date, "%Y-%m-%d").replace(hour=int(cycle_hour.replace("z", "")))
+    cs_dt = datetime.datetime.strptime(cold_start_datetime, "%Y-%m-%d %H:%M:%S") if cold_start_datetime else None
 
     # Retrieve AnAFlag
     ana_flag = forcing_template['AnAFlag']
@@ -2119,8 +2120,8 @@ def create_fcst_times(
     # Construct start and end times for cold start period
     if use_cold_start is True:
 
-        fcst_start = cold_start_datetime
-        fcst_end = datetime.datetime.strftime(cycle_dt - datetime.timedelta(hours=1), "%Y-%m-%d %H:%M:%S")
+        fcst_start = datetime.datetime.strftime(cs_dt + datetime.timedelta(hours=1), "%Y-%m-%d %H:%M:%S")
+        fcst_end = datetime.datetime.strftime(cycle_dt, "%Y-%m-%d %H:%M:%S")
 
     # Construct start and end times based on forecast cycle
     elif ana_flag == 0:
@@ -2136,10 +2137,10 @@ def create_fcst_times(
     elif ana_flag == 1:
 
         # Retrieve analysis lookback from config file
-        forcing_lookback = int(forcing_template['LookBack'] / 60)
+        forcing_lookback = int(forcing_template['LookBack'] / 60) - 1
 
         fcst_start = datetime.datetime.strftime(cycle_dt - datetime.timedelta(hours=forcing_lookback), "%Y-%m-%d %H:%M:%S")
-        fcst_end = datetime.datetime.strftime(cycle_dt - datetime.timedelta(hours=1), "%Y-%m-%d %H:%M:%S")
+        fcst_end = datetime.datetime.strftime(cycle_dt, "%Y-%m-%d %H:%M:%S")
 
     return fcst_start, fcst_end
 
