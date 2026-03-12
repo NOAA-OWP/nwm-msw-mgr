@@ -1960,11 +1960,8 @@ def create_troute_config(
         routing_config_file = os.path.join(rt_cfg_file + file_name)
         run_name1 = file_name.replace('_troute_config_', '').replace('.yaml', '')
         if len(time_period['run_time_period'][run_name][0]) != 0 & len(time_period['run_time_period'][run_name][0]):
-            start_time = pd.to_datetime(time_period['run_time_period'][run_name][0], format="%Y-%m-%d %H:%M:%S") - pd.Timedelta(hours=1)
-            end_time = pd.to_datetime(time_period['run_time_period'][run_name][1], format="%Y-%m-%d %H:%M:%S")
-            nts = len(pd.date_range(start=start_time, end=end_time, freq='5min')) - 1
-            # run_range = pd.to_datetime(time_period['run_time_period'][run_name])
-            # nts = len(pd.date_range(start=run_range[0], end=run_range[1], freq='5min')) - 1
+            run_range = pd.to_datetime(time_period['run_time_period'][run_name])
+            nts = len(pd.date_range(start=run_range[0], end=run_range[1], freq='5min')) - 1
 
         # bmi_parameters
         bmi_param = {"flowpath_columns": ["id", "toid", "lengthkm"],
@@ -2052,7 +2049,7 @@ def create_troute_config(
                       "cpu_pool": 16,
                       "compute_kernel": "V02-structured",
                       "assume_short_ts": True,
-                      "restart_parameters": {"start_datetime": str(start_time)},
+                      "restart_parameters": {"start_datetime": time_period['run_time_period'][run_name][0]},
                       "forcing_parameters": {"qts_subdivisions": 12,
                                              "dt": 300,
                                              "qlat_input_folder": ".",
