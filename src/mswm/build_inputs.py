@@ -883,13 +883,13 @@ class RealizationBuilder:
             logger.info("T-Route must be included in the formulation. T-Route added to module list")
             self.modules = self.modules + ['troute']
 
-        # # make sure SMP, SFT, SAC-SMA, and LASAM are paired with Noah-OWP-Modular
-        # if any(m in self.modules for m in ('smp', 'sft', 'sac', 'lasam')) and 'noah' not in self.modules:
-        #     try:
-        #         raise ValueError("NOAH-OWP-Modular required to supply inputs for SMP, SFT, SAC-SMA, and LASAM. Add NOAH-OWP-Modular to formulation.")
-        #     except ValueError as e:
-        #         logger.critical(e)
-        #         raise
+        # make sure SMP, SFT are paired with Noah-OWP-Modular
+        if any(m in self.modules for m in ('smp', 'sft')) and 'noah' not in self.modules:
+            try:
+                raise ValueError("NOAH-OWP-Modular required to supply inputs for SMP and SFT Add NOAH-OWP-Modular to formulation.")
+            except ValueError as e:
+                logger.critical(e)
+                raise
 
         # rearrange modules in order of hydrologic processes
         self.modules = [m1 for m1 in settings.modules_all['module'] if m1 in self.modules]
@@ -985,13 +985,13 @@ class RealizationBuilder:
                 logger.info(f"T-Route must be included in the formulation. T-Route added to module list: {row['gage_id']}")
                 modules = modules + ['troute']
 
-            # # make sure SMP, SFT, SAC-SMA, and LASAM are paired with Noah-OWP-Modular
-            # if any(m in modules for m in ('smp', 'sft', 'sac', 'lasam')) and 'noah' not in modules:
-            #     try:
-            #         raise ValueError(f"NOAH-OWP-Modular required to supply inputs for SMP, SFT, SAC-SMA, and LASAM. Add NOAH-OWP-Modular to formulation for {row['gage_id']}.")
-            #     except ValueError as e:
-            #         logger.critical(e)
-            #         raise
+            # make sure SMP, SFT are paired with Noah-OWP-Modular
+            if any(m in modules for m in ('smp', 'sft')) and 'noah' not in modules:
+                try:
+                    raise ValueError(f"NOAH-OWP-Modular required to supply inputs for SMP and SFT. Add NOAH-OWP-Modular to formulation for {row['gage_id']}.")
+                except ValueError as e:
+                    logger.critical(e)
+                    raise
 
             # rearrange modules in order of hydrologic processes
             modules = [m1 for m1 in settings.modules_all['module'] if m1 in modules]

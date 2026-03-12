@@ -2477,6 +2477,7 @@ def var_mapping(
         modules: List[str],
         pet_in: str,
         pcp_in: str,
+        pcp_forcing: str,
         output_dict: dict,
 ) -> Dict[str, str]:
     """ create variable name mapping based on modules
@@ -2486,6 +2487,7 @@ def var_mapping(
     modules: list of modules in the formulation
     pet_in: module input variable name for evapotranspiration
     pcp_in: module input variable name for precipitation
+    pcp_forcing: name of precipitation forcing variable
     output_dict: dictionary defining which output variables to write out
 
     Returns
@@ -2537,6 +2539,9 @@ def var_mapping(
         else:
             var_maps['output']['swe_out'] = ''
     else:
+        # Assign precipitation forcing mapping if needed
+        if pcp_in != pcp_forcing:
+            var_maps['input'][pcp_in] = pcp_forcing
         var_maps['output']['swe_out'] = ''
 
     # soil moisture fraction
@@ -2709,7 +2714,7 @@ def create_reg_realization_file(
             # variable name mapping section
             pet_in = "water_potential_evaporation_flux"
             pcp_in = name_prcp.get('csv')
-            var_maps = var_mapping(grp_mod, pet_in, pcp_in, output_dict)
+            var_maps = var_mapping(grp_mod, pet_in, pcp_in, name_prcp.get(forcing_provider), output_dict)
 
             # module output variable for input to t-route
             main_output_variable = "Q_OUT"
@@ -2733,7 +2738,7 @@ def create_reg_realization_file(
             # variable name mapping section
             pet_in = "water_potential_evaporation_flux"
             pcp_in = name_prcp.get('csv')
-            var_maps = var_mapping(grp_mod, pet_in, pcp_in, output_dict)
+            var_maps = var_mapping(grp_mod, pet_in, pcp_in, name_prcp.get(forcing_provider), output_dict)
 
             # module output variable for input to t-route
             main_output_variable = "Qout"
@@ -2757,7 +2762,7 @@ def create_reg_realization_file(
             # variable name mapping section
             pet_in = "pet"
             pcp_in = "precip"
-            var_maps = var_mapping(grp_mod, pet_in, pcp_in, output_dict)
+            var_maps = var_mapping(grp_mod, pet_in, pcp_in, name_prcp.get(forcing_provider), output_dict)
             var_maps['input']['tair'] = name_temp.get(forcing_provider)
 
             # module output variable for input to t-route
@@ -2944,7 +2949,7 @@ def create_reg_realization_file(
             # variable name mapping section
             pet_in = "potential_evapotranspiration_rate"
             pcp_in = "precipitation_rate"
-            var_maps = var_mapping(grp_mod, pet_in, pcp_in, output_dict)
+            var_maps = var_mapping(grp_mod, pet_in, pcp_in, name_prcp.get(forcing_provider), output_dict)
 
             # module output variable for input to t-route
             main_output_variable = "total_discharge"
@@ -3268,7 +3273,7 @@ def create_realization_file(
         # variable name mapping section
         pet_in = "water_potential_evaporation_flux"
         pcp_in = name_prcp.get('csv')
-        var_maps = var_mapping(modules, pet_in, pcp_in, output_dict)
+        var_maps = var_mapping(modules, pet_in, pcp_in, name_prcp.get(forcing_provider), output_dict)
 
         # module output variable for input to t-route
         main_output_variable = "Q_OUT"
@@ -3290,7 +3295,7 @@ def create_realization_file(
         # variable name mapping section
         pet_in = "water_potential_evaporation_flux"
         pcp_in = name_prcp.get('csv')
-        var_maps = var_mapping(modules, pet_in, pcp_in, output_dict)
+        var_maps = var_mapping(modules, pet_in, pcp_in, name_prcp.get(forcing_provider), output_dict)
 
         # module output variable for input to t-route
         main_output_variable = "Qout"
@@ -3313,7 +3318,7 @@ def create_realization_file(
         # variable name mapping section
         pet_in = "pet"
         pcp_in = "precip"
-        var_maps = var_mapping(modules, pet_in, pcp_in, output_dict)
+        var_maps = var_mapping(modules, pet_in, pcp_in, name_prcp.get(forcing_provider), output_dict)
         var_maps['input']['tair'] = name_temp.get(forcing_provider)
 
         # module output variable for input to t-route
@@ -3494,7 +3499,7 @@ def create_realization_file(
         # variable name mapping section
         pet_in = "potential_evapotranspiration_rate"
         pcp_in = "precipitation_rate"
-        var_maps = var_mapping(modules, pet_in, pcp_in, output_dict)
+        var_maps = var_mapping(modules, pet_in, pcp_in, name_prcp.get(forcing_provider), output_dict)
 
         # module output variable for input to t-route
         main_output_variable = "total_discharge"
