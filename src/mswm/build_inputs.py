@@ -1631,11 +1631,23 @@ class RealizationBuilder:
         """
         Write parallel processing partition file
         """
+        if getattr(self, "_building_fcst_realization", "")  is True:
+            cat_file = self.gpkg_cats
+            partition_config_basename_prefix = ""
+            work_dir, sub_dir_name = os.path.split(self.input_dir)
+        else:
+            # Original behavior for "default", "calibration", and "regionalization", before forecast partitions were supported
+            cat_file = self.cat_file
+            partition_config_basename_prefix = self.basin
+            work_dir = self.work_dir
+            sub_dir_name = "Input"
+
         self.part_file = gfun.create_partition_file(self.parallelSec['partition_generator_exe'],
-                                                    self.cat_file,
+                                                    cat_file,
                                                     self.parallelSec['nprocs'],
-                                                    self.work_dir,
-                                                    self.basin) if self.parallelSec else None
+                                                    work_dir,
+                                                    partition_config_basename_prefix,
+                                                    sub_dir_name) if self.parallelSec else None
 
         logger.info(f"Partition file is created at: {self.part_file}")
 
@@ -1825,6 +1837,8 @@ class RealizationBuilder:
         """
         Replicate functionality of ngen-fcst, creating realization file from validation yaml file and formatting other input files
         """
+        self._building_fcst_realization = True
+
         self.load_config_apply_overrides()
         self._load_yaml()
         self._parse_config()
@@ -1838,12 +1852,14 @@ class RealizationBuilder:
         self._update_fcst_noah_ueb_topo()
         self._update_fcst_troute()
         self._configure_model_states()
+        self._write_partition()
         self._write_fcst_realization()
 
         if self.use_cold_start:
             logger.info("Cold start run set up successfully")
         else:
             logger.info("Forecast run set up successfully")
+        self._building_fcst_realization = False
 
         if self.save_state:
             return self.realization_file, self.save_state_to
