@@ -3761,7 +3761,12 @@ def create_partition_file(
 
     """
 
-    partition_file = os.path.join(work_dir, sub_dir_name, f"{partition_config_basename_prefix}_partition_config.json")
+    partition_file = os.path.join(
+        work_dir,
+        sub_dir_name,
+        f"{partition_config_basename_prefix}{settings.PARTITION_CONFIG_FILE_NAME_SUFFIX}.json",
+    )
+
     cmd = f"{partition_generator} {gpkg_file} {gpkg_file} {partition_file} {nprocs} '' ''"
 
     logger.info("Creating partition file for %s", partition_config_basename_prefix)

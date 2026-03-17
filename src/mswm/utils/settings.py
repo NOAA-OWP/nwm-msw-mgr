@@ -1,7 +1,7 @@
 import pandas as pd
 
 DEFAULT_DATETIME_FORMAT = "%Y-%m-%d %H:%M:%S"
-
+PARTITION_CONFIG_FILE_NAME_SUFFIX = "_partition_config"
 
 # information about all modules currently supported in ngen-cal
 # Column 1: module name
