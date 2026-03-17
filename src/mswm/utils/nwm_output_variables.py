@@ -1,0 +1,267 @@
+"""
+This module contains functions to manage the configuration of NWM output variables
+
+@author: Jeffrey Wade
+"""
+
+from dataclasses import dataclass, field
+from typing import List
+
+
+@dataclass
+class NWMOutputVariable:
+    """Represents an NWM output variable with associated metadata and provider"""
+    nwm_name: str
+    nwm_units: str
+    description: str
+    adapter: str
+    adapter_var: str
+    provider: List[str] = field(default_factory=list)
+    provider_var: List[str] = field(default_factory=list)
+
+    def get_provider_var(self, provider: str) -> str:
+        """Return the module variable name for a given provider"""
+        try:
+            idx = self.provider.index(provider)
+            return self.provider_var[idx]
+        except ValueError:
+            raise ValueError(f"Provider '{provider}' not found for variable '{self.nwm_name}'")
+
+
+# Registry of NWM output variables, all must be satisfied for an NWM output formulation
+NWM_OUTPUT_VARIABLES: List[NWMOutputVariable] = [
+    NWMOutputVariable(
+        nwm_name="sfcheadsubrt",
+        nwm_units="mm",
+        description="Ponded water depth",
+        adapter="cfes",
+        adapter_var="NWM_PONDED_DEPTH",
+        provider=["cfes", "cfex", "sac", "topmodel", "lasam"],
+        provider_var=["NWM_PONDED_DEPTH", "NWM_PONDED_DEPTH", "nwm_ponded_depth", "", "ponded_depth_max"],
+    ),
+    NWMOutputVariable(
+        nwm_name="qBucket",
+        nwm_units="m3/s",
+        description="Flux from gw bucket",
+        adapter="cfes",
+        adapter_var="DEEP_GW_TO_CHANNEL_FLUX",
+        provider=["cfes", "cfex", "sac", "topmodel", "lasam"],
+        provider_var=["DEEP_GW_TO_CHANNEL_FLUX", "DEEP_GW_TO_CHANNEL_FLUX", "qg", "land_surface_water__baseflow_volume_flux", "groundwater_to_stream_recharge"],
+    ),
+    NWMOutputVariable(
+        nwm_name="ACSNOM",
+        nwm_units="mm",
+        description="Accumulated meltwater from bottom snow layer",
+        adapter="noah-owp-modular",
+        adapter_var="ACSNOM",
+        provider=["snow17", "ueb", "noah-owp-modular"],
+        provider_var=["raim", "SWIT", "ACSNOM"],
+    ),
+    NWMOutputVariable(
+        nwm_name="SNOWT_AVG",
+        nwm_units="K",
+        description="Average snow temperature (by layer mass)",
+        adapter="noah-owp-modular",
+        adapter_var="SNOWT_AVG",
+        provider=["ueb", "noah-owp-modular"],
+        provider_var=["Tave", "SNOWT_AVG"],
+    ),
+    NWMOutputVariable(
+        nwm_name="SOILICE",
+        nwm_units="1",
+        description="Fraction of soil moisture that is ice",
+        adapter="sft",
+        adapter_var="SOILICE",
+        provider=["sft"],
+        provider_var=["soil_ice_fraction"],
+    ),
+    NWMOutputVariable(
+        nwm_name="SOILSAT_TOP",
+        nwm_units="1",
+        description="Fraction of soil saturation, top 2 layers, 0.4m depth",
+        adapter="smp",
+        adapter_var="soil_moisture_fraction",
+        provider=["smp"],
+        provider_var=["soil_moisture_fraction"],
+    ),
+    NWMOutputVariable(
+        nwm_name="QRAIN",
+        nwm_units="mm/s",
+        description="Rainfall rate on the ground",
+        adapter="noah-owp-modular",
+        adapter_var="QRAIN",
+        provider=["cfes", "cfex", "lasam", "noah-owp-modular", "topmodel", "ueb"],
+        provider_var=["RAIN_RATE", "RAIN_RATE", "precipitation_rate", "QRAIN", "atmosphere_water__liquid_equivalent_precipitation_rate_out", "precip"],
+    ),
+    NWMOutputVariable(
+        nwm_name="FSNO",
+        nwm_units="1",
+        description="Snow-cover fraction on the ground",
+        adapter="noah-owp-modular",
+        adapter_var="FSNO",
+        provider=["noah-owp-modular"],
+        provider_var=["FSNO"],
+    ),
+    NWMOutputVariable(
+        nwm_name="SNOWH",
+        nwm_units="m",
+        description="Snow depth",
+        adapter="noah-owp-modular",
+        adapter_var="SNOWH",
+        provider=["snow17", "noah-owp-modular"],
+        provider_var=["snowh", "SNOWH"],
+    ),
+    NWMOutputVariable(
+        nwm_name="SNLIQ",
+        nwm_units="mm",
+        description="Snow layer liquid water",
+        adapter="noah-owp-modular",
+        adapter_var="SNLIQ",
+        provider=["noah-owp-modular"],
+        provider_var=["SNLIQ"],
+    ),
+    NWMOutputVariable(
+        nwm_name="SNEQV",
+        nwm_units="kg/m2",
+        description="Snow water equivalent",
+        adapter="noah-owp-modular",
+        adapter_var="SNEQV",
+        provider=["snow17", "ueb", "noah-owp-modular"],
+        provider_var=["sneqv", "SWE", "SNEQV"],
+    ),
+    NWMOutputVariable(
+        nwm_name="QSNOW",
+        nwm_units="mm/s",
+        description="Snowfall rate on the ground",
+        adapter="noah-owp-modular",
+        adapter_var="QSNOW",
+        provider=["ueb", "noah-owp-modular"],
+        provider_var=["Ps", "QSNOW"],
+    ),
+    NWMOutputVariable(
+        nwm_name="SOIL_T",
+        nwm_units="K",
+        description="Soil temperature",
+        adapter="sft",
+        adapter_var="SOIL_T",
+        provider=["sft"],
+        provider_var=["soil_temperature_profile"],
+    ),
+    NWMOutputVariable(
+        nwm_name="SOIL_M",
+        nwm_units="m3/m3",
+        description="Volumetric soil moisture",
+        adapter="smp",
+        adapter_var="soil_moisture_profile",
+        provider=["smp"],
+        provider_var=["soil_moisture_profile"],
+    ),
+    NWMOutputVariable(
+        nwm_name="SFCRNOFF",
+        nwm_units="mm",
+        description="Accumulated surface runoff",
+        adapter="cfes",
+        adapter_var="flux_direct_runoff_m",
+        provider=["cfes", "cfex", "lasam", "sac", "topmodel"],
+        provider_var=["flux_direct_runoff_m", "flux_direct_runoff_m", "surface_runoff", "qs", "land_surface_water__domain_time_integral_of_runoff_volume_flux"],
+    ),
+    NWMOutputVariable(
+        nwm_name="TRAD",
+        nwm_units="K",
+        description="Surface radiative temperature",
+        adapter="noah-owp-modular",
+        adapter_var="TRAD",
+        provider=["noah-owp-modular"],
+        provider_var=["TRAD"],
+    ),
+    NWMOutputVariable(
+        nwm_name="LH",
+        nwm_units="W/m2",
+        description="Total latent heat to the atmosphere",
+        adapter="noah-owp-modular",
+        adapter_var="LH",
+        provider=["ueb", "noah-owp-modular"],
+        provider_var=["QEs", "LH"],
+    ),
+    NWMOutputVariable(
+        nwm_name="FIRA",
+        nwm_units="W/m2",
+        description="Total net LW radiation to atmosphere",
+        adapter="noah-owp-modular",
+        adapter_var="FIRA",
+        provider=["ueb", "noah-owp-modular"],
+        provider_var=["Qlns", "FIRA"],
+    ),
+    NWMOutputVariable(
+        nwm_name="HFX",
+        nwm_units="W/m2",
+        description="Total sensible heat to the atmosphere",
+        adapter="noah-owp-modular",
+        adapter_var="FSH",
+        provider=["ueb", "noah-owp-modular"],
+        provider_var=["QHs", "FSH"],
+    ),
+]
+
+# Lookup by variable name for quick access
+NWM_OUTPUT_VARIABLE_MAP: dict = {v.nwm_name: v for v in NWM_OUTPUT_VARIABLES}
+
+
+def get_provider_for_variable(variable_name: str, available_modules: List[str]) -> tuple:
+    """
+    Given a variable name and a list of modules in a formulation, return the matching module and its associated name.
+    Fall back to the first valid provider if not match is found in available_modules
+
+    Parameters
+    ----------
+    variable_name: str
+        Name of the NWM output variable
+    available_modules: list
+        List of module names from the current formulation
+
+    Returns
+    -------
+    tuple:
+        (provider, modular_var) for the matched or fallback module
+    """
+    var = NWM_OUTPUT_VARIABLE_MAP.get(variable_name)
+    if var is None:
+        raise ValueError(f"Unknown NWM output variable: {variable_name}")
+
+    # Find first matching module in available_modules
+    for module in available_modules:
+        if module in var.provider:
+            return module, var.get_provider_var(module)
+
+    # Fallback to first valid provider if no match found
+    adapter_provider = var.adapter
+    adapter_var = var.adapter_var
+    return adapter_provider, adapter_var
+
+
+def get_providers_for_formulation(available_modules: List[str]) -> List[dict]:
+    """
+    For each required NWM output variable, find which module in the formulation provides it,
+    falling back to the first valid provider if no match is found
+
+    Parameters
+    ----------
+
+    available_modules: list
+        List of module names from the current formulation
+
+    Returns
+    -------
+    list:
+        List of dicts with keys: nwm_name, nwm_units, provider, provider_var
+    """
+    results = []
+    for var in NWM_OUTPUT_VARIABLES:
+        provider, provider_var = get_provider_for_variable(var.nwm_name, available_modules)
+        results.append({
+            "nwm_name": var.nwm_name,
+            "nwm_units": var.nwm_units,
+            "provider": provider,
+            "provider_var": provider_var
+        })
+    return results

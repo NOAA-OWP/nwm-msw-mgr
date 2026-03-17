@@ -23,6 +23,7 @@ import subprocess
 from mswm.utils import ginputfunc as gfun
 from mswm.utils import settings
 from mswm.utils.input_configuration import InputConfig
+from mswm.utils.nwm_output_variables import get_providers_for_formulation
 
 
 # Initialize MSWM setup logger
@@ -491,6 +492,40 @@ class RealizationBuilder:
 
         logger.info(f"Regionalization parameters loaded from: {self.assign_file}")
 
+    def _parse_config(self):
+        """
+        Parse sections from input.config file
+        """
+        # reassign config sections for convenience
+        self.conf1 = self.input_configs.get('General')
+        self.run_type = self.conf1.get("run_type") if self.conf1 else None
+        self.domain = self.conf1.get("domain") if self.conf1 else None
+        self.environment = self.conf1.get("environment") if self.conf1 else None
+        self.basin = self.conf1['basin'] if self.conf1 else None
+
+        # Retrieve module properties inputs
+        self.module_prop = self.input_configs.get("ModuleProperties")
+        self.aet_rootzone = self.module_prop.get("cfe_aet_rootzone") if self.module_prop else 0
+        self.pet_method = self.module_prop.get("pet_method") if self.module_prop else None
+
+        # Retrieve NWM output variable inputs
+        self.nwm_output_sec = self.input_configs.get("NWMOutput")
+        self.output_nwm_vars = self.nwm_output_sec.get('nwm_output_variables') if self.nwm_output_sec else False
+
+        # Load run_type specific config section or empty dict for default
+        run_key = (self.run_type or "").capitalize()
+        self.conf2 = self.input_configs.get(run_key, {})
+        self.ngen_cerf = self.conf2.get('ngen_cerf') or False
+
+        # Retrieve input.config sections
+        self.conf3 = self.input_configs.get('DataFile')
+        self.forcingSec = self.input_configs.get('Forcing')
+        self.parallelSec = self.input_configs.get('Parallel')
+
+        # Use parallel ngen only when the number of processors is greater than 1
+        if not self.parallelSec or self.parallelSec.get("nprocs", 0) < 2:
+            self.parallelSec = None
+
     def _load_realization(self):
         """
         Load realization json file
@@ -516,36 +551,30 @@ class RealizationBuilder:
         except Exception as e:
             logger.critical(f"Unexpected error reading realization file: {self.real_input_file}\n{e}")
 
-    def _parse_config(self):
+    def _parse_realization_modules(self):
         """
-        Parse sections from input.config file
+        Read existing formulation modules from realization file
         """
-        # reassign config sections for convenience
-        self.conf1 = self.input_configs.get('General')
-        self.run_type = self.conf1.get("run_type") if self.conf1 else None
-        self.domain = self.conf1.get("domain") if self.conf1 else None
-        self.environment = self.conf1.get("environment") if self.conf1 else None
-        self.basin = self.conf1.get("basin") if self.conf1 else None
-        self.subset_type = self.conf1.get("subset_type") if self.conf1 else None
+        if self.output_nwm_vars:
 
-        # Retrieve module properties inputs
-        self.module_prop = self.input_configs.get("ModuleProperties")
-        self.aet_rootzone = self.module_prop.get("cfe_aet_rootzone") if self.module_prop else 0
-        self.pet_method = self.module_prop.get("pet_method") if self.module_prop else None
+            # Read modules from global or grouped formulation
+            if 'global' in self.real_config:
+                real_modules_sec = self.real_config['global']['formulations'][0]['params']['modules']
+                real_modules = [m['params']['model_type_name'] for m in real_modules_sec]
+            else:
+                logger.critical("Grouped formulations not currently supported for NWM output variables.")
 
-        # Load run_type specific config section or empty dict for default
-        run_key = (self.run_type or "").capitalize()
-        self.conf2 = self.input_configs.get(run_key, {})
-        self.ngen_cerf = self.conf2.get('ngen_cerf') or False
+            # Transform module names
+            self.modules = [settings.modules_all[settings.modules_all['name_config'] == m].iloc[0]['module'] for m in real_modules]
 
-        # Retrieve input.config sections
-        self.conf3 = self.input_configs.get('DataFile')
-        self.forcingSec = self.input_configs.get('Forcing')
-        self.parallelSec = self.input_configs.get('Parallel')
+    def _get_nwm_output_variables(self):
+        """Retrieve NWM output variables for a given formulation, including required adapter modules"""
+        if self.output_nwm_vars:
+            # Query NWM output variables and providers for existing formulation
+            self.nwm_output_dicts = get_providers_for_formulation(self.modules)
 
-        # Use parallel ngen only when the number of processors is greater than 1
-        if not self.parallelSec or self.parallelSec.get("nprocs", 0) < 2:
-            self.parallelSec = None
+            # Identify required adapter modules that need to be added as non-interacting modules in the formulation
+            self.adapters = set(r["provider"] for r in self.nwm_output_dicts if r["provider"] not in self.modules)
 
     def _create_input_dir(self):
         """
@@ -1816,6 +1845,8 @@ class RealizationBuilder:
         self._init_log()
         self._parse_yaml()
         self._load_realization()
+        self._parse_realization_modules()
+        self._get_nwm_output_variables()
         self._parse_forcing_engine()
         self._configure_forcing_engine()
         self._update_fcst_realization()
