@@ -106,6 +106,31 @@ __all__ = [
     'create_partition_file',
 ]
 
+# Set global forcing name variables
+name_prcp = {"csv": "atmosphere_water__liquid_equivalent_precipitation_rate",
+             "bmi": "RAINRATE_ELEMENT"}
+
+name_Q2 = {"csv": "atmosphere_air_water~vapor__relative_saturation",
+           "bmi": "Q2D_ELEMENT"}
+
+name_temp = {"csv": "land_surface_air__temperature",
+             "bmi": "T2D_ELEMENT"}
+
+name_xwind = {"csv": "land_surface_wind__x_component_of_velocity",
+              "bmi": "U2D_ELEMENT"}
+
+name_ywind = {"csv": "land_surface_wind__y_component_of_velocity",
+              "bmi": "V2D_ELEMENT"}
+
+name_lw = {"csv": "land_surface_radiation~incoming~longwave__energy_flux",
+           "bmi": "LWDOWN_ELEMENT"}
+
+name_sw = {"csv": "land_surface_radiation~incoming~shortwave__energy_flux",
+           "bmi": "SWDOWN_ELEMENT"}
+
+name_pressure = {"csv": "land_surface_air__pressure",
+                 "bmi": "PSFC_ELEMENT"}
+
 
 def init_ginput_logger():
     """"
@@ -416,13 +441,12 @@ def create_noah_input(
             logger.critical(f"Failed to create symlink: {src} -> {dst}: {e}")
             raise
 
-    # Files for either the calibration and validation run or the regionalization run
+    # Generate files based on run type
     run_list_map = {
         'calibration': ['calib', 'valid'],
         'regionalization': ['region'],
-        'default': ['default'],
     }
-    run_list = run_list_map.get(run_type)
+    run_list = run_list_map.get(run_type, [run_type])
 
     # Set base namelist section
     base_namelist = {

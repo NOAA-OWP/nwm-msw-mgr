@@ -301,7 +301,7 @@ class DataFileConfig(StrictBaseModel):
     lasam_parameter_dir: Optional[str] = None
     lstm_parameter_dir: Optional[str] = None
     attributes_file: Optional[str] = None
-    ngen_exe_file: str
+    ngen_exe_file: Optional[str] = None
     sloth_lib: Optional[str] = None
     cfe_lib: Optional[str] = None
     lasam_lib: Optional[str] = None

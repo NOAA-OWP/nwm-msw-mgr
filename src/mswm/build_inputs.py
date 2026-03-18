@@ -551,7 +551,7 @@ class RealizationBuilder:
         except Exception as e:
             logger.critical(f"Unexpected error reading realization file: {self.real_input_file}\n{e}")
 
-    def _parse_realization_modules(self):
+    def _parse_realization(self):
         """
         Read existing formulation modules from realization file
         """
@@ -567,14 +567,31 @@ class RealizationBuilder:
             # Transform module names
             self.modules = [settings.modules_all[settings.modules_all['name_config'] == m].iloc[0]['module'] for m in real_modules]
 
+            # Read catids from geopackage
+            self.divides_layer = gpd.read_file(self.gpkg_cats, layer='divides')
+            self.catids = self.divides_layer['divide_id'].tolist()
+            logger.info("Parsed modules and hydrofabric geopackage from existing realization file")
+
     def _get_nwm_output_variables(self):
-        """Retrieve NWM output variables for a given formulation, including required adapter modules"""
+        """
+        Retrieve NWM output variables for a given formulation, including required adapter modules
+        """
         if self.output_nwm_vars:
+
+            logger.info("Run configured to produce full set of NWM output variables")
+
             # Query NWM output variables and providers for existing formulation
             self.nwm_output_dicts = get_providers_for_formulation(self.modules)
 
             # Identify required adapter modules that need to be added as non-interacting modules in the formulation
-            self.adapters = set(r["provider"] for r in self.nwm_output_dicts if r["provider"] not in self.modules)
+            self.adapters = list(set(r["provider"] for r in self.nwm_output_dicts if r["provider"] not in self.modules))
+
+            # Add sloth to modules if required
+            mod_adapters = self.modules + self.adapters
+            if (any(x in mod_adapters for x in ['cfes', 'cfex', 'lasam'])) or ('topmodel' in mod_adapters and 'smp' in mod_adapters) and 'sloth' not in mod_adapters:
+                self.adapters = ['sloth'] + self.adapters
+
+            logger.info(f"Adapter modules required to produce full set of NWM output variables: {self.adapters}")
 
     def _create_input_dir(self):
         """
@@ -735,6 +752,8 @@ class RealizationBuilder:
                 # Retrieve ngen start and end time based on forecast cycle date, hour and configuration
                 self.fcst_start, self.fcst_end = gfun.create_fcst_times(self.forcing_template, self.cycle_date, self.cycle_hour, self.use_cold_start,
                                                                         self.use_warm_start, self.hind_cycle, self.prev_hind_cycle, self.forcing_lag, self.cold_start_datetime, self.fcst_lookback)
+                self.time_period = {"run_time_period": {self.run_type: [self.fcst_start, self.fcst_end]}}
+
             else:
                 # Set default fcst_start/fcst_end values
                 self.fcst_start = None
@@ -1156,6 +1175,7 @@ class RealizationBuilder:
         """
         # Set library files
         self.lib_file = {}
+        modules1 = []
         if self.run_type == 'regionalization':
             modules1 = list(set(m1 for form in self.grp_to_form.values() for m1 in form if m1 not in ['troute', 'lstm', 'topoflow-glacier']))
             self.all_mod = modules1.copy()
@@ -1166,6 +1186,10 @@ class RealizationBuilder:
                     self.all_mod.append(mod)
         else:
             modules1 = [m1 for m1 in self.modules if m1 not in ['troute', 'lstm', 'topoflow-glacier']]
+
+        # Append adapter modules to modules1
+        if self.output_nwm_vars:
+            modules1 += self.adapters
 
         # Reformat library file paths to match input.config format
         for m1 in modules1:
@@ -1336,27 +1360,30 @@ class RealizationBuilder:
         # whether to output SWE, soil moisture, or precip (default to False)
         self.output_dict = dict()
         for s1 in ['output_swe', 'output_sm', 'output_precip']:
-            if (s1 not in self.conf1.keys()) or (self.conf1[s1] is None) or (self.conf1[s1] == ''):
+            if self.output_nwm_vars:
+                self.output_dict[s1] = True
+            elif (s1 not in self.conf1.keys()) or (self.conf1[s1] is None) or (self.conf1[s1] == ''):
                 # Default output_precip to True if not specified
                 self.output_dict[s1] = True if s1 == 'output_precip' else False
             else:
                 self.output_dict[s1] = self.conf1[s1]
 
         # define depth (in meters) for output soil moisture
-        val = self.conf1.get("sm_frac_depth")
+        val = self.conf1.get("sm_frac_depth") if self.conf1 else None
         self.output_dict["sm_frac_depth"] = 0.4 if val in (None, "") else float(val)
         self.output_dict["sm_profile_depth"] = (
             [float(v) for v in self.conf1["sm_profile_depth"]]
-            if "sm_profile_depth" in self.conf1 and self.conf1["sm_profile_depth"] is not None
+            if self.conf1 is not None and "sm_profile_depth" in self.conf1 and self.conf1["sm_profile_depth"] is not None
             else [0.1, 0.4, 1.0, 2.0]
         )
 
         # Retrieve calib and valid output variable settings
-        self.calib_output_vars = self.conf2.get('calib_output_vars')
-        self.valid_output_vars = self.conf2.get('valid_output_vars')
+        if self.run_type == 'calibration':
+            self.calib_output_vars = self.conf2.get('calib_output_vars') if self.conf2 else None
+            self.valid_output_vars = self.conf2.get('valid_output_vars') if self.conf2 else None
 
-        self.calib_output_vars = False if self.calib_output_vars is None else self.calib_output_vars
-        self.valid_output_vars = True if self.valid_output_vars is None else self.valid_output_vars
+            self.calib_output_vars = False if self.calib_output_vars is None else self.calib_output_vars
+            self.valid_output_vars = True if self.valid_output_vars is None else self.valid_output_vars
 
         logger.info("Set output variables")
 
@@ -1404,6 +1431,9 @@ class RealizationBuilder:
         if hasattr(self, 'grp_to_cat') and self.grp_to_cat:
             # Retrieve unique modules in all formulations, maintaining formulation order
             mod_all = list(dict.fromkeys(item for lst in self.grp_to_form.values() for item in lst))
+        elif hasattr(self, 'adapters') and self.adapters:
+            # Create BMI configs for adapter modules
+            mod_all = self.adapters.copy()
         else:
             mod_all = self.modules.copy()
 
@@ -1558,6 +1588,30 @@ class RealizationBuilder:
             self.real_config['state_saving'] = state_saving
             logger.info("Model state configuration set in realization file")
 
+    def _set_bmi_config_dir(self):
+        """
+        Set directories of BMI config files
+        """
+        if self.output_nwm_vars:
+            bmi_mods = self.adapters
+        elif self.run_type == 'regionalization':
+            bmi_mods = self.all_mod
+        else:
+            bmi_mods = self.modules
+
+        self.bmi_dir = {}
+        for m1 in bmi_mods:
+            m2 = settings.modules_all.loc[settings.modules_all['module'] == m1, 'name_ui'].iloc[0]
+            self.bmi_dir[m1] = os.path.join(self.input_dir, m2 + '_input')
+
+    def _add_nwm_outputs_to_realization(self):
+        """
+        Add NWM output variables and adapter module sections to forecast realization
+        """
+        if self.output_nwm_vars:
+            self.real_config = gfun.update_realization_nwm_output(self.work_dir, self.lib_file, self.bmi_dir, self.forcing_provider,
+                                                                  self.adapters, self.modules, self.nwm_output_dicts, self.output_dict, self.real_config, self.run_type)
+
     def _write_realization(self):
         """
         Write realization file for calibration and default runs
@@ -1580,10 +1634,10 @@ class RealizationBuilder:
 
         # Write realization file
         if hasattr(self, 'grp_to_form') and self.grp_to_form:
-            self.output_config = gfun.create_reg_realization_file(self.work_dir, self.lib_file, bmi_dir, self.forcing_provider, self.forcing_path, self.forcing_config_file, self.realization_file,
+            self.output_config = gfun.create_reg_realization_file(self.work_dir, self.lib_file, self.bmi_dir, self.forcing_provider, self.forcing_path, self.forcing_config_file, self.realization_file,
                                                                   self.time_period, rt_dict, self.output_dict, self.calib_output_vars, self.run_type, self.cat_to_grp, self.grp_to_form, {})
         else:
-            self.output_config = gfun.create_realization_file(self.work_dir, self.lib_file, bmi_dir, self.forcing_provider, self.forcing_path, self.forcing_config_file, self.realization_file,
+            self.output_config = gfun.create_realization_file(self.work_dir, self.lib_file, self.bmi_dir, self.forcing_provider, self.forcing_path, self.forcing_config_file, self.realization_file,
                                                               self.modules, self.time_period, rt_dict, self.output_dict, self.calib_output_vars, self.run_type)
 
     def _write_region_realization(self):
@@ -1593,16 +1647,10 @@ class RealizationBuilder:
         # Create model realization file for regionalization
         self.realization_file = self.work_dir + '/{}'.format(self.basin) + '_realization_config_bmi_region.json'
         routing_config_file = os.path.join(self.work_dir + '/Input', '{}'.format(self.basin) + self.run_configs[0])
-
-        # Set BMI config directories
-        bmi_dir = {}
-        for m1 in self.all_mod:
-            m2 = settings.modules_all.loc[settings.modules_all['module'] == m1, 'name_ui'].iloc[0]
-            bmi_dir[m1] = os.path.join(self.input_dir, m2 + '_input')
         rt_dict = {"routing": {"t_route_config_file_with_path": routing_config_file}}
 
         # Write realization file
-        self.output_config = gfun.create_reg_realization_file(self.work_dir, self.lib_file, bmi_dir, self.forcing_provider, self.forcing_path, self.forcing_config_file, self.realization_file,
+        self.output_config = gfun.create_reg_realization_file(self.work_dir, self.lib_file, self.bmi_dir, self.forcing_provider, self.forcing_path, self.forcing_config_file, self.realization_file,
                                                               self.time_period, rt_dict, self.output_dict, {}, self.run_type, self.cat_to_grp, self.grp_to_form, self.grp_params)
 
     def _write_fcst_realization(self):
@@ -1774,6 +1822,7 @@ class RealizationBuilder:
         self._extract_streamflow_obs()
         self._set_output_vars()
         self._create_bmi_configs()
+        self._set_bmi_config_dir()
         self._write_realization()
         self._write_partition()
         self._create_calib_model_dict()
@@ -1816,6 +1865,7 @@ class RealizationBuilder:
         self._configure_forcing_engine()
         self._set_output_vars()
         self._create_bmi_configs(is_regionalization=True)
+        self._set_bmi_config_dir()
         self._write_region_realization()
         self._write_partition()
 
@@ -1845,15 +1895,20 @@ class RealizationBuilder:
         self._init_log()
         self._parse_yaml()
         self._load_realization()
-        self._parse_realization_modules()
+        self._parse_realization()
         self._get_nwm_output_variables()
+        self._set_lib_paths()
         self._parse_forcing_engine()
         self._configure_forcing_engine()
+        self._set_output_vars()
+        self._create_bmi_configs()
         self._update_fcst_realization()
         self._update_fcst_noah_ueb_topo()
         self._update_fcst_troute()
         self._configure_model_states()
         self._write_partition()
+        self._set_bmi_config_dir()
+        self._add_nwm_outputs_to_realization()
         self._write_fcst_realization()
 
         if self.use_cold_start:
@@ -1897,6 +1952,7 @@ class RealizationBuilder:
         self._configure_forcing_engine()
         self._set_output_vars()
         self._create_bmi_configs()
+        self._set_bmi_config_dir()
         self._write_realization()
         self._write_partition()
 
