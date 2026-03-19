@@ -289,7 +289,22 @@ class RealizationBuilder:
                         else ('Lagged_Ensemble_Run' if self.use_lagged_ens
                               else 'Forecast_Run')))
         )
-        self.work_dir = Path(fcst_dir0, fcst_dir_name, self.fcst_run_name)
+
+        # Set run_type to forecast for log generation
+        self.run_type = (
+            'cold_start' if self.use_cold_start
+            else ('warm_start' if self.use_warm_start
+                  else ('hindcast' if self.use_hindcast
+                        else ('lagged_ens' if self.use_lagged_ens
+                              else 'forecast')))
+        )
+
+        if self.use_hindcast or self.use_warm_start:
+            self.work_dir = Path(fcst_dir0, fcst_dir_name, self.fcst_run_name, f"{self.run_type}_{self.hind_cycle}")
+        elif self.use_lagged_ens:
+            self.work_dir = Path(fcst_dir0, fcst_dir_name, self.fcst_run_name, f"{self.run_type}_{self.lagged_ens_mem}")
+        else:
+            self.work_dir = Path(fcst_dir0, fcst_dir_name, self.fcst_run_name)
         self.input_dir = self.work_dir / 'Input'
 
         # Set file basename based on forecast run type
@@ -299,15 +314,6 @@ class RealizationBuilder:
                   else ('hind' if self.use_hindcast
                         else ('lagged_ens' if self.use_lagged_ens
                               else 'fcst')))
-        )
-
-        # Set run_type to forecast for log generation
-        self.run_type = (
-            'cold_start' if self.use_cold_start
-            else ('warm_start' if self.use_warm_start
-                  else ('hindcast' if self.use_hindcast
-                        else ('lagged_ens' if self.use_lagged_ens
-                              else 'forecast')))
         )
 
         try:
