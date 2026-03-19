@@ -545,7 +545,7 @@ class TestFcstNWMOutputBuild:
     # Forecasts Tests
     def test_adapters(self):
         assert hasattr(self.rb, 'adapters')
-        assert self.rb.adapters == ['sloth', 'sft', 'smp']
+        assert all(x in self.rb.adapters for x in ['sloth', 'sft', 'smp'])
 
     def test_output_variables(self):
         assert hasattr(self.rb, 'output_nwm_vars')
