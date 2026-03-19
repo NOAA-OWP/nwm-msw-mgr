@@ -102,6 +102,7 @@ __all__ = [
     'build_output_vars',
     'create_realization_file',
     'create_reg_realization_file',
+    'update_realization_nwm_output',
     'create_calib_config_file',
     'create_partition_file',
 ]

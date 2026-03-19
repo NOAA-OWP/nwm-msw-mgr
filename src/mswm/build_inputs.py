@@ -555,43 +555,36 @@ class RealizationBuilder:
         """
         Read existing formulation modules from realization file
         """
-        if self.output_nwm_vars:
+        # Read modules from global or grouped formulation
+        if 'global' in self.real_config:
+            real_modules_sec = self.real_config['global']['formulations'][0]['params']['modules']
+            real_modules = [m['params']['model_type_name'] for m in real_modules_sec]
+        else:
+            logger.critical("Grouped formulations not currently supported for NWM output variables.")
 
-            # Read modules from global or grouped formulation
-            if 'global' in self.real_config:
-                real_modules_sec = self.real_config['global']['formulations'][0]['params']['modules']
-                real_modules = [m['params']['model_type_name'] for m in real_modules_sec]
-            else:
-                logger.critical("Grouped formulations not currently supported for NWM output variables.")
-
-            # Transform module names
-            self.modules = [settings.modules_all[settings.modules_all['name_config'] == m].iloc[0]['module'] for m in real_modules]
-
-            # Read catids from geopackage
-            self.divides_layer = gpd.read_file(self.gpkg_cats, layer='divides')
-            self.catids = self.divides_layer['divide_id'].tolist()
-            logger.info("Parsed modules and hydrofabric geopackage from existing realization file")
+        # Transform module names
+        self.modules = [settings.modules_all[settings.modules_all['name_config'] == m].iloc[0]['module'] for m in real_modules]
+        logger.info("Parsed modules and hydrofabric geopackage from existing realization file")
 
     def _get_nwm_output_variables(self):
         """
         Retrieve NWM output variables for a given formulation, including required adapter modules
         """
-        if self.output_nwm_vars:
 
-            logger.info("Run configured to produce full set of NWM output variables")
+        logger.info("Run configured to produce full set of NWM output variables")
 
-            # Query NWM output variables and providers for existing formulation
-            self.nwm_output_dicts = get_providers_for_formulation(self.modules)
+        # Query NWM output variables and providers for existing formulation
+        self.nwm_output_dicts = get_providers_for_formulation(self.modules)
 
-            # Identify required adapter modules that need to be added as non-interacting modules in the formulation
-            self.adapters = list(set(r["provider"] for r in self.nwm_output_dicts if r["provider"] not in self.modules))
+        # Identify required adapter modules that need to be added as non-interacting modules in the formulation
+        self.adapters = list(set(r["provider"] for r in self.nwm_output_dicts if r["provider"] not in self.modules))
 
-            # Add sloth to modules if required
-            mod_adapters = self.modules + self.adapters
-            if (any(x in mod_adapters for x in ['cfes', 'cfex', 'lasam'])) or ('topmodel' in mod_adapters and 'smp' in mod_adapters) and 'sloth' not in mod_adapters:
-                self.adapters = ['sloth'] + self.adapters
+        # Add sloth to modules if required
+        mod_adapters = self.modules + self.adapters
+        if (any(x in mod_adapters for x in ['cfes', 'cfex', 'lasam'])) or ('topmodel' in mod_adapters and 'smp' in mod_adapters) and 'sloth' not in mod_adapters:
+            self.adapters = ['sloth'] + self.adapters
 
-            logger.info(f"Adapter modules required to produce full set of NWM output variables: {self.adapters}")
+        logger.info(f"Adapter modules required to produce full set of NWM output variables: {self.adapters}")
 
     def _create_input_dir(self):
         """
@@ -1608,9 +1601,8 @@ class RealizationBuilder:
         """
         Add NWM output variables and adapter module sections to forecast realization
         """
-        if self.output_nwm_vars:
-            self.real_config = gfun.update_realization_nwm_output(self.work_dir, self.lib_file, self.bmi_dir, self.forcing_provider,
-                                                                  self.adapters, self.modules, self.nwm_output_dicts, self.output_dict, self.real_config, self.run_type)
+        self.real_config = gfun.update_realization_nwm_output(self.work_dir, self.lib_file, self.bmi_dir, self.forcing_provider,
+                                                              self.adapters, self.modules, self.nwm_output_dicts, self.output_dict, self.real_config, self.run_type)
 
     def _write_realization(self):
         """
@@ -1895,21 +1887,24 @@ class RealizationBuilder:
         self._init_log()
         self._parse_yaml()
         self._load_realization()
-        self._parse_realization()
-        self._get_nwm_output_variables()
-        self._set_lib_paths()
         self._parse_forcing_engine()
         self._configure_forcing_engine()
-        self._set_output_vars()
-        self._create_bmi_configs()
-        self._update_fcst_realization()
-        self._update_fcst_noah_ueb_topo()
-        self._update_fcst_troute()
+        if self.output_nwm_vars:
+            self._parse_realization()
+            self._extract_divides()
+            self._map_cat_to_grp()
+            self._map_cat_to_form()
+            self._map_mod_to_cat()
+            self._get_nwm_output_variables()
+            self._set_lib_paths()
+            self._set_output_vars()
+            self._create_bmi_configs()
+            self._set_bmi_config_dir()
         self._configure_model_states()
+        self._update_fcst_noah_ueb_topo()
+        self._update_fcst_realization()
         self._write_partition()
-        self._set_bmi_config_dir()
-        self._add_nwm_outputs_to_realization()
-        self._write_fcst_realization()
+        self._write_realization()
 
         if self.use_cold_start:
             logger.info("Cold start run set up successfully")
