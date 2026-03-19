@@ -1427,8 +1427,10 @@ class RealizationBuilder:
         elif hasattr(self, 'adapters') and self.adapters:
             # Create BMI configs for adapter modules
             mod_all = self.adapters.copy()
+            full_modules = self.modules + self.adapters
         else:
             mod_all = self.modules.copy()
+            full_modules = mod_all
 
         # Ensure cfes and cfex are first in mod_all, and troute last
         if 'cfes' in mod_all:
