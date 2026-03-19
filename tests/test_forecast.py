@@ -10,7 +10,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from mswm.build_inputs import RealizationBuilder
-from conftest import _make_calib_input_config, _make_fcst_input_config, _make_lagged_ens_input_config
+from conftest import _make_calib_input_config, _make_fcst_input_config, _make_lagged_ens_input_config, _make_fcst_nwm_output_input_config
 
 
 def _run_calib_build(tmp_work_dir):
@@ -63,6 +63,7 @@ def _create_valid_best_from_calib(calib_rb):
 def calib_build(tmp_work_dir, dummy_files):
     """Run a calibration build workflow"""
     return _run_calib_build(tmp_work_dir)
+
 
 @pytest.fixture
 def valid_yaml_from_calib(calib_build):
@@ -511,3 +512,98 @@ class TestLaggedEnsBuild:
     def test_lagged_ens_variables(self):
         assert self.rb.lagged_ens_mem == "mem2"
         assert self.rb.forcing_lag == 6
+
+
+class TestFcstNWMOutputBuild:
+    """End-to-end tests for forecast realization build workflow with NWM output variables"""
+
+    @pytest.fixture(autouse=True)
+    def _build(self, tmp_work_dir, dummy_files, calib_build, valid_yaml_from_calib):
+        """Minimal test: confirm forecast pipeline runs to completion"""
+
+        # Create input config
+        config = _make_fcst_nwm_output_input_config(tmp_work_dir)
+
+        # Initialize builder
+        rb = RealizationBuilder(
+            config_overrides=config,
+            valid_yaml=valid_yaml_from_calib,
+            fcst_run_name="test_fcst"
+        )
+
+        # Mock file operations that require external dependencies
+        with (
+            patch("mswm.build_inputs.gfun.create_partition_file", return_value=None),
+            patch("pathlib.Path.exists", return_value=True)
+        ):
+            # Run calibration workflow
+            rb.build_fcst_realization()
+
+        self.rb = rb
+        self.calib_rb = calib_build
+
+    # Forecasts Tests
+    def test_adapters(self):
+        assert hasattr(self.rb, 'adapters')
+        assert self.rb.adapters == ['sloth', 'sft', 'smp']
+
+    def test_output_variables(self):
+        assert hasattr(self.rb, 'output_nwm_vars')
+        assert hasattr(self.rb, 'nwm_output_dicts')
+        nwm_outputs = [x['nwm_name'] for x in self.rb.nwm_output_dicts]
+        nwm_required_outputs = ['sfcheadsubrt', 'qBucket', 'ACSNOM', 'SNOWT_AVG', 'SOILICE', 'SOILSAT_TOP', 'QRAIN', 'FSNO', 'SNOWH',
+                                'SNLIQ', 'SNEQV', 'QSNOW', 'SOIL_T', 'SOIL_M', 'SFCRNOFF', 'TRAD', 'LH', 'FIRA', 'HFX']
+        assert nwm_outputs == nwm_required_outputs
+
+    def test_nwm_units(self):
+        nwm_units = [x['nwm_units'] for x in self.rb.nwm_output_dicts]
+        nwm_required_units = ['mm', 'm3/s', 'mm', 'K', '1', '1', 'mm/s', '1', 'm',
+                              'mm', 'kg/m2', 'mm/s', 'K', 'm3/m3', 'mm', 'K', 'W/m2', 'W/m2', 'W/m2']
+        assert nwm_units == nwm_required_units
+
+    def test_nwm_providers(self):
+        nwm_providers = [x['provider'] for x in self.rb.nwm_output_dicts]
+        nwm_required_providers = ['cfes', 'cfes', 'noah', 'noah', 'sft', 'smp', 'noah', 'noah', 'noah',
+                                  'noah', 'noah', 'noah', 'sft', 'smp', 'cfes', 'noah', 'noah', 'noah', 'noah']
+        assert nwm_providers == nwm_required_providers
+
+    def test_nwm_provider_vars(self):
+        nwm_provider_vars = [x['provider_var'] for x in self.rb.nwm_output_dicts]
+        nwm_required_provider_vars = ['NWM_PONDED_DEPTH', 'DEEP_GW_TO_CHANNEL_FLUX', 'ACSNOM', 'SNOWT_AVG', 'soil_ice_fraction', 'soil_moisture_fraction', 'QRAIN', 'FSNO', 'SNOWH',
+                                      'SNLIQ', 'SNEQV', 'QSNOW', 'soil_temperature_profile', 'soil_moisture_profile', 'flux_direct_runoff_m', 'TRAD', 'LH', 'FIRA', 'FSH']
+        assert nwm_provider_vars == nwm_required_provider_vars
+
+    def test_nwm_ouputs_in_realization(self):
+        assert len(self.rb.real_config['global']['formulations'][0]['params']['output_variables']) == 21
+
+    def test_adapters_in_realizaiton(self):
+        assert len(self.rb.real_config['global']['formulations'][0]['params']['modules']) == 5
+        modules = [x['params']['model_type_name'] for x in self.rb.real_config['global']['formulations'][0]['params']['modules']]
+        assert all(x in modules for x in ['SLOTH', 'NoahOWP', 'SMP', 'SFT', 'CFE'])
+
+    def test_sloth_after_adapters(self):
+        expected_sloth_params = {
+            "sloth_ice_fraction_schaake(1,double,1,node)": 0.0,
+            "sloth_ice_fraction_xinanjiang(1,double,1,node)": 0.0,
+            "sloth_smp(1,double,1,node)": 0.0,
+            "soil_moisture_wetting_fronts(1,double,1,node)": 0.0,
+            "soil_thickness_layered(1,double,1,node)": 0.0,
+            "soil_depth_wetting_fronts(1,double,m,node)": 0.0,
+            "num_wetting_fronts(1,int,1,node)": 1.0,
+            "Qb_topmodel(1,double,m h^-1,node)": 0.0,
+            "Qv_topmodel(1,double,m h^-1,node)": 0.0,
+            "global_deficit(1,double,m,node)": 0.0
+        }
+        assert self.rb.real_config['global']['formulations'][0]['params']['modules'][0]["params"]["model_params"] == expected_sloth_params
+
+    def test_sft_adapter_configs_created(self):
+        sft_dir = os.path.join(str(self.rb.input_dir), "sft_input")
+        assert os.path.isdir(sft_dir)
+        input_files = [f for f in os.listdir(sft_dir) if f.endswith(".txt")]
+        assert len(input_files) > 0
+
+    def test_smp_adapter_configs_created(self):
+        smp_dir = os.path.join(str(self.rb.input_dir), "smp_input")
+        assert os.path.isdir(smp_dir)
+        input_files = [f for f in os.listdir(smp_dir) if f.endswith(".txt")]
+        assert len(input_files) > 0
