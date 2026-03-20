@@ -435,7 +435,7 @@ def create_noah_input(
             try:
                 os.unlink(dst)
             except Exception as e:
-                logger.error(f"Failed to remove existing {dst}: {e}")
+                logger.critical(f"Failed to remove existing {dst}: {e}")
                 raise
         try:
             os.symlink(src, dst)
@@ -829,7 +829,7 @@ def create_ueb_input(
             try:
                 os.unlink(dst)
             except Exception as e:
-                logger.error(f"Failed to remove existing {dst}: {e}")
+                logger.critical(f"Failed to remove existing {dst}: {e}")
                 raise
 
         # Create new symlink
@@ -1119,12 +1119,11 @@ def create_symlinks(src_file_list, src_dir, dst_dir):
                 try:
                     os.unlink(target)
                 except Exception as e:
-                    logger.error(f"Failed to remove existing {target}: {e}")
+                    logger.critical(f"Failed to remove existing {target}: {e}")
                     raise
 
             try:
                 os.symlink(ffile, target)
-                logger.info("Created symlink to ngen executable")
             except OSError as e:
                 logger.critical(f"Failed to create symlink: {ffile} -> {target}: {e}")
                 raise
@@ -1170,7 +1169,7 @@ def create_lstm_config(
         try:
             os.unlink(train_data_dir)
         except Exception as e:
-            logger.error(f"Failed to remove existing {train_data_dir}: {e}")
+            logger.critical(f"Failed to remove existing {train_data_dir}: {e}")
             raise
 
     try:
@@ -3350,6 +3349,7 @@ def update_realization_nwm_output(
         output_dict: dict,
         real_config: dict,
         run_type: str,
+        grp: str = None
 ) -> None:
     """
     Create realization file for the specified model and module
@@ -3366,10 +3366,11 @@ def update_realization_nwm_output(
     output_dict : whether to output certain variables (currently SWE and soil moisture)
     real_config : existing realization file as a dictionary
     run_type: type of run (calib, regionalization, or default, cold_start, forecast, hindcast, lagged_ens)
+    grp: group name for regionalization realizations
 
     Returns
     ----------
-    output_config: dictionary containing output variable configuration
+    real_config: updated realization file as a dictionary
     """
 
     # Create symlinks for adapter libraries
@@ -3381,28 +3382,30 @@ def update_realization_nwm_output(
             try:
                 os.unlink(lib_mod_link)
             except Exception as e:
-                logger.error(f"Failed to remove existing {lib_mod_link}: {e}")
+                logger.critical(f"Failed to remove existing {lib_mod_link}: {e}")
                 raise
         try:
             os.symlink(lib_file[key], lib_mod_link)
-            logger.info(f"Created symlink: {lib_file[key]} -> {lib_mod_link}")
         except OSError as e:
             logger.critical(f"Failed to create symlink: {lib_file[key]} -> {lib_mod_link}: {e}")
             raise
 
-    # Update output variable section with NWM output variables
-    real_output = real_config['global']['formulations'][0]['params']['output_variables']
-    output_keys = set(key for item in real_output for key in item.keys())
+    # Retrieve correct formulation section based on type of realization file
+    if grp is not None:
+        real_output = real_config['formulation_groups'][grp][0]['params']['output_variables']
+        real_modules = real_config['formulation_groups'][grp][0]['params']['modules']
+    else:
+        real_output = real_config['global']['formulations'][0]['params']['output_variables']
+        real_modules = real_config['global']['formulations'][0]['params']['modules']
 
+    # Update output variable section with NWM output variables
+    output_keys = set(item['header'] for item in real_output)
     for nwm_dict in nwm_output_dicts:
         if nwm_dict['nwm_name'] not in output_keys:
             real_output.append({'name': nwm_dict['provider_var'], 'header': nwm_dict['nwm_name'], 'units': nwm_dict['nwm_units']})
 
     # Combine modules and adapters
     mod_adapters = modules + adapters
-
-    # Add adapters to modules section
-    real_modules = real_config['global']['formulations'][0]['params']['modules']
 
     if 'sloth' in mod_adapters:
         # Set sloth model parameters depending on modules and adapters
@@ -3443,6 +3446,9 @@ def update_realization_nwm_output(
         # If sloth already in formulation, add sloth module parameters to existing section
         if 'sloth' in modules:
             sloth_index = next((i for i, m in enumerate(modules) if 'sloth' in m), None)
+            # Remove soil_temperature profile if SFT is being added as an adapter
+            if 'sft' in mod_adapters:
+                real_modules[sloth_index]["params"]["model_params"].pop("soil_temperature_profile(1,double,K,node)", None)
             real_modules[sloth_index]["params"]["model_params"].update(sloth_params)
         else:
             # Add sloth section to realization
@@ -3664,7 +3670,7 @@ def create_calib_config_file(
         try:
             os.unlink(ngen_file_link)
         except Exception as e:
-            logger.error(f"Failed to remove existing {ngen_file_link}: {e}")
+            logger.critical(f"Failed to remove existing {ngen_file_link}: {e}")
             raise
     try:
         os.symlink(model_dict['binary'], ngen_file_link)

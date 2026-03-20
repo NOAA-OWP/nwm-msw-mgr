@@ -573,18 +573,41 @@ class RealizationBuilder:
 
         logger.info("Run configured to produce full set of NWM output variables")
 
-        # Query NWM output variables and providers for existing formulation
-        self.nwm_output_dicts = get_providers_for_formulation(self.modules)
+        if self.run_type == 'regionalization':
+            # Query NWM output variables and adapters per formulation group
+            self.grp_to_adapters = {}
+            self.grp_to_nwm_output_dicts = {}
+            all_adapters = set()
 
-        # Identify required adapter modules that need to be added as non-interacting modules in the formulation
-        self.adapters = list(set(r["provider"] for r in self.nwm_output_dicts if r["provider"] not in self.modules))
+            for grp, modules in self.grp_to_form.items():
+                nwm_output_dicts = get_providers_for_formulation(modules)
+                adapters = list(set(r["provider"] for r in nwm_output_dicts if r["provider"] not in modules))
 
-        # Add sloth to modules if required
-        mod_adapters = self.modules + self.adapters
-        if (any(x in mod_adapters for x in ['cfes', 'cfex', 'lasam'])) or ('topmodel' in mod_adapters and 'smp' in mod_adapters) and 'sloth' not in mod_adapters:
-            self.adapters = ['sloth'] + self.adapters
+                # Add sloth if required
+                mod_adapters = modules + adapters
+                if (any(x in mod_adapters for x in ['cfes', 'cfex', 'lasam'])) or ('topmodel' in mod_adapters and 'smp' in mod_adapters) and 'sloth' not in mod_adapters:
+                    adapters = ['sloth'] + adapters
 
-        logger.info(f"Adapter modules required to produce full set of NWM output variables: {self.adapters}")
+                self.grp_to_adapters[grp] = adapters
+                self.grp_to_nwm_output_dicts[grp] = nwm_output_dicts
+                all_adapters.update(adapters)
+                logger.info(f"Adapter modules to produce full set of NWM output variables for group {grp}: {adapters}")
+
+            self.adapters = list(all_adapters)
+
+        else:
+            # Query NWM output variables and providers for existing formulation
+            self.nwm_output_dicts = get_providers_for_formulation(self.modules)
+
+            # Identify required adapter modules that need to be added as non-interacting modules in the formulation
+            self.adapters = list(set(r["provider"] for r in self.nwm_output_dicts if r["provider"] not in self.modules))
+
+            # Add sloth to modules if required
+            mod_adapters = self.modules + self.adapters
+            if (any(x in mod_adapters for x in ['cfes', 'cfex', 'lasam'])) or ('topmodel' in mod_adapters and 'smp' in mod_adapters) and 'sloth' not in mod_adapters:
+                self.adapters = ['sloth'] + self.adapters
+
+            logger.info(f"Adapter modules required to produce full set of NWM output variables: {self.adapters}")
 
     def _create_input_dir(self):
         """
@@ -1223,7 +1246,7 @@ class RealizationBuilder:
             try:
                 symlink_path.unlink()
             except Exception as e:
-                logger.error(f"Failed to remove existing {symlink_path}: {e}")
+                logger.critical(f"Failed to remove existing {symlink_path}: {e}")
                 raise
 
         # Link ngen executable
@@ -1270,7 +1293,7 @@ class RealizationBuilder:
                         try:
                             os.unlink(target)
                         except Exception as e:
-                            logger.error(f"Failed to remove existing {target}: {e}")
+                            logger.critical(f"Failed to remove existing {target}: {e}")
                             raise
 
                     try:
@@ -1399,8 +1422,7 @@ class RealizationBuilder:
             elif self.run_type == 'default':
                 self.run_configs = ['_troute_config_default.yaml']
 
-        if hasattr(self, 'grp_to_cat') and self.grp_to_cat:
-            # Retrieve unique modules in all formulations, maintaining formulation order
+        if self.run_type == 'regionalization' or (hasattr(self, 'grp_to_cat') and self.grp_to_cat):
             mod_all = list(dict.fromkeys(item for lst in self.grp_to_form.values() for item in lst))
         else:
             mod_all = self.modules.copy()
@@ -1414,13 +1436,13 @@ class RealizationBuilder:
             mod_all.remove('troute')
             mod_all.append('troute')
 
-        # Define bmi config loop iterations (modules to creat configs for; modules to pass to create functions)
+        # Define bmi config loop iterations (modules to creat configs for; is adapter loop)
         # Only create adapter modules if requested when running forecast
         if hasattr(self, '_building_fcst_realization') and self._building_fcst_realization:
             loop_configs = []
         # Create bmi configs for modules in existing formulation
         else:
-            loop_configs = [(mod_all, mod_all)]
+            loop_configs = [(mod_all, False)]
 
         # Add adapter modules if output_nwm_vars requested
         if hasattr(self, 'adapters') and self.adapters:
@@ -1593,7 +1615,7 @@ class RealizationBuilder:
         if hasattr(self, '_building_fcst_realization') and self._building_fcst_realization:
             base_mods = []
         elif self.run_type == 'regionalization':
-            base_mods = self.all_mod
+            base_mods = list(set(m1 for form in self.grp_to_form.values() for m1 in form if m1 != 'troute'))
         else:
             base_mods = self.modules
 
@@ -1655,11 +1677,17 @@ class RealizationBuilder:
 
         # Update realization with NWM output variables if needed
         if self.output_nwm_vars:
-            self.real_config = gfun.update_realization_nwm_output(self.work_dir, self.lib_file, self.bmi_dir, self.forcing_provider,
-                                                                  self.adapters, self.modules, self.nwm_output_dicts, self.output_dict,
-                                                                  self.real_config, self.run_type)
+            if hasattr(self, 'grp_to_form') and self.grp_to_form:
+                for grp in self.grp_to_form:
+                    self.real_config = gfun.update_realization_nwm_output(self.work_dir, self.lib_file, self.bmi_dir, self.forcing_provider,
+                                                                          self.grp_to_adapters[grp], self.grp_to_form[grp], self.grp_to_nwm_output_dicts[grp], self.output_dict,
+                                                                          self.real_config, self.run_type, grp=grp)
+            else:
+                self.real_config = gfun.update_realization_nwm_output(self.work_dir, self.lib_file, self.bmi_dir, self.forcing_provider,
+                                                                      self.adapters, self.modules, self.nwm_output_dicts, self.output_dict,
+                                                                      self.real_config, self.run_type)
 
-    def _write_region_realization(self):
+    def _assemble_region_realization(self):
         """
         Assemble realization file for regionalization runs
         """
@@ -1673,9 +1701,10 @@ class RealizationBuilder:
 
         # Update realization with NWM output variables if needed
         if self.output_nwm_vars:
-            self.real_config = gfun.update_realization_nwm_output(self.work_dir, self.lib_file, self.bmi_dir, self.forcing_provider,
-                                                                  self.adapters, self.modules, self.nwm_output_dicts, self.output_dict,
-                                                                  self.real_config, self.run_type)
+            for grp in self.grp_to_form:
+                self.real_config = gfun.update_realization_nwm_output(self.work_dir, self.lib_file, self.bmi_dir, self.forcing_provider,
+                                                                      self.grp_to_adapters[grp], self.grp_to_form[grp], self.grp_to_nwm_output_dicts[grp], self.output_dict,
+                                                                      self.real_config, self.run_type, grp=grp)
 
     def _write_realization(self):
         """
@@ -1879,6 +1908,8 @@ class RealizationBuilder:
         self._map_cat_to_grp()
         self._map_cat_to_form()
         self._map_mod_to_cat()
+        if self.output_nwm_vars:
+            self._get_nwm_output_variables()
         self._set_lib_paths()
         self._symlink_ngen()
         self._extract_forcing()
