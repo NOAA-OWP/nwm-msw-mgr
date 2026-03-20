@@ -255,7 +255,7 @@ class TestRegionNWMOutputBuild:
 
     def test_nwm_provider_vars_grp2(self):
         nwm_provider_vars = [x['provider_var'] for x in self.rb.grp_to_nwm_output_dicts['gage2']]
-        nwm_required_provider_vars = ['ponded_depth_max', 'groundwater_to_stream_recharge', 'ACSNOM', 'SNOWT_AVG', 'soil_ice_fraction', 'soil_moisture_fraction', 'QRAIN', 'FSNO', 'SNOWH',
+        nwm_required_provider_vars = ['nwm_ponded_depth', 'groundwater_to_stream_recharge', 'ACSNOM', 'SNOWT_AVG', 'soil_ice_fraction', 'soil_moisture_fraction', 'QRAIN', 'FSNO', 'SNOWH',
                                       'SNLIQ', 'SNEQV', 'QSNOW', 'soil_temperature_profile', 'soil_moisture_profile', 'surface_runoff', 'TRAD', 'LH', 'FIRA', 'FSH']
         assert nwm_provider_vars == nwm_required_provider_vars
 
