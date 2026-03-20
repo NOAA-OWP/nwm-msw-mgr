@@ -27,23 +27,6 @@ If you already have an environment for running ngen, you can use the same venv.
 where `[VENV_ROOT]` is the location of your Python virtual environment.
 
 
-### Topoflow-Glacier Validation
-To validate whether catchments in a given basin have sufficient glacier coverage to apply Topoflow-Glacier, the validate_topoflow function can be called:
-1. python -m mswm.manager validate_topoflow 01123000 conus False
-
-The mswm.manager script in topoflow validation mode takes two command line arguments:
-1. Command for topoflow validation mode (validate_topoflow)
-2. Basin id
-3. Domain id (conus, prvi, ak, hi, gl)
-4. NgenCERF Flag (True = running inside NgenCERF, False = running outside NgenCERF)
-
-The validate_topoflow function will return a JSON with a status of True if there are catchments in the basin where Topoflow-Glacier can be applied (>=50% glacier coverage).
-The validate_topoflow function will return a JSON with a status of False if there are no catchments in the basin where Topoflow-Glacier can be applied.
-
-Within Python scripts, regionalization input files can be generated calling the build_region realization function:
-1. from mswm.build_inputs import validate_topoflow
-2. validate_topoflow(basin_id='01123000', domain='conus', ngen_cerf=False)
-
 ## Docker container
 
 ### Requirements
@@ -56,6 +39,13 @@ To build the nwm-msw-mgr continer:
 
 ```bash
 docker build --tag=nwm-msw-mgr .
+```
+
+## Testing
+To run nwm-msw-mgr integration tests:
+```bash
+pip install -e ".[test]"
+pytest tests/ -v
 ```
 
 
@@ -227,6 +217,24 @@ build_default(
 #### Arguments
 - `input_path` - Path to user-generated configuration file
 
+
+### Topoflow-Glacier Validation
+To validate whether catchments in a given basin have sufficient glacier coverage to apply Topoflow-Glacier, the validate_topoflow function can be called:
+1. python -m mswm.manager validate_topoflow 01123000 conus False
+
+The mswm.manager script in topoflow validation mode takes two command line arguments:
+1. Command for topoflow validation mode (validate_topoflow)
+2. Basin id
+3. Domain id (conus, prvi, ak, hi, gl)
+4. NgenCERF Flag (True = running inside NgenCERF, False = running outside NgenCERF)
+
+The validate_topoflow function will return a JSON with a status of True if there are catchments in the basin where Topoflow-Glacier can be applied (>=50% glacier coverage).
+The validate_topoflow function will return a JSON with a status of False if there are no catchments in the basin where Topoflow-Glacier can be applied.
+
+Within Python scripts, regionalization input files can be generated calling the build_region realization function:
+1. from mswm.build_inputs import validate_topoflow
+2. validate_topoflow(basin_id='01123000', domain='conus', ngen_cerf=False)
+
 # nwm-msw-mgr Input Configuration File Reference
 This section describes all configuration parameters in the `input.config` file used by the nwm-msw-mgr. Full example files for each run type are available in `/example_inputs/`
 
@@ -248,6 +256,14 @@ Configuration parameters that apply to all run types except `forecast`.
 | `sm_profile_depth` | string | No | Comma-separated depths in meters for soil moisture profile output (default: `0.1, 0.4, 1.0, 2.0`) |
 | `sm_frac_depth` | float | No | Depth in meters for soil moisture fraction calculation (default: `0.4`) |
 | `is_aet_rootzone` | boolean | No | CFE rootzone option for actual evapotranspiration only used if CFE is in the formulation (default: `False`) |
+
+## Module Properties Section: `[ModuleProperties]`
+Configuration parameters that only apply to specific modules.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `is_aet_rootzone` | boolean | No | CFE rootzone option for actual evapotranspiration only used if CFE is in the formulation (default: `False`) |
+| `pet_method` | int | No | Integer (1-5) used to specify the PET method to be used |
 
 ## Regionalization Section: `[Regionalization]`
 Parameters required only for regionalization runs. Section does not need to be supplied for other run types.
@@ -492,27 +508,29 @@ When generating run files for a hindcast (using the nwm-fcst-mgr), multiple sets
 │   │   │       ├── logs/
 │   │   │       └── Output/                            
 │   │   └── Warm_Start_Run/
-│   │       ├── [hind_run_name]_3/                     # Warm Start run providing start up states to hindcast cycle at 3 hours
-│   │       │   ├── Input/
-│   │       │   ├── logs/
-│   │       │   └── Output/
-│   │       └── [hind_run_name]_6/                     # Warm Start run providing start up states to hindcast cycle at 6 hours
-│   │           ├── Input/
-│   │           ├── logs/
-│   │           └── Output/
+│   │       └──  [hind_run_name]/
+│   │           ├── warm_start_3                      # Warm Start run providing start up states to hindcast cycle at 3 hours
+│   │           │   ├── Input/
+│   │           │   ├── logs/
+│   │           │   └── Output/
+│   │           └── warm_start_6                      # Warm Start run providing start up states to hindcast cycle at 6 hours
+│   │               ├── Input/
+│   │               ├── logs/
+│   │               └── Output/
 │   └── Hindcast_Run
-│       ├── [hind_run_name]_0/                         # Hindcast run at 0 hours, using saved states from Cold Start run
-│       │   ├── Input/
-│       │   ├── logs/
-│       │   └── Output/     
-│       ├── [hind_run_name]_3/                         # Hindcast run at 3 hours, using saved states from Warm Start run at 3 hours
-│       │   ├── Input/
-│       │   ├── logs/
-│       │   └── Output/  
-│       └── [hind_run_name]_6/                         # Hindcast run at 6 hours, using saved states from Warm Start run at 6 hours
-│           ├── Input/
-│           ├── logs/
-│           └── Output/                         
+│       └── [hind_run_name]/
+│           ├── hindcast_0                          # Hindcast run at 0 hours, using saved states from Cold Start run
+│           │   ├── Input/
+│           │   ├── logs/
+│           │   └── Output/     
+│           ├── hindcast_3                          # Hindcast run at 3 hours, using saved states from Warm Start run at 3 hours
+│           │   ├── Input/
+│           │   ├── logs/
+│           │   └── Output/  
+│           └── hindcast_6                         # Hindcast run at 6 hours, using saved states from Warm Start run at 6 hours
+│               ├── Input/
+│               ├── logs/
+│               └── Output/                         
 ```
 
 ### Lagged Ensemble Directory Structure
@@ -523,20 +541,21 @@ When generating run files for a medium range lagged ensemble (using the nwm-fcst
 │   ├── Calibration_Run/                               # Output run folder from previous calibration run
 │   ├── Validation_Run/                                # Output run folder from previous validation run
 │   └── Lagged_Ensemble_Run
-│       ├── [lagged_ens_run_name]_mem1/                # Lagged Ensemble member 1 run, using saved states from Closed Loop AnA
-│       │   ├── Input/
-│       │   ├── logs/
-│       │   └── Output/   
-│       ├── [lagged_ens_run_name]_no_da/               # Lagged Ensemble no data assimilation run, using saved states from Open Loop AnA
-│       │   ├── Input/
-│       │   ├── logs/
-│       │   └── Output/   
-│       ├── [lagged_ens_run_name]_mem2/                # Lagged Ensemble member 2 run, using saved states from Closed Loop AnA
-│       │   ├── Input/
-│       │   ├── logs/
-│       │   └── Output/
-│       ├── [lagged_ens_run_name]_mem3/                # Lagged Ensemble member 3 run, using saved states from Closed Loop AnA
-│       ├── [lagged_ens_run_name]_mem4/                # Lagged Ensemble member 4 run, using saved states from Closed Loop AnA
-│       ├── [lagged_ens_run_name]_mem5/                # Lagged Ensemble member 5 run, using saved states from Closed Loop AnA
-│       └── [lagged_ens_run_name]_mem6/                # Lagged Ensemble member 6 run, using saved states from Closed Loop AnA                    
+│       └── [lagged_ens_run_name]/
+│           ├── lagged_ens_mem1/                       # Lagged Ensemble member 1 run, using saved states from Closed Loop AnA
+│           │   ├── Input/
+│           │   ├── logs/
+│           │   └── Output/   
+│           ├── lagged_ens_noda/                       # Lagged Ensemble no data assimilation run, using saved states from Open Loop AnA
+│           │   ├── Input/
+│           │   ├── logs/
+│           │   └── Output/   
+│           ├── lagged_ens_mem2/                       # Lagged Ensemble member 2 run, using saved states from Closed Loop AnA
+│           │   ├── Input/
+│           │   ├── logs/
+│           │   └── Output/
+│           ├── lagged_ens_mem3/                       # Lagged Ensemble member 3 run, using saved states from Closed Loop AnA
+│           ├── lagged_ens_mem4/                       # Lagged Ensemble member 4 run, using saved states from Closed Loop AnA
+│           ├── lagged_ens_mem5/                       # Lagged Ensemble member 5 run, using saved states from Closed Loop AnA
+│           └── lagged_ens_mem6/                       # Lagged Ensemble member 6 run, using saved states from Closed Loop AnA                    
 ```
