@@ -103,6 +103,7 @@ __all__ = [
     'create_realization_file',
     'create_reg_realization_file',
     'update_realization_nwm_output',
+    'write_realization_to_file',
     'create_calib_config_file',
     'create_partition_file',
 ]
@@ -3165,7 +3166,6 @@ def create_reg_realization_file(
         forcing_provider: str,
         forcing_dir: Union[str, Path],
         forcing_config_file: Union[str, Path],
-        realization_file: Union[str, Path],
         time_period: dict,
         rt_dict: dict,
         output_dict: dict,
@@ -3336,12 +3336,244 @@ def create_reg_realization_file(
     # Add catchment groups
     g['catchments'] = {cat: {"formulations": grp, "forcing": "forcing_grp1"} for cat, grp in cat_to_grp.items()}
 
-    # Write realization file
-    with open(realization_file, 'w') as f:
-        json.dump(g, f, indent=4, separators=(", ", ": "), sort_keys=False)
-    logger.info(f'Realization file is created at {realization_file}')
+    return g, output_config_grp
 
-    return output_config_grp
+
+def update_realization_nwm_output(
+        workdir: Union[str, Path],
+        lib_file: dict,
+        bmi_dir: dict,
+        forcing_provider: str,
+        adapters: List[str],
+        modules: List[str],
+        nwm_output_dicts: List[dict],
+        output_dict: dict,
+        real_config: dict,
+        run_type: str,
+) -> None:
+    """
+    Create realization file for the specified model and module
+
+    Parameters
+    ----------
+    workdir : basin directory for storing all the files
+    lib_file : library files for different modules
+    bmi_dir : directory for different model or module to store BMI files
+    forcing_provider: forcing provider option (csv or bmi)
+    adapters : additional modules required to produce NWM output variables
+    modules: model and module combination
+    nwm_output_dicts : dictionaries containing NWM output variable information
+    output_dict : whether to output certain variables (currently SWE and soil moisture)
+    real_config : existing realization file as a dictionary
+    run_type: type of run (calib, regionalization, or default, cold_start, forecast, hindcast, lagged_ens)
+
+    Returns
+    ----------
+    output_config: dictionary containing output variable configuration
+    """
+
+    # Create symlinks for adapter libraries
+    lib_mod = {}
+    for key in adapters:
+        lib_mod_link = os.path.join(workdir, 'Input/' + os.path.basename(lib_file[key]))
+        lib_mod.update({key: lib_mod_link})
+        if os.path.exists(lib_mod_link) or os.path.islink(lib_mod_link):
+            try:
+                os.unlink(lib_mod_link)
+            except Exception as e:
+                logger.error(f"Failed to remove existing {lib_mod_link}: {e}")
+                raise
+        try:
+            os.symlink(lib_file[key], lib_mod_link)
+            logger.info(f"Created symlink: {lib_file[key]} -> {lib_mod_link}")
+        except OSError as e:
+            logger.critical(f"Failed to create symlink: {lib_file[key]} -> {lib_mod_link}: {e}")
+            raise
+
+    # Update output variable section with NWM output variables
+    real_output = real_config['global']['formulations'][0]['params']['output_variables']
+    output_keys = set(key for item in real_output for key in item.keys())
+
+    for nwm_dict in nwm_output_dicts:
+        if nwm_dict['nwm_name'] not in output_keys:
+            real_output.append({'name': nwm_dict['provider_var'], 'header': nwm_dict['nwm_name'], 'units': nwm_dict['nwm_units']})
+
+    # Combine modules and adapters
+    mod_adapters = modules + adapters
+
+    # Add adapters to modules section
+    real_modules = real_config['global']['formulations'][0]['params']['modules']
+
+    if 'sloth' in mod_adapters:
+        # Set sloth model parameters depending on modules and adapters
+        if 'cfes' in mod_adapters:
+            if 'sft' not in mod_adapters:
+                sloth_params = {
+                    "sloth_ice_fraction_schaake(1,double,1,node)": 0.0,
+                    "sloth_ice_fraction_xinanjiang(1,double,1,node)": 0.0,
+                    "sloth_smp(1,double,1,node)": 0.0}
+            else:
+                sloth_params = {
+                    "soil_moisture_wetting_fronts(1,double,1,node)": 0.0,
+                    "soil_thickness_layered(1,double,1,node)": 0.0,
+                    "soil_depth_wetting_fronts(1,double,m,node)": 0.0,
+                    "num_wetting_fronts(1,int,1,node)": 1.0,
+                    "Qb_topmodel(1,double,m h^-1,node)": 0.0,
+                    "Qv_topmodel(1,double,m h^-1,node)": 0.0,
+                    "global_deficit(1,double,m,node)": 0.0}
+        elif 'topmodel' in mod_adapters and 'smp' in mod_adapters:
+            sloth_params = {
+                "sloth_soil_storage(1,double,m,node)": 1.0E-10,
+                "sloth_soil_storage_change(1,double,m,node)": 0.0,
+                "soil_moisture_wetting_fronts(1,double,1,node)": 0.0,
+                "soil_depth_wetting_fronts(1,double,1,node)": 0.0,
+                "num_wetting_fronts(1,int,1,node)": 1}
+        elif 'lasam' in mod_adapters:
+            if 'sft' not in mod_adapters:
+                sloth_params = {"soil_temperature_profile(1,double,K,node)": 275.15}
+            else:
+                sloth_params = {
+                    "sloth_soil_storage(1,double,m,node)": 1.0E-10,
+                    "sloth_soil_storage_change(1,double,m,node)": 0.0,
+                    "Qb_topmodel(1,double,m h^-1,node)": 0.0,
+                    "Qv_topmodel(1,double,m h^-1,node)": 0.0,
+                    "global_deficit(1,double,m,node)": 0.0,
+                    "potential_evapotranspiration_rate(1,double,1,node)": 0.0}
+
+        # If sloth already in formulation, add sloth module parameters to existing section
+        if 'sloth' in modules:
+            sloth_index = next((i for i, m in enumerate(modules) if 'sloth' in m), None)
+            real_modules[sloth_index]["params"]["model_params"].update(sloth_params)
+        else:
+            # Add sloth section to realization
+            modules.insert(0, 'sloth')
+            real_modules.insert(0,
+                                {"name": "bmi_c++",
+                                 "params": {"name": "bmi_c++",
+                                            "model_type_name": get_model_type_name('sloth'),
+                                            "main_output_variable": "z",
+                                            "library_file": lib_mod['sloth'],
+                                            "init_config": '/dev/null',
+                                            "allow_exceed_end_time": True,
+                                            "fixed_time_step": False,
+                                            "uses_forcing_file": False,
+                                            "model_params": sloth_params}}
+                                )
+
+    if 'noah' in adapters:
+        noah_index = 1 if 'sloth' in modules else 0
+        modules.insert(noah_index, 'noah')
+        real_modules.insert(noah_index,
+                            {"name": "bmi_fortran",
+                             "params": {"name": "bmi_fortran",
+                                        "model_type_name": get_model_type_name('noah'),
+                                        "main_output_variable": "QINSUR",
+                                        "library_file": lib_mod['noah'],
+                                        "init_config": os.path.join(bmi_dir['noah'], '{{id}}_' + run_type + '.input'),
+                                        "allow_exceed_end_time": True, "fixed_time_step": False, "uses_forcing_file": False,
+                                        "variables_names_map": {"PRCPNONC": name_prcp.get(forcing_provider),
+                                                                "Q2": name_Q2.get(forcing_provider),
+                                                                "SFCTMP": name_temp.get(forcing_provider),
+                                                                "UU": name_xwind.get(forcing_provider),
+                                                                "VV": name_ywind.get(forcing_provider),
+                                                                "LWDN": name_lw.get(forcing_provider),
+                                                                "SOLDN": name_sw.get(forcing_provider),
+                                                                "SFCPRS": name_pressure.get(forcing_provider)}}}
+                            )
+
+    if 'smp' in adapters:
+        noah_index = next((i for i, m in enumerate(modules) if 'noah' in m), None)
+        smp_index = noah_index + 1
+        modules.insert(smp_index, 'smp')
+        real_modules.insert(smp_index,
+                            {"name": "bmi_c++",
+                             "params": {"name": "bmi_c++",
+                                        "model_type_name": get_model_type_name('smp'),
+                                        "main_output_variable": "soil_storage",
+                                        "library_file": lib_mod['smp'],
+                                        "init_config": os.path.join(bmi_dir['smp'], '{{id}}_bmi_config_smp.txt'),
+                                        "allow_exceed_end_time": True,
+                                        "uses_forcing_file": False,
+                                        "variables_names_map": {
+                                            "soil_storage": "SOIL_STORAGE",
+                                            "soil_storage_change": "SOIL_STORAGE_CHANGE"}}}
+                            )
+
+    if 'sft' in adapters:
+        smp_index = next((i for i, m in enumerate(modules) if 'smp' in m), None)
+        sft_index = smp_index + 1
+        modules.insert(sft_index, 'sft')
+        real_modules.insert(sft_index,
+                            {"name": "bmi_c++",
+                             "params": {"name": "bmi_c++",
+                                        "model_type_name": get_model_type_name('sft'),
+                                        "main_output_variable": "num_cells",
+                                        "library_file": lib_mod['sft'],
+                                        "init_config": os.path.join(bmi_dir['sft'], '{{id}}_bmi_config_sft.txt'),
+                                        "allow_exceed_end_time": True,
+                                        "uses_forcing_file": False,
+                                        "variables_names_map": {"ground_temperature": "TGS"}}}
+                            )
+
+        if 'lasam' in modules:
+            real_modules[smp_index]['params']["variables_names_map"] = {
+                "soil_storage": "sloth_soil_storage",
+                "soil_storage_change": "sloth_soil_storage_change",
+                "soil_moisture_wetting_fronts": "soil_moisture_wetting_fronts",
+                "soil_depth_wetting_fronts": "soil_depth_wetting_fronts",
+                "num_wetting_fronts": "soil_num_wetting_fronts"}
+        elif 'topmodel' in modules:
+            real_modules[smp_index]['params']["variables_names_map"] = {
+                "soil_storage": "sloth_soil_storage",
+                "soil_storage_change": "sloth_soil_storage_change",
+                "Qb_topmodel": "land_surface_water__baseflow_volume_flux",
+                "Qv_topmodel": "soil_water_root-zone_unsat-zone_top__recharge_volume_flux",
+                "global_deficit": "soil_water__domain_volume_deficit"}
+
+    if 'cfes' in adapters:
+        smp_index = next((i for i, m in enumerate(modules) if 'smp' in m), None)
+        cfes_index = smp_index + 1
+        modules.insert(cfes_index, 'cfes')
+        var_maps = var_mapping(modules, "water_potential_evaporation_flux", name_prcp.get('csv'), output_dict)
+        real_modules.insert(cfes_index,
+                            {"name": "bmi_c",
+                             "params": {"name": "bmi_c",
+                                        "model_type_name": get_model_type_name('cfes'),
+                                        "main_output_variable": "Q_OUT",
+                                        "library_file": lib_mod['cfes'],
+                                        "init_config": os.path.join(bmi_dir['cfes'], '{{id}}_bmi_config_cfe.txt'),
+                                        "allow_exceed_end_time": True, "fixed_time_step": False, "uses_forcing_file": False,
+                                        "registration_function": "register_bmi_cfe",
+                                        "variables_names_map": var_maps['input']}}
+                            )
+
+    return real_config
+
+
+def write_realization_to_file(
+        real_config: dict,
+        realization_file: Union[str, Path],
+) -> None:
+    """ Create configuration YAML file for calibration run
+
+    Parameters
+    ----------
+    real_config : dictionary containing realization file schema
+    realization_file: path to write realization file
+
+    Returns
+    ----------
+    None
+    """
+    try:
+        with open(realization_file, 'w') as outfile:
+            json.dump(real_config, outfile, indent=4, separators=(", ", ": "), sort_keys=False)
+    except TypeError as e:
+        logger.critical(f"Failed to dump realization data to JSON: {realization_file}\n{e}")
+        raise
+    except OSError as e:
+        logger.critical(f"Unexpected error while writing realization data to JSON: {realization_file}\n{e}")
+        raise
 
 
 def create_calib_config_file(

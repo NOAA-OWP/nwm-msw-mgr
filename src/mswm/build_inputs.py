@@ -1371,40 +1371,18 @@ class RealizationBuilder:
         )
 
         # Retrieve calib and valid output variable settings
-        if self.run_type == 'calibration':
-            self.calib_output_vars = self.conf2.get('calib_output_vars') if self.conf2 else None
-            self.valid_output_vars = self.conf2.get('valid_output_vars') if self.conf2 else None
+        self.calib_output_vars = self.conf2.get('calib_output_vars') if self.conf2 else None
+        self.valid_output_vars = self.conf2.get('valid_output_vars') if self.conf2 else None
 
-            self.calib_output_vars = False if self.calib_output_vars is None else self.calib_output_vars
-            self.valid_output_vars = True if self.valid_output_vars is None else self.valid_output_vars
+        self.calib_output_vars = False if self.calib_output_vars is None else self.calib_output_vars
+        self.valid_output_vars = True if self.valid_output_vars is None else self.valid_output_vars
 
         logger.info("Set output variables")
-
-    def _update_fcst_realization(self):
-        """
-        Update forcing and time related info in realization file
-        """
-        self.real_config = gfun.update_forcing_in_realization(self.real_config, self.forcing_path, self.forcing_config_file, self.fcst_start, self.fcst_end, self.basename_opt)
-        logger.info("Updated forecast realization file")
-
-    def _update_fcst_noah_ueb_topo(self):
-        """
-        For UEB, TopoFlow-Glacier, and Noah-OWP-Modular, create new BMI config files with new time info, and
-        update path to BMI configs in realization file accordingly
-        """
-        self.real_config = gfun.update_noah_ueb_topo_times(self.real_config, self.input_dir, self.basename_opt)
-        logger.info("Updated noah and ueb config files for forecast if used")
-
-    def _update_fcst_troute(self):
-        """
-        Update BMI config files for t-route for forecast period
-        """
-        self.real_config = gfun.update_troute(self.real_config, self.input_dir, self.basename_opt)
-        logger.info("Updated t-route file for forecast")
 
     def _create_bmi_configs(self, is_regionalization: bool = False):
         """
         Generate BMI config files for modules or link to existing config files
+        Create BMI configs for formulation and adapter modules separately to ensure that adapters don't influence existing formulation
 
         Parameters
         ----------
@@ -1424,13 +1402,8 @@ class RealizationBuilder:
         if hasattr(self, 'grp_to_cat') and self.grp_to_cat:
             # Retrieve unique modules in all formulations, maintaining formulation order
             mod_all = list(dict.fromkeys(item for lst in self.grp_to_form.values() for item in lst))
-        elif hasattr(self, 'adapters') and self.adapters:
-            # Create BMI configs for adapter modules
-            mod_all = self.adapters.copy()
-            full_modules = self.modules + self.adapters
         else:
             mod_all = self.modules.copy()
-            full_modules = mod_all
 
         # Ensure cfes and cfex are first in mod_all, and troute last
         if 'cfes' in mod_all:
@@ -1441,92 +1414,122 @@ class RealizationBuilder:
             mod_all.remove('troute')
             mod_all.append('troute')
 
+        # Define bmi config loop iterations (modules to creat configs for; modules to pass to create functions)
+        # Only create adapter modules if requested when running forecast
+        if hasattr(self, '_building_fcst_realization') and self._building_fcst_realization:
+            loop_configs = []
+        # Create bmi configs for modules in existing formulation
+        else:
+            loop_configs = [(mod_all, mod_all)]
+
+        # Add adapter modules if output_nwm_vars requested
+        if hasattr(self, 'adapters') and self.adapters:
+            adapter_all = [m for m in self.adapters if m != 'sloth']
+            loop_configs.append((adapter_all, True))
+
         # loop through modules to create input files
-        for m1 in mod_all:
+        for mods_to_create, is_adapter_loop in loop_configs:
+            for m1 in mods_to_create:
 
-            # module name used by the UI
-            m2 = settings.modules_all.loc[settings.modules_all['module'] == m1, 'name_ui'].iloc[0]
+                # module name used by the UI
+                m2 = settings.modules_all.loc[settings.modules_all['module'] == m1, 'name_ui'].iloc[0]
 
-            # define module input directory
-            mod_input_dir = os.path.join(self.input_dir, m2 + '_input')
+                # define module input directory
+                mod_input_dir = os.path.join(self.input_dir, m2 + '_input')
 
-            # Retrieve catchments that use each module
-            if is_regionalization:
-                cat_mod = self.mod_to_cat[m1]
-                # If module requires full formulation, retrieve formulation for each catchment
-                if m1 in ['cfes', 'cfex', 'sft', 'lasam']:
-                    form_cat = [self.cat_to_form[cat] for cat in cat_mod]
-            else:
-                if hasattr(self, 'grp_to_cat') and self.grp_to_cat:
-                    cat_mod = self.mod_to_cat[m1]
+                # Remove existing symlinked input dir
+                if os.path.isdir(mod_input_dir) and os.path.islink(mod_input_dir):
+                    try:
+                        os.unlink(mod_input_dir)
+                    except Exception as e:
+                        logger.critical(f"failed to remove existing {mod_input_dir}: {e}")
+                        raise
+
+                # Skip config generation for sloth
+                if m1 in ['sloth']:
+                    continue
+
+                # Create input file directory
+                if m1 != 'troute':
+                    try:
+                        os.makedirs(mod_input_dir, exist_ok=True)
+                    except Exception as e:
+                        logger.critical(f"Failed to create input directory for {m1}: {mod_input_dir} - {e}")
+                        raise
+
+                # Determine cat_mod and mods_to_pass based on run_type and loop type
+                if is_regionalization or hasattr(self, 'grp_to_form') and self.grp_to_form:
+                    if is_adapter_loop:
+                        cat_mod = [cat for grp, grp_adapters in self.grp_to_adapters.items()
+                                   if m1 in grp_adapters for cat in self.grp_to_cat[grp]]
+                        form_cat = [self.grp_to_form[grp] + self.grp_to_adapters[grp]
+                                    for grp, grp_adapters in self.grp_to_adapters.items()
+                                    if m1 in grp_adapters for _ in self.grp_to_cat[grp]]
+                    else:
+                        cat_mod = self.mod_to_cat[m1]
+                        form_cat = [self.cat_to_form[cat] for cat in cat_mod]
+                    mods_to_pass = form_cat
                 else:
                     cat_mod = self.catids.copy()
+                    mods_to_pass = mod_all + self.adapters if is_adapter_loop and hasattr(self, 'adapters') else mod_all
 
-            # Skip config generation for sloth
-            if m1 in ['sloth']:
-                continue
+                # Create BMI config files from scratch if paths not provided
+                if m1 in ['cfes', 'cfex']:
+                    gfun.create_cfe_input(cat_mod, mods_to_pass, self.divides_df, mod_input_dir, self.run_type,
+                                          self.cat_to_aet_rootzone if is_regionalization or hasattr(self, 'grp_to_form') else self.aet_rootzone,
+                                          self.output_dict['sm_profile_depth'])
+                elif m1 == 'topmodel':
+                    gfun.create_topmodel_input(cat_mod, self.divides_df, self.flowpaths_df, mod_input_dir)
+                elif m1 == 'ueb':
+                    gfun.create_ueb_input(cat_mod, self.time_period, self.divides_df, self.conf3[m1 + '_parameter_dir'], mod_input_dir, self.run_type)
+                elif m1 == 'snow17':
+                    gfun.create_snow17_input(cat_mod, self.divides_df, mod_input_dir)
+                elif m1 == "pet":
+                    gfun.create_pet_input(cat_mod, self.divides_df, mod_input_dir, self.pet_method)
+                elif m1 == "sac":
+                    gfun.create_sac_input(cat_mod, self.divides_df, mod_input_dir)
+                elif m1 == 'noah':
+                    gfun.create_noah_input(cat_mod, self.time_period, self.divides_df, self.conf3[m1 + '_parameter_dir'], mod_input_dir, self.run_type)
+                elif m1 == 'lstm':
+                    gfun.create_lstm_input(cat_mod, self.divides_df, self.conf3['lstm_parameter_dir'], mod_input_dir)
+                elif m1 == 'sft':
+                    sft_dir = os.path.join(self.input_dir, 'sft_input')
+                    smp_dir = os.path.join(self.input_dir, 'smp_input')
 
-            # Create input file directory
-            if m1 != 'troute':
-                try:
-                    os.makedirs(mod_input_dir, exist_ok=True)
-                except Exception as e:
-                    logger.critical(f"Failed to create input directory for {m1}: {mod_input_dir} - {e}")
-                    raise
+                    if is_regionalization or (hasattr(self, 'grp_to_form') and self.grp_to_form):
+                        # Loop through schemes that could be paired with SMP/SFT
+                        for scheme in ['cfes', 'cfex', 'lasam', 'topmodel', 'sac']:
+                            if is_adapter_loop:
+                                # Find groups where scheme is in formulation or adapter and sft is in adapter
+                                scheme_sft_grps = [grp for grp, mods in self.grp_to_form.items()
+                                                   if (scheme in mods or scheme in self.grp_to_adapters.get(grp, [])) and 'sft' in self.grp_to_adapters.get(grp, [])]
+                            else:
+                                # Find groups where scheme and sft are both in the formulation
+                                scheme_sft_grps = [grp for grp, mods in self.grp_to_form.items()
+                                                   if scheme in mods and 'sft' in mods]
 
-            # Create BMI config files from scratch if paths not provided
-            if m1 in ['cfes', 'cfex']:
-                if is_regionalization:
-                    gfun.create_cfe_input(cat_mod, form_cat, self.divides_df, mod_input_dir, self.run_type, self.cat_to_aet_rootzone, self.output_dict['sm_profile_depth'])
-                else:
-                    gfun.create_cfe_input(cat_mod, mod_all, self.divides_df, mod_input_dir, self.run_type, self.aet_rootzone, self.output_dict['sm_profile_depth'])
-            elif m1 == 'topmodel':
-                gfun.create_topmodel_input(cat_mod, self.divides_df, self.flowpaths_df, mod_input_dir)
-            elif m1 == 'ueb':
-                gfun.create_ueb_input(cat_mod, self.time_period, self.divides_df, self.conf3[m1 + '_parameter_dir'], mod_input_dir, self.run_type)
-            elif m1 == 'snow17':
-                gfun.create_snow17_input(cat_mod, self.divides_df, mod_input_dir)
-            elif m1 == "pet":
-                gfun.create_pet_input(cat_mod, self.divides_df, mod_input_dir, self.pet_method)
-            elif m1 == "sac":
-                gfun.create_sac_input(cat_mod, self.divides_df, mod_input_dir)
-            elif m1 == 'noah':
-                gfun.create_noah_input(cat_mod, self.time_period, self.divides_df, self.conf3[m1 + '_parameter_dir'], mod_input_dir, self.run_type)
-            elif m1 == 'lstm':
-                gfun.create_lstm_input(cat_mod, self.divides_df, self.conf3['lstm_parameter_dir'], mod_input_dir)
-            elif m1 == 'sft':
-                sft_dir = os.path.join(self.input_dir, 'sft_input')
-                smp_dir = os.path.join(self.input_dir, 'smp_input')
+                            if scheme_sft_grps:
+                                # Retrieve catchments and formulations for groups using this scheme/sft combination
+                                scheme_cat = [cat for grp in scheme_sft_grps for cat in self.grp_to_cat[grp]]
+                                scheme_form = [self.grp_to_form[grp] + self.grp_to_adapters[grp]
+                                               for grp in scheme_sft_grps for _ in self.grp_to_cat[grp]] if is_adapter_loop else [self.cat_to_form[cat] for cat in scheme_cat]
+                                gfun.create_sft_smp_input(scheme_cat, scheme_form, self.divides_df, sft_dir, smp_dir, self.run_type,
+                                                          self.output_dict['sm_frac_depth'], self.output_dict['sm_profile_depth'])
+                    else:
+                        gfun.create_sft_smp_input(cat_mod, mods_to_pass, self.divides_df, sft_dir, smp_dir, self.run_type,
+                                                  self.output_dict['sm_frac_depth'], self.output_dict['sm_profile_depth'])
+                elif m1 == 'smp':
+                    pass
+                elif m1 == 'lasam':
+                    gfun.create_lasam_input(cat_mod, mods_to_pass, self.divides_df, mod_input_dir, self.conf3['lasam_parameter_dir'], self.run_type)
+                elif m1 == 'topoflow-glacier':
+                    gfun.create_topoflow_glacier_input(cat_mod, self.divides_df, self.time_period, mod_input_dir, self.run_type)
+                elif m1 == 'troute':
+                    routing_config_file = os.path.join(self.work_dir + '/Input', '{}'.format(self.basin))
+                    gfun.create_troute_config(self.cat_file, self.time_period, routing_config_file, self.run_configs, self.run_type)
 
-                if is_regionalization:
-                    # Loop through schemes that could be paired with SMP/SFT
-                    for scheme in ['cfes', 'cfex', 'lasam', 'topmodel', 'sac']:
-                        scheme_sft_grps = [grp for grp, mods in self.grp_to_form.items() if scheme in mods and 'sft' in mods]
-
-                        if scheme_sft_grps:
-                            # Retrieve catchments and formulations corresponding to scheme
-                            scheme_cat = [cat for grp in scheme_sft_grps for cat in self.grp_to_cat[grp]]
-                            scheme_form = [self.cat_to_form[cat] for cat in scheme_cat]
-                            gfun.create_sft_smp_input(scheme_cat, scheme_form, self.divides_df, sft_dir, smp_dir, self.run_type,
-                                                      self.output_dict['sm_frac_depth'], self.output_dict['sm_profile_depth'])
-                else:
-                    gfun.create_sft_smp_input(cat_mod, mod_all, self.divides_df, sft_dir, smp_dir, self.run_type,
-                                              self.output_dict['sm_frac_depth'], self.output_dict['sm_profile_depth'])
-            elif m1 == 'smp':
-                pass
-            elif m1 == 'lasam':
-                if is_regionalization:
-                    gfun.create_lasam_input(cat_mod, form_cat, self.divides_df, mod_input_dir, self.conf3['lasam_parameter_dir'], self.run_type)
-                else:
-                    gfun.create_lasam_input(cat_mod, mod_all, self.divides_df, mod_input_dir, self.conf3['lasam_parameter_dir'], self.run_type)
-            elif m1 == 'topoflow-glacier':
-                gfun.create_topoflow_glacier_input(cat_mod, self.divides_df, self.time_period, mod_input_dir, self.run_type)
-            elif m1 == 'troute':
-                routing_config_file = os.path.join(self.work_dir + '/Input', '{}'.format(self.basin))
-                gfun.create_troute_config(self.cat_file, self.time_period, routing_config_file, self.run_configs, self.run_type)
-
-            if m1 != 'troute':
-                logger.info(f'{m1}: input config files created at: {mod_input_dir}')
+                    if m1 != 'troute':
+                        logger.info(f'{m1}: input config files created at: {mod_input_dir}')
 
         log_msg = "Created BMI config files for all modules in each regionalization formulation" if is_regionalization else "Created BMI config files for all modules in the formulation"
         logger.info(log_msg)
@@ -1587,37 +1590,53 @@ class RealizationBuilder:
         """
         Set directories of BMI config files
         """
-        if self.output_nwm_vars:
-            bmi_mods = self.adapters
+        if hasattr(self, '_building_fcst_realization') and self._building_fcst_realization:
+            base_mods = []
         elif self.run_type == 'regionalization':
-            bmi_mods = self.all_mod
+            base_mods = self.all_mod
         else:
-            bmi_mods = self.modules
+            base_mods = self.modules
+
+        bmi_mods = (self.adapters + base_mods) if self.output_nwm_vars else base_mods
 
         self.bmi_dir = {}
         for m1 in bmi_mods:
             m2 = settings.modules_all.loc[settings.modules_all['module'] == m1, 'name_ui'].iloc[0]
             self.bmi_dir[m1] = os.path.join(self.input_dir, m2 + '_input')
 
-    def _add_nwm_outputs_to_realization(self):
+    def _update_fcst_noah_ueb_topo(self):
         """
-        Add NWM output variables and adapter module sections to forecast realization
+        For UEB, TopoFlow-Glacier, and Noah-OWP-Modular, create new BMI config files with new time info, and
+        update path to BMI configs in realization file accordingly
         """
-        self.real_config = gfun.update_realization_nwm_output(self.work_dir, self.lib_file, self.bmi_dir, self.forcing_provider,
-                                                              self.adapters, self.modules, self.nwm_output_dicts, self.output_dict, self.real_config, self.run_type)
+        self.real_config = gfun.update_noah_ueb_topo_times(self.real_config, self.input_dir, self.basename_opt)
+        logger.info("Updated noah and ueb config files for forecast if used")
 
-    def _write_realization(self):
+    def _update_fcst_troute(self):
         """
-        Write realization file for calibration and default runs
+        Update BMI config files for t-route for forecast period
         """
-        # Set file suffix
-        if self.run_type == 'calibration':
-            file_suffix = 'calib'
-        else:
-            file_suffix = self.run_type
+        self.real_config = gfun.update_troute(self.real_config, self.input_dir, self.basename_opt)
+        logger.info("Updated t-route file for forecast")
 
-        # Set BMI config directories
-        self.realization_file = self.work_dir + '/{}'.format(self.basin) + '_realization_config_bmi_' + file_suffix + '.json'
+    def _update_fcst_realization(self):
+        """
+        Update forcing and time related info in realization file
+        Add NWM Output variable sections to realization if requested
+        """
+        self.real_config = gfun.update_forcing_in_realization(self.real_config, self.forcing_path, self.forcing_config_file, self.fcst_start, self.fcst_end, self.basename_opt)
+        logger.info("Updated forecast realization file forcing and time information")
+
+        if self.output_nwm_vars:
+            self.real_config = gfun.update_realization_nwm_output(self.work_dir, self.lib_file, self.bmi_dir, self.forcing_provider,
+                                                                  self.adapters, self.modules, self.nwm_output_dicts, self.output_dict,
+                                                                  self.real_config, self.run_type)
+
+    def _assemble_realization(self):
+        """
+        Assemble realization file for calibration and default runs
+        """
+        # Set file paths
         routing_config_file = os.path.join(self.work_dir + '/Input', '{}'.format(self.basin) + self.run_configs[0])
         bmi_dir = {}
         for m1 in self.modules:
@@ -1626,46 +1645,52 @@ class RealizationBuilder:
 
         rt_dict = {"routing": {"t_route_config_file_with_path": routing_config_file}}
 
-        # Write realization file
+        # Assemble realization file
         if hasattr(self, 'grp_to_form') and self.grp_to_form:
-            self.output_config = gfun.create_reg_realization_file(self.work_dir, self.lib_file, self.bmi_dir, self.forcing_provider, self.forcing_path, self.forcing_config_file, self.realization_file,
-                                                                  self.time_period, rt_dict, self.output_dict, self.calib_output_vars, self.run_type, self.cat_to_grp, self.grp_to_form, {})
+            self.real_config, self.output_config = gfun.create_reg_realization_file(self.work_dir, self.lib_file, self.bmi_dir, self.forcing_provider, self.forcing_path, self.forcing_config_file,
+                                                                                    self.time_period, rt_dict, self.output_dict, self.calib_output_vars, self.run_type, self.cat_to_grp, self.grp_to_form, {})
         else:
-            self.output_config = gfun.create_realization_file(self.work_dir, self.lib_file, self.bmi_dir, self.forcing_provider, self.forcing_path, self.forcing_config_file, self.realization_file,
-                                                              self.modules, self.time_period, rt_dict, self.output_dict, self.calib_output_vars, self.run_type)
+            self.real_config, self.output_config = gfun.create_realization_file(self.work_dir, self.lib_file, self.bmi_dir, self.forcing_provider, self.forcing_path, self.forcing_config_file,
+                                                                                self.modules, self.time_period, rt_dict, self.output_dict, self.calib_output_vars, self.run_type)
+
+        # Update realization with NWM output variables if needed
+        if self.output_nwm_vars:
+            self.real_config = gfun.update_realization_nwm_output(self.work_dir, self.lib_file, self.bmi_dir, self.forcing_provider,
+                                                                  self.adapters, self.modules, self.nwm_output_dicts, self.output_dict,
+                                                                  self.real_config, self.run_type)
 
     def _write_region_realization(self):
         """
-        Write realization file for regionalization runs
+        Assemble realization file for regionalization runs
         """
-        # Create model realization file for regionalization
-        self.realization_file = self.work_dir + '/{}'.format(self.basin) + '_realization_config_bmi_region.json'
+        # Set file paths
         routing_config_file = os.path.join(self.work_dir + '/Input', '{}'.format(self.basin) + self.run_configs[0])
         rt_dict = {"routing": {"t_route_config_file_with_path": routing_config_file}}
 
-        # Write realization file
-        self.output_config = gfun.create_reg_realization_file(self.work_dir, self.lib_file, self.bmi_dir, self.forcing_provider, self.forcing_path, self.forcing_config_file, self.realization_file,
-                                                              self.time_period, rt_dict, self.output_dict, {}, self.run_type, self.cat_to_grp, self.grp_to_form, self.grp_params)
+        # Assemble realization file
+        self.real_config, self.output_config = gfun.create_reg_realization_file(self.work_dir, self.lib_file, self.bmi_dir, self.forcing_provider, self.forcing_path, self.forcing_config_file,
+                                                                                self.time_period, rt_dict, self.output_dict, {}, self.run_type, self.cat_to_grp, self.grp_to_form, self.grp_params)
 
-    def _write_fcst_realization(self):
+        # Update realization with NWM output variables if needed
+        if self.output_nwm_vars:
+            self.real_config = gfun.update_realization_nwm_output(self.work_dir, self.lib_file, self.bmi_dir, self.forcing_provider,
+                                                                  self.adapters, self.modules, self.nwm_output_dicts, self.output_dict,
+                                                                  self.real_config, self.run_type)
+
+    def _write_realization(self):
         """
-        Write updated forecast realization file
+        Write realization to file for all run types
         """
-        # Update realization file basename
-        new_basename = os.path.basename(self.real_input_file).replace("valid_best", self.basename_opt)
+        # Set realization path based on run type
+        if hasattr(self, '_building_fcst_realization') and self._building_fcst_realization:
+            new_basename = os.path.basename(self.real_input_file).replace("valid_best", self.basename_opt)
+            self.realization_file = Path(self.work_dir, new_basename)
+        else:
+            file_suffix = {'calibration': 'calib', 'regionalization': 'region'}.get(self.run_type, self.run_type)
+            self.realization_file = self.work_dir + '/{}'.format(self.basin) + '_realization_config_bmi_' + file_suffix + '.json'
 
-        # save the new realization file
-        self.realization_file = Path(self.work_dir, new_basename)
-        try:
-            with open(self.realization_file, 'w') as outfile:
-                json.dump(self.real_config, outfile, indent=4, separators=(", ", ": "), sort_keys=False)
-        except TypeError as e:
-            logger.critical(f"Failed to dump realization data to JSON: {self.realization_file}\n{e}")
-            raise
-        except OSError as e:
-            logger.critical(f"Unexpected error while writing realization data to JSON: {self.realization_file}\n{e}")
-            raise
-
+        # Write realization to file
+        gfun.write_realization_to_file(self.real_config, self.realization_file)
         logger.info(f"Realization file created at: {self.realization_file}")
 
     def _write_partition(self):
@@ -1817,6 +1842,7 @@ class RealizationBuilder:
         self._set_output_vars()
         self._create_bmi_configs()
         self._set_bmi_config_dir()
+        self._assemble_realization()
         self._write_realization()
         self._write_partition()
         self._create_calib_model_dict()
@@ -1860,7 +1886,8 @@ class RealizationBuilder:
         self._set_output_vars()
         self._create_bmi_configs(is_regionalization=True)
         self._set_bmi_config_dir()
-        self._write_region_realization()
+        self._assemble_region_realization()
+        self._write_realization()
         self._write_partition()
 
         logger.info("Regionalization run set up successfully")
@@ -1914,6 +1941,8 @@ class RealizationBuilder:
             logger.info("Forecast run set up successfully")
         self._building_fcst_realization = False
 
+        self._building_fcst_realization = False
+
         if self.save_state:
             return self.realization_file, self.save_state_to
         else:
@@ -1938,11 +1967,14 @@ class RealizationBuilder:
         self._parse_forcing_engine()
         self._parse_time()
         self._extract_hydrofabric()
+        self._extract_divides()
         self._parse_modules()
         self._validate_processes()
         self._map_cat_to_grp()
         self._map_cat_to_form()
         self._map_mod_to_cat()
+        if self.output_nwm_vars:
+            self._get_nwm_output_variables()
         self._set_lib_paths()
         self._symlink_ngen()
         self._extract_forcing()
@@ -1950,6 +1982,7 @@ class RealizationBuilder:
         self._set_output_vars()
         self._create_bmi_configs()
         self._set_bmi_config_dir()
+        self._assemble_realization()
         self._write_realization()
         self._write_partition()
 
