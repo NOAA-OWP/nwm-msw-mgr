@@ -3372,6 +3372,8 @@ def update_realization_nwm_output(
     ----------
     real_config: updated realization file as a dictionary
     """
+    # Create local copy of modules to not affect self.modules
+    modules = modules.copy()
 
     # Create symlinks for adapter libraries
     lib_mod = {}
@@ -3409,7 +3411,7 @@ def update_realization_nwm_output(
 
     if 'sloth' in mod_adapters:
         # Set sloth model parameters depending on modules and adapters
-        if 'cfes' in mod_adapters:
+        if 'cfes' in mod_adapters or 'cfex' in mod_adapters:
             if 'sft' not in mod_adapters:
                 sloth_params = {
                     "sloth_ice_fraction_schaake(1,double,1,node)": 0.0,
@@ -3424,6 +3426,12 @@ def update_realization_nwm_output(
                     "Qb_topmodel(1,double,m h^-1,node)": 0.0,
                     "Qv_topmodel(1,double,m h^-1,node)": 0.0,
                     "global_deficit(1,double,m,node)": 0.0}
+            # If topmodel and smp are also present, merge in their required sloth params
+            if 'topmodel' in mod_adapters and 'smp' in mod_adapters:
+                sloth_params.update({
+                    "sloth_soil_storage(1,double,m,node)": 1.0E-10,
+                    "sloth_soil_storage_change(1,double,m,node)": 0.0
+                })
         elif 'topmodel' in mod_adapters and 'smp' in mod_adapters:
             sloth_params = {
                 "sloth_soil_storage(1,double,m,node)": 1.0E-10,
@@ -3537,8 +3545,8 @@ def update_realization_nwm_output(
                 "global_deficit": "soil_water__domain_volume_deficit"}
 
     if 'cfes' in adapters:
-        smp_index = next((i for i, m in enumerate(modules) if 'smp' in m), None)
-        cfes_index = smp_index + 1
+        sft_index = next((i for i, m in enumerate(modules) if 'sft' in m), None)
+        cfes_index = sft_index + 1
         modules.insert(cfes_index, 'cfes')
         var_maps = var_mapping(modules, "water_potential_evaporation_flux", name_prcp.get('csv'), output_dict)
         real_modules.insert(cfes_index,

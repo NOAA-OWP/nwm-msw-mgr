@@ -36,8 +36,8 @@ NWM_OUTPUT_VARIABLES: List[NWMOutputVariable] = [
         description="Ponded water depth",
         adapter="cfes",
         adapter_var="NWM_PONDED_DEPTH",
-        provider=["cfes", "cfex", "sac", "topmodel", "lasam"],
-        provider_var=["NWM_PONDED_DEPTH", "NWM_PONDED_DEPTH", "nwm_ponded_depth", "", "nwm_ponded_depth"],
+        provider=["cfes", "cfex", "sac", "lasam"],
+        provider_var=["NWM_PONDED_DEPTH", "NWM_PONDED_DEPTH", "nwm_ponded_depth", "nwm_ponded_depth"],
     ),
     NWMOutputVariable(
         nwm_name="qBucket",
@@ -90,8 +90,8 @@ NWM_OUTPUT_VARIABLES: List[NWMOutputVariable] = [
         description="Rainfall rate on the ground",
         adapter="noah",
         adapter_var="QRAIN",
-        provider=["cfes", "cfex", "lasam", "noah", "topmodel", "ueb"],
-        provider_var=["RAIN_RATE", "RAIN_RATE", "precipitation_rate", "QRAIN", "atmosphere_water__liquid_equivalent_precipitation_rate_out", "precip"],
+        provider=["noah"],
+        provider_var=["QRAIN"],
     ),
     NWMOutputVariable(
         nwm_name="FSNO",
@@ -228,15 +228,13 @@ def get_provider_for_variable(variable_name: str, available_modules: List[str]) 
     if var is None:
         raise ValueError(f"Unknown NWM output variable: {variable_name}")
 
-    # Find first matching module in available_modules
-    for module in available_modules:
-        if module in var.provider:
-            return module, var.get_provider_var(module)
+    # Find first matching module in registry order
+    for provider in var.provider:
+        if provider in available_modules:
+            return provider, var.get_provider_var(provider)
 
     # Fallback to first valid provider if no match found
-    adapter_provider = var.adapter
-    adapter_var = var.adapter_var
-    return adapter_provider, adapter_var
+    return var.adapter, var.adapter_var
 
 
 def get_providers_for_formulation(available_modules: List[str]) -> List[dict]:
