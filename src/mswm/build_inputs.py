@@ -604,8 +604,13 @@ class RealizationBuilder:
 
             # Add sloth to modules if required
             mod_adapters = self.modules + self.adapters
-            if (any(x in mod_adapters for x in ['cfes', 'cfex', 'lasam'])) or ('topmodel' in mod_adapters and 'smp' in mod_adapters) and 'sloth' not in mod_adapters:
+            if (any(x in mod_adapters for x in ['cfes', 'cfex', 'lasam'])) or ('topmodel' in mod_adapters and 'smp' in mod_adapters) or ('sac' in mod_adapters and 'smp' in mod_adapters) and 'sloth' not in mod_adapters:
                 self.adapters = ['sloth'] + self.adapters
+
+            if 'cfes' in self.adapters and 'topmodel' in self.modules:
+                msg = "Topmodel formulations cannot create all NWM output variables due to conflict with CFE adapter."
+                logger.critical(msg)
+                raise RuntimeError(msg)
 
             logger.info(f"Adapter modules required to produce full set of NWM output variables: {self.adapters}")
 

@@ -3419,6 +3419,8 @@ def update_realization_nwm_output(
                     "sloth_smp(1,double,1,node)": 0.0}
             else:
                 sloth_params = {
+                    "sloth_soil_storage(1,double,m,node)": 1.0E-10,
+                    "sloth_soil_storage_change(1,double,m,node)": 0.0,
                     "soil_moisture_wetting_fronts(1,double,1,node)": 0.0,
                     "soil_thickness_layered(1,double,1,node)": 0.0,
                     "soil_depth_wetting_fronts(1,double,m,node)": 0.0,
@@ -3439,6 +3441,17 @@ def update_realization_nwm_output(
                 "soil_moisture_wetting_fronts(1,double,1,node)": 0.0,
                 "soil_depth_wetting_fronts(1,double,1,node)": 0.0,
                 "num_wetting_fronts(1,int,1,node)": 1}
+        elif 'sac' in mod_adapters and 'smp' in mod_adapters:
+            sloth_params = {
+                "sloth_soil_storage(1,double,m,node)": 1.0E-10,
+                "sloth_soil_storage_change(1,double,m,node)": 0.0,
+                "soil_moisture_wetting_fronts(1,double,1,node)": 0.0,
+                "soil_thickness_layered(1,double,1,node)": 0.0,
+                "soil_depth_wetting_fronts(1,double,m,node)": 0.0,
+                "num_wetting_fronts(1,int,1,node)": 1.0,
+                "Qb_topmodel(1,double,m h^-1,node)": 0.0,
+                "Qv_topmodel(1,double,m h^-1,node)": 0.0,
+                "global_deficit(1,double,m,node)": 0.0}
         elif 'lasam' in mod_adapters:
             if 'sft' not in mod_adapters:
                 sloth_params = {"soil_temperature_profile(1,double,K,node)": 275.15}
@@ -3446,10 +3459,14 @@ def update_realization_nwm_output(
                 sloth_params = {
                     "sloth_soil_storage(1,double,m,node)": 1.0E-10,
                     "sloth_soil_storage_change(1,double,m,node)": 0.0,
+                    "soil_moisture_wetting_fronts(1,double,1,node)": 0.0,
+                    "soil_depth_wetting_fronts(1,double,1,node)": 0.0,
+                    "num_wetting_fronts(1,int,1,node)": 1,
                     "Qb_topmodel(1,double,m h^-1,node)": 0.0,
                     "Qv_topmodel(1,double,m h^-1,node)": 0.0,
                     "global_deficit(1,double,m,node)": 0.0,
                     "potential_evapotranspiration_rate(1,double,1,node)": 0.0}
+
 
         # If sloth already in formulation, add sloth module parameters to existing section
         if 'sloth' in modules:
@@ -3509,8 +3526,8 @@ def update_realization_nwm_output(
                                         "allow_exceed_end_time": True,
                                         "uses_forcing_file": False,
                                         "variables_names_map": {
-                                            "soil_storage": "SOIL_STORAGE",
-                                            "soil_storage_change": "SOIL_STORAGE_CHANGE"}}}
+                                            "soil_storage": "sloth_soil_storage",
+                                            "soil_storage_change": "sloth_soil_storage_change"}}}
                             )
 
     if 'sft' in adapters:
@@ -3528,21 +3545,6 @@ def update_realization_nwm_output(
                                         "uses_forcing_file": False,
                                         "variables_names_map": {"ground_temperature": "TGS"}}}
                             )
-
-        if 'lasam' in modules:
-            real_modules[smp_index]['params']["variables_names_map"] = {
-                "soil_storage": "sloth_soil_storage",
-                "soil_storage_change": "sloth_soil_storage_change",
-                "soil_moisture_wetting_fronts": "soil_moisture_wetting_fronts",
-                "soil_depth_wetting_fronts": "soil_depth_wetting_fronts",
-                "num_wetting_fronts": "soil_num_wetting_fronts"}
-        elif 'topmodel' in modules:
-            real_modules[smp_index]['params']["variables_names_map"] = {
-                "soil_storage": "sloth_soil_storage",
-                "soil_storage_change": "sloth_soil_storage_change",
-                "Qb_topmodel": "land_surface_water__baseflow_volume_flux",
-                "Qv_topmodel": "soil_water_root-zone_unsat-zone_top__recharge_volume_flux",
-                "global_deficit": "soil_water__domain_volume_deficit"}
 
     if 'cfes' in adapters:
         sft_index = next((i for i, m in enumerate(modules) if 'sft' in m), None)
