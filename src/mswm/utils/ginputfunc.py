@@ -2651,8 +2651,8 @@ def create_reg_realization_file(
                                             "init_config": os.path.join(bmi_dir[m1], '{{id}}_bmi_config_cfe.txt'),
                                             "allow_exceed_end_time": True, "fixed_time_step": False, "uses_forcing_file": False,
                                             "registration_function": "register_bmi_cfe"}}
-            if grp_params.get('m1', {}).get(grp):
-                model_configs['m1']['params']['model_params'] = grp_params['m1'][grp]
+            if grp_params.get(m1, {}).get(grp):
+                model_configs[m1]['params']['model_params'] = grp_params[m1][grp]
 
             # variable name mapping section
             pet_in = "water_potential_evaporation_flux"
@@ -2793,7 +2793,7 @@ def create_reg_realization_file(
                         "Qb_topmodel(1,double,m h^-1,node)": 0.0,
                         "Qv_topmodel(1,double,m h^-1,node)": 0.0,
                         "global_deficit(1,double,m,node)": 0.0}
-            elif 'topmodel' and 'smp' in grp_mod:
+            elif 'topmodel' in grp_mod and 'smp' in grp_mod:
                 model_params = {
                     "sloth_soil_storage(1,double,m,node)": 1.0E-10,
                     "sloth_soil_storage_change(1,double,m,node)": 0.0,
