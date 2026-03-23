@@ -3375,6 +3375,9 @@ def update_realization_nwm_output(
     # Create local copy of modules to not affect self.modules
     modules = modules.copy()
 
+    if run_type == 'regionalization':
+        run_type = 'region'
+
     # Create symlinks for adapter libraries
     lib_mod = {}
     for key in adapters:
@@ -3410,70 +3413,43 @@ def update_realization_nwm_output(
     mod_adapters = modules + adapters
 
     if 'sloth' in mod_adapters:
-        # Set sloth model parameters depending on modules and adapters
-        if 'cfes' in mod_adapters or 'cfex' in mod_adapters:
-            if 'sft' not in mod_adapters:
-                sloth_params = {
-                    "sloth_ice_fraction_schaake(1,double,1,node)": 0.0,
-                    "sloth_ice_fraction_xinanjiang(1,double,1,node)": 0.0,
-                    "sloth_smp(1,double,1,node)": 0.0}
-            else:
-                sloth_params = {
-                    "sloth_soil_storage(1,double,m,node)": 1.0E-10,
-                    "sloth_soil_storage_change(1,double,m,node)": 0.0,
-                    "soil_moisture_wetting_fronts(1,double,1,node)": 0.0,
-                    "soil_thickness_layered(1,double,1,node)": 0.0,
-                    "soil_depth_wetting_fronts(1,double,m,node)": 0.0,
-                    "num_wetting_fronts(1,int,1,node)": 1.0,
-                    "Qb_topmodel(1,double,m h^-1,node)": 0.0,
-                    "Qv_topmodel(1,double,m h^-1,node)": 0.0,
-                    "global_deficit(1,double,m,node)": 0.0}
-            # If topmodel and smp are also present, merge in their required sloth params
-            if 'topmodel' in mod_adapters and 'smp' in mod_adapters:
-                sloth_params.update({
-                    "sloth_soil_storage(1,double,m,node)": 1.0E-10,
-                    "sloth_soil_storage_change(1,double,m,node)": 0.0
-                })
-        elif 'topmodel' in mod_adapters and 'smp' in mod_adapters:
-            sloth_params = {
-                "sloth_soil_storage(1,double,m,node)": 1.0E-10,
-                "sloth_soil_storage_change(1,double,m,node)": 0.0,
-                "soil_moisture_wetting_fronts(1,double,1,node)": 0.0,
-                "soil_depth_wetting_fronts(1,double,1,node)": 0.0,
-                "num_wetting_fronts(1,int,1,node)": 1}
-        elif 'sac' in mod_adapters and 'smp' in mod_adapters:
-            sloth_params = {
-                "sloth_soil_storage(1,double,m,node)": 1.0E-10,
-                "sloth_soil_storage_change(1,double,m,node)": 0.0,
-                "soil_moisture_wetting_fronts(1,double,1,node)": 0.0,
-                "soil_thickness_layered(1,double,1,node)": 0.0,
-                "soil_depth_wetting_fronts(1,double,m,node)": 0.0,
-                "num_wetting_fronts(1,int,1,node)": 1.0,
-                "Qb_topmodel(1,double,m h^-1,node)": 0.0,
-                "Qv_topmodel(1,double,m h^-1,node)": 0.0,
-                "global_deficit(1,double,m,node)": 0.0}
-        elif 'lasam' in mod_adapters:
-            if 'sft' not in mod_adapters:
-                sloth_params = {"soil_temperature_profile(1,double,K,node)": 275.15}
-            else:
-                sloth_params = {
-                    "sloth_soil_storage(1,double,m,node)": 1.0E-10,
-                    "sloth_soil_storage_change(1,double,m,node)": 0.0,
-                    "soil_moisture_wetting_fronts(1,double,1,node)": 0.0,
-                    "soil_depth_wetting_fronts(1,double,1,node)": 0.0,
-                    "num_wetting_fronts(1,int,1,node)": 1,
-                    "Qb_topmodel(1,double,m h^-1,node)": 0.0,
-                    "Qv_topmodel(1,double,m h^-1,node)": 0.0,
-                    "global_deficit(1,double,m,node)": 0.0,
-                    "potential_evapotranspiration_rate(1,double,1,node)": 0.0}
 
+        # Define reusable sloth param blocks
+        soil_storage_params = {
+            "sloth_soil_storage(1,double,m,node)": 1.0E-10,
+            "sloth_soil_storage_change(1,double,m,node)": 0.0}
+        smp_params = {
+            "soil_moisture_wetting_fronts(1,double,1,node)": 0.0,
+            "soil_thickness_layered(1,double,1,node)": 0.0,
+            "soil_depth_wetting_fronts(1,double,m,node)": 0.0,
+            "num_wetting_fronts(1,int,1,node)": 1.0}
+        topmodel_params = {
+            "Qb_topmodel(1,double,m h^-1,node)": 0.0,
+            "Qv_topmodel(1,double,m h^-1,node)": 0.0,
+            "global_deficit(1,double,m,node)": 0.0}
+
+        # Build sloth params by combining blocks based on mod_adapters
+        sloth_params = {}
+
+        if 'cfes' in mod_adapters or 'cfex' in mod_adapters:
+            sloth_params.update({**soil_storage_params, **smp_params, **topmodel_params})
+            if 'topmodel' in mod_adapters and 'smp' in adapters:
+                sloth_params.update(soil_storage_params)
+
+        elif any(m in mod_adapters for m in ['topmodel', 'sac', 'lasam']) and 'smp' in adapters:
+            sloth_params.update({**soil_storage_params, **topmodel_params})
+            if 'lasam' in mod_adapters:
+                sloth_params.update({
+                    "num_wetting_fronts(1,int,1,node)": 1.0,
+                    "potential_evapotranspiration_rate(1,double,1,node)": 0.0})
+            elif 'topmodel' in mod_adapters or 'sac' in mod_adapters:
+                sloth_params.update(smp_params)
 
         # If sloth already in formulation, add sloth module parameters to existing section
         if 'sloth' in modules:
             sloth_index = next((i for i, m in enumerate(modules) if 'sloth' in m), None)
             # Remove soil_temperature profile if SFT is being added as an adapter
-            if 'sft' in mod_adapters:
-                real_modules[sloth_index]["params"]["model_params"].pop("soil_temperature_profile(1,double,K,node)", None)
+            real_modules[sloth_index]["params"]["model_params"].pop("soil_temperature_profile(1,double,K,node)", None)
             real_modules[sloth_index]["params"]["model_params"].update(sloth_params)
         else:
             # Add sloth section to realization

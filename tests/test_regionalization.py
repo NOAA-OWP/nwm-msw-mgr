@@ -280,6 +280,8 @@ class TestRegionNWMOutputBuild:
             "sloth_ice_fraction_schaake(1,double,1,node)": 0.0,
             "sloth_ice_fraction_xinanjiang(1,double,1,node)": 0.0,
             "sloth_smp(1,double,1,node)": 0.0,
+            "sloth_soil_storage(1,double,m,node)": 1e-10,
+            "sloth_soil_storage_change(1,double,m,node)": 0.0,
             "soil_moisture_wetting_fronts(1,double,1,node)": 0.0,
             "soil_thickness_layered(1,double,1,node)": 0.0,
             "soil_depth_wetting_fronts(1,double,m,node)": 0.0,
@@ -297,7 +299,8 @@ class TestRegionNWMOutputBuild:
             'Qb_topmodel(1,double,m h^-1,node)': 0.0,
             'Qv_topmodel(1,double,m h^-1,node)': 0.0,
             'global_deficit(1,double,m,node)': 0.0,
-            'potential_evapotranspiration_rate(1,double,1,node)': 0.0
+            'potential_evapotranspiration_rate(1,double,1,node)': 0.0,
+            "num_wetting_fronts(1,int,1,node)": 1.0
         }
         assert self.rb.real_config['formulation_groups']['gage2'][0]['params']['modules'][0]["params"]["model_params"] == expected_sloth_params
 

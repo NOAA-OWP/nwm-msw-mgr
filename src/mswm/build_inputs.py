@@ -585,7 +585,7 @@ class RealizationBuilder:
 
                 # Add sloth if required
                 mod_adapters = modules + adapters
-                if (any(x in mod_adapters for x in ['cfes', 'cfex', 'lasam'])) or ('topmodel' in mod_adapters and 'smp' in mod_adapters) and 'sloth' not in mod_adapters:
+                if (any(x in mod_adapters for x in ['cfes', 'cfex', 'lasam'])) or ('topmodel' in mod_adapters and 'smp' in mod_adapters) or ('sac' in mod_adapters and 'smp' in mod_adapters) and 'sloth' not in mod_adapters:
                     adapters = ['sloth'] + adapters
 
                 self.grp_to_adapters[grp] = adapters
@@ -1068,7 +1068,7 @@ class RealizationBuilder:
                     raise
 
             # add sloth if CFE, LASAM, Topmodel is selected
-            if (any(x in modules for x in ['cfes', 'cfex', 'lasam'])) or ('topmodel' in modules and 'smp' in modules) and 'sloth' not in modules:
+            if (any(x in modules for x in ['cfes', 'cfex', 'lasam'])) or ('topmodel' in modules and 'smp' in modules) or ('sac' in modules and 'smp' in modules) and 'sloth' not in modules:
                 logger.info(f"CFE, LASAM, or SMP/Topmodel is used in the formulation. SLOTH added to module list: {row['gage_id']}")
                 modules = ['sloth'] + modules
 
