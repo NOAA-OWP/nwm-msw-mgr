@@ -787,7 +787,7 @@ class RealizationBuilder:
                 raise
 
         # add sloth if CFE, LASAM, Topmodel is selected
-        if (any(x in self.modules for x in ['cfes', 'cfex', 'lasam'])) or ('topmodel' in self.modules and 'smp' in self.modules) and 'sloth' not in self.modules:
+        if (any(x in self.modules for x in ['cfes', 'cfex', 'lasam'])) or ('topmodel' in self.modules and 'smp' in self.modules) or ('sac' in self.modules and 'smp' in self.modules) and 'sloth' not in self.modules:
             logger.info("CFE, LASAM, or SMP/Topmodel is used in the formulation. SLOTH added to module list")
             self.modules = ['sloth'] + self.modules
 
@@ -1396,9 +1396,9 @@ class RealizationBuilder:
                 sft_dir = os.path.join(self.input_dir, 'sft_input')
                 smp_dir = os.path.join(self.input_dir, 'smp_input')
 
-                # Loop through schemes that could be paired with SMP/SFT (CFES/CFEX/LASAM)
-                # SMP/SFT could be paired with CFES/CFEX/LASAM simulatenously in different formulations, so configs must be generated separately
-                for scheme in ['cfes', 'cfex', 'lasam', 'topmodel']:
+                # Loop through schemes that could be paired with SMP/SFT (CFES/CFEX/LASAM/TOPMODEL/SACSMA)
+                # SMP/SFT could be paired with CFES/CFEX/LASAM/TOPMODEL/SACSMA simulatenously in different formulations, so configs must be generated separately
+                for scheme in ['cfes', 'cfex', 'lasam', 'topmodel', 'sac']:
                     # Retrieve formulation groups where CFES/CFEX/LASAM co-occur with SFT
                     scheme_sft_grps = [grp for grp, mods in self.grp_to_form.items() if scheme in mods and 'sft' in mods]
 

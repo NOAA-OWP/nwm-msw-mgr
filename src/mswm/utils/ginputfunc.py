@@ -172,18 +172,17 @@ def call_icefabric_gpkg(
             resp.raise_for_status()
             with open(gpkg_fp, "wb") as f:
                 f.write(resp.content)
-            # logger.info(f"Saved geopackage file from Icefabric API to {gpkg_fp}")
             print(f"Saved geopackage file from Icefabric API to {gpkg_fp}")
+    except httpx.TimeoutException as e:
+        print(f"Icefabric API call timed out for {basin} gpkg. Request URL: {url}, params: {params}, {e}")
+        raise
     except httpx.HTTPStatusError as e:
-        print(f"Icefabric API call gages-{basin} gpkg failed: {e}")
-        # logger.critical(f"Icefabric API call gages-{basin} gpkg failed: {e}")
+        print(f"Icefabric API call {basin} gpkg failed. Request URL: {url}, params: {params}, {e}")
         raise
     except ValueError:
-        # logger.critical(f"Icefabric API call did not return valid results for gpkg: gauge_{basin}")
-        print(f"Icefabric API call did not return valid results for gpkg: gauge_{basin}")
+        print(f"Icefabric API call did not return valid results for gpkg: {basin}.")
         raise
     except (OSError, IOError) as e:
-        # logger.critical(f"Failed to write gpkg file: {e}")
         print(f"Failed to write gpkg file: {e}")
         raise
 
@@ -788,7 +787,7 @@ def create_sft_smp_input(
                    'soil_z=' + ",".join(f"{float(depth):g}" for depth in sm_profile_depth) + "[m]",
                    'soil_moisture_fraction_depth=' + str(sm_frac_depth) + '[m]']
 
-        if 'cfes' in mods or 'cfex' in mods:
+        if 'cfes' in mods or 'cfex' in mods or 'sac' in mods:
             smp_lst += ['soil_storage_model=conceptual', 'soil_storage_depth=2.0']
         elif 'topmodel' in mods:
             smp_lst += ['soil_storage_model=TopModel', 'water_table_based_method=flux_based']
@@ -2692,7 +2691,8 @@ def create_reg_realization_file(
                                         "library_file": lib_mod['sac'],
                                         "init_config": os.path.join(bmi_dir['sac'], 'sac-init-' + '{{id}}.namelist.input'),
                                         "allow_exceed_end_time": True, "fixed_time_step": False, "uses_forcing_file": False,
-                                        "main_output_variable": "tci"}}
+                                        "main_output_variable": "tci_giuh",
+                                        "registration_function": "register_bmi_sac"}}
             if grp_params.get('sac', {}).get(grp):
                 model_configs['sac']['params']['model_params'] = grp_params['sac'][grp]
 
@@ -2703,7 +2703,7 @@ def create_reg_realization_file(
             var_maps['input']['tair'] = name_temp.get(forcing_provider)
 
             # module output variable for input to t-route
-            main_output_variable = "tci"
+            main_output_variable = "tci_giuh"
 
         # snow17
         if 'snow17' in grp_mod:
@@ -2800,6 +2800,15 @@ def create_reg_realization_file(
                     "soil_moisture_wetting_fronts(1,double,1,node)": 0.0,
                     "soil_depth_wetting_fronts(1,double,1,node)": 0.0,
                     "num_wetting_fronts(1,int,1,node)": 1}
+            elif 'sac' in grp_mod and 'smp' in grp_mod:
+                model_params = {
+                    "soil_moisture_wetting_fronts(1,double,1,node)": 0.0,
+                    "soil_thickness_layered(1,double,1,node)": 0.0,
+                    "soil_depth_wetting_fronts(1,double,m,node)": 0.0,
+                    "num_wetting_fronts(1,int,1,node)": 1.0,
+                    "Qb_topmodel(1,double,m h^-1,node)": 0.0,
+                    "Qv_topmodel(1,double,m h^-1,node)": 0.0,
+                    "global_deficit(1,double,m,node)": 0.0}
             elif 'lasam' in grp_mod:
                 if 'sft' not in grp_mod:
                     model_params = {"soil_temperature_profile(1,double,K,node)": 275.15}
@@ -2853,6 +2862,10 @@ def create_reg_realization_file(
                     "Qb_topmodel": "land_surface_water__baseflow_volume_flux",
                     "Qv_topmodel": "soil_water_root-zone_unsat-zone_top__recharge_volume_flux",
                     "global_deficit": "soil_water__domain_volume_deficit"}
+            elif 'sac' in grp_mod:
+                model_configs['smp']['params']["variables_names_map"] = {
+                    "soil_storage": "uzsmc",
+                    "soil_storage_change": "uzsmc_ch"}
 
         # lasam
         if 'lasam' in grp_mod:
@@ -3224,7 +3237,8 @@ def create_realization_file(
                                     "library_file": lib_mod['sac'],
                                     "init_config": os.path.join(bmi_dir['sac'], 'sac-init-{{id}}.namelist.input'),
                                     "allow_exceed_end_time": True, "fixed_time_step": False, "uses_forcing_file": False,
-                                    "main_output_variable": "tci",
+                                    "main_output_variable": "tci_giuh",
+                                    "registration_function": "register_bmi_sac"
                                 }}
 
         # variable name mapping section
@@ -3234,7 +3248,7 @@ def create_realization_file(
         var_maps['input']['tair'] = name_temp.get(forcing_provider)
 
         # module output variable for input to t-route
-        main_output_variable = "tci"
+        main_output_variable = "tci_giuh"
 
     # snow17
     if 'snow17' in modules:
@@ -3327,6 +3341,15 @@ def create_realization_file(
                 "soil_moisture_wetting_fronts(1,double,1,node)": 0.0,
                 "soil_depth_wetting_fronts(1,double,1,node)": 0.0,
                 "num_wetting_fronts(1,int,1,node)": 1}
+        elif 'sac' in modules and 'smp' in modules:
+            model_params = {
+                "soil_moisture_wetting_fronts(1,double,1,node)": 0.0,
+                "soil_thickness_layered(1,double,1,node)": 0.0,
+                "soil_depth_wetting_fronts(1,double,m,node)": 0.0,
+                "num_wetting_fronts(1,int,1,node)": 1.0,
+                "Qb_topmodel(1,double,m h^-1,node)": 0.0,
+                "Qv_topmodel(1,double,m h^-1,node)": 0.0,
+                "global_deficit(1,double,m,node)": 0.0}
         elif 'lasam' in modules:
             if 'sft' not in modules:
                 model_params = {"soil_temperature_profile(1,double,K,node)": 275.15}
@@ -3380,6 +3403,10 @@ def create_realization_file(
                 "Qb_topmodel": "land_surface_water__baseflow_volume_flux",
                 "Qv_topmodel": "soil_water_root-zone_unsat-zone_top__recharge_volume_flux",
                 "global_deficit": "soil_water__domain_volume_deficit"}
+        elif 'sac' in modules:
+            model_configs['smp']['params']["variables_names_map"] = {
+                "soil_storage": "uzsmc",
+                "soil_storage_change": "uzsmc_ch"}
 
     # lasam
     if 'lasam' in modules:
