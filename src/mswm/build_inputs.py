@@ -58,7 +58,10 @@ class RealizationBuilder:
         This property can be changed after instantiating this class, before calling one of the `build_*_realization()` methods.
     """
 
-    def __init__(self, input_path: str | None = None, valid_yaml: str | None = None, use_cold_start: bool = False, forcing_path: str | None = None, fcst_run_name: str | None = None, config_overrides: InputConfig | None = None):
+    def __init__(self, input_path: str | None = None, valid_yaml: str | None = None, use_cold_start: bool = False, use_warm_start: bool = False,
+                 use_hindcast: bool = False, use_lagged_ens: bool = False, forcing_path: str | None = None, fcst_run_name: str | None = None, hind_cycle: int | None = None, prev_hind_cycle: int | None = None,
+                 lagged_ens_mem: str | None = None, forcing_lag: int | None = None, load_state_from: str | None = None, save_state: bool = False,
+                 config_overrides: InputConfig | None = None):
 
         # Private attributes controlled by public properties.
         self._config_overrides: InputConfig | None
@@ -82,10 +85,25 @@ class RealizationBuilder:
             raise ValueError("Must provide `input_path` or `config_overrides`")
 
         self.valid_yaml = Path(valid_yaml) if valid_yaml else None
-
         self.use_cold_start = use_cold_start
+        self.use_warm_start = use_warm_start
+        self.use_hindcast = use_hindcast
+        self.use_lagged_ens = use_lagged_ens
         self.forcing_path = Path(forcing_path) if forcing_path else None
         self.fcst_run_name = fcst_run_name if fcst_run_name else None
+        self.hind_cycle = hind_cycle if hind_cycle else 0
+        self.prev_hind_cycle = prev_hind_cycle if prev_hind_cycle else 0
+        self.load_state_from = Path(load_state_from) if load_state_from else None
+        self.save_state = save_state
+        self.lagged_ens_mem = lagged_ens_mem if lagged_ens_mem else None
+        self.forcing_lag = forcing_lag if forcing_lag else 0
+
+        # Validate optional forecast flags
+        fcst_modes = sum([self.use_cold_start, self.use_warm_start, self.use_hindcast, self.use_lagged_ens])
+        if fcst_modes > 1:
+            err = ("Invalid configuration: only one of 'use_cold_start', 'use_warm_start', 'use_hindcast', use_lagged_ens may be True.")
+            logger.critical(err)
+            raise ValueError(err)
 
         # Initialize this to empty dict so that config override has a target even when input_path is not used
         self.input_configs = {}
@@ -108,7 +126,7 @@ class RealizationBuilder:
     def config_overrides_mode__amend(self, new: bool):
         self._config_overrides_mode__amend = new
 
-    def __load_config(self):
+    def _load_config(self):
         """
         Read input.config file
         """
@@ -153,9 +171,9 @@ class RealizationBuilder:
                 main_logger.critical(e)
                 raise
 
-        self.__validate_config()
+        self._validate_config()
 
-    def __validate_config(self):
+    def _validate_config(self):
         """
         Validate input.config file using Pydantic (input_configuration.py)
         """
@@ -178,7 +196,7 @@ class RealizationBuilder:
         self.input_configs_class = model
         self.input_configs = model.model_dump()
 
-    def __override_config(self) -> None:
+    def _override_config(self) -> None:
         """
         Override the current config in-memory, either partially or in full.
 
@@ -263,15 +281,40 @@ class RealizationBuilder:
             main_logger.critical(f"Invalid yaml file path: {self.valid_conf['general']['yaml_file']} - {e}")
             raise
 
-        # Create forecast run directory or cold start run directory
-        fcst_dir_name = 'Cold_Start_Run' if self.use_cold_start else 'Forecast_Run'
-        self.input_dir = Path(fcst_dir0, fcst_dir_name, self.fcst_run_name)
-
-        # Set file basename for forecast or cold start
-        self.basename_opt = 'fcst' if not self.use_cold_start else 'cold_start'
+        # Create cold start, warm start, or forecast run directory  run directory
+        fcst_dir_name = (
+            'Model_State_Run/Cold_Start_Run' if self.use_cold_start
+            else ('Model_State_Run/Warm_Start_Run' if self.use_warm_start
+                  else ('Hindcast_Run' if self.use_hindcast
+                        else ('Lagged_Ensemble_Run' if self.use_lagged_ens
+                              else 'Forecast_Run')))
+        )
 
         # Set run_type to forecast for log generation
-        self.run_type = 'forecast' if not self.use_cold_start else 'cold start'
+        self.run_type = (
+            'cold_start' if self.use_cold_start
+            else ('warm_start' if self.use_warm_start
+                  else ('hindcast' if self.use_hindcast
+                        else ('lagged_ens' if self.use_lagged_ens
+                              else 'forecast')))
+        )
+
+        if self.use_hindcast or self.use_warm_start:
+            self.work_dir = Path(fcst_dir0, fcst_dir_name, self.fcst_run_name, f"{self.run_type}_{self.hind_cycle}")
+        elif self.use_lagged_ens:
+            self.work_dir = Path(fcst_dir0, fcst_dir_name, self.fcst_run_name, f"{self.run_type}_{self.lagged_ens_mem}")
+        else:
+            self.work_dir = Path(fcst_dir0, fcst_dir_name, self.fcst_run_name)
+        self.input_dir = self.work_dir / 'Input'
+
+        # Set file basename based on forecast run type
+        self.basename_opt = (
+            'cold_start' if self.use_cold_start
+            else ('warm_start' if self.use_warm_start
+                  else ('hind' if self.use_hindcast
+                        else ('lagged_ens' if self.use_lagged_ens
+                              else 'fcst')))
+        )
 
         try:
             self.input_dir.mkdir(parents=True, exist_ok=True)
@@ -527,10 +570,7 @@ class RealizationBuilder:
         Initialize logging depending on run type
         """
         # Set location for msw-mgr log
-        if self.run_type in ('forecast', 'cold start'):
-            log_path = os.path.join(self.input_dir, 'logs')
-        else:
-            log_path = os.path.join(self.work_dir, 'logs')
+        log_path = os.path.join(self.work_dir, 'logs')
 
         # Initialize logging
         log_level_set(log_path)
@@ -551,6 +591,14 @@ class RealizationBuilder:
         self.global_domain = self.forcingSec.get('global_domain', "CONUS")
         self.forcing_static_dir = self.forcingSec.get('forcing_static_dir', None)
 
+        # Raise error if forecast or cold start is run with CSV provider
+        if self.forcing_provider == 'csv' and self.run_type in ('forecast', 'cold_start'):
+            try:
+                raise ValueError(f"Run type {self.run_type} requires bmi forcing provider")
+            except ValueError as e:
+                logger.critical(e)
+                raise
+
         # Retrieve cold_start_time
         self.cold_start_datetime = self.forcingSec.get('cold_start_datetime', None)
 
@@ -561,7 +609,6 @@ class RealizationBuilder:
 
                 # Retrieve forcing engine variables
                 cycle_datetime = self.forcingSec.get('cycle_datetime')
-                self.cycle_hour = self.forcingSec.get('cycle_hour')
 
                 # Construct cycle date and cycle hour
                 cycle_dt = datetime.strptime(cycle_datetime, settings.DEFAULT_DATETIME_FORMAT)
@@ -572,8 +619,39 @@ class RealizationBuilder:
                 if self.use_cold_start:
                     forcing_region = next((f"_{reg}" for reg in ["alaska", "hawaii", "puertorico"] if reg in self.forcing_configuration), "")
                     self.forcing_configuration_str = f"cold_start{forcing_region}_config.yml"
+
+                elif self.use_warm_start:
+                    forcing_region = next((f"_{reg}" for reg in ["alaska", "hawaii", "puertorico"] if reg in self.forcing_configuration), "")
+                    self.forcing_configuration_str = f"standard_ana{forcing_region}_config.yml"
+                elif self.use_lagged_ens:
+                    # Check that use_lagged_ens is only used with medium_range configuration
+                    if self.forcing_configuration != "medium_range":
+                        logger.critical(f"Lagged ensemble run must use medium range forcing configuration. {self.forcing_configuration} configuration cannot be used for a lagged ensemble.")
+                        raise
+                    self.forcing_configuration_str = f"{self.forcing_configuration}_{self.lagged_ens_mem}_config.yml"
                 else:
                     self.forcing_configuration_str = f"{self.forcing_configuration}_config.yml"
+
+                # Initialize fcst_lookback
+                self.fcst_lookback = 0
+
+                # Read fcst_template to retrieve lookback used to set cold start/warm start end time
+                if self.use_cold_start or self.use_warm_start:
+                    fcst_template_file = (Path(self.forcing_template_dir) / f"{self.forcing_configuration}_config.yml").absolute()
+                    if fcst_template_file.exists():
+                        try:
+                            with open(fcst_template_file) as f:
+                                fcst_template = yaml.safe_load(f)
+                        except FileNotFoundError as e:
+                            logger.critical(f'Config file does not exist: {self.forcing_template_file}\n{e}')
+                            raise
+                        except yaml.YAMLError as e:
+                            logger.critical(f"YAML parsing error in config file: {self.forcing_template_file}\n{e}")
+                            raise
+                        except Exception as e:
+                            logger.critical(f"Unexpected error loading config at: {self.forcing_template_file}\n{e}")
+                            raise
+                        self.fcst_lookback = 0 if fcst_template['LookBack'] == -9999 else int(fcst_template['LookBack'] / 60)
 
             # Set forcing engine variables for historical forcing
             else:
@@ -604,7 +682,8 @@ class RealizationBuilder:
 
             if self.forcing_configuration not in ['nwm', 'aorc']:
                 # Retrieve ngen start and end time based on forecast cycle date, hour and configuration
-                self.fcst_start, self.fcst_end = gfun.create_fcst_times(self.forcing_template, self.cycle_date, self.cycle_hour, self.use_cold_start, self.cold_start_datetime)
+                self.fcst_start, self.fcst_end = gfun.create_fcst_times(self.forcing_template, self.cycle_date, self.cycle_hour, self.use_cold_start,
+                                                                        self.use_warm_start, self.hind_cycle, self.prev_hind_cycle, self.forcing_lag, self.cold_start_datetime, self.fcst_lookback)
             else:
                 # Set default fcst_start/fcst_end values
                 self.fcst_start = None
@@ -1098,17 +1177,17 @@ class RealizationBuilder:
         Extract forcing files and symlink to input directory
         """
 
-        # Create forcing directory
-        self.forcing_path = os.path.join(self.input_dir, 'forcing')
-
-        try:
-            os.makedirs(self.forcing_path, exist_ok=True)
-        except Exception as e:
-            logger.critical(f"Invalid forcing directory: {e}. Check `main_dir` variable")
-            raise
-
         # For csv provider
         if self.forcing_provider == 'csv':
+
+            # Create forcing directory
+            self.forcing_path = os.path.join(self.input_dir, 'forcing')
+
+            try:
+                os.makedirs(self.forcing_path, exist_ok=True)
+            except Exception as e:
+                logger.critical(f"Invalid forcing directory: {e}. Check `main_dir` variable")
+                raise
 
             # Retrieve forcing_provider and forcing_dir
             self.forcing_dir = (self.forcingSec.get('forcing_dir', "") or None)
@@ -1156,6 +1235,9 @@ class RealizationBuilder:
         """
         if self.forcing_provider == 'bmi':
 
+            # Set dummy forcing path
+            self.forcing_path = ''
+
             # Set target directory for forcing config file
             self.forcing_config_dir = Path(self.input_dir) / 'forcing_config'
             self.forcing_config_file = self.forcing_config_dir / self.forcing_configuration_str
@@ -1164,9 +1246,10 @@ class RealizationBuilder:
             gpkg_file = self.cat_file if hasattr(self, "cat_file") and self.cat_file else self.gpkg_cats
 
             if self.forcing_configuration not in ['nwm', 'aorc']:
-                # Update forecast dynamic parameters in forcing engine configuration file
+                # Update dynamic parameters in forcing engine configuration file
                 gfun.update_fcst_forcing_config(self.cycle_date, self.cycle_hour, self.root_dir, self.forcing_template, gpkg_file, self.forcing_config_dir,
-                                                self.forcing_config_file, self.use_cold_start, self.cold_start_datetime)
+                                                self.forcing_config_file, self.use_cold_start, self.use_warm_start, self.hind_cycle, self.prev_hind_cycle,
+                                                self.forcing_lag, self.cold_start_datetime, self.fcst_lookback)
             else:
                 # Update historical dynamic parameters in forcing engine configuration file
                 gfun.update_hist_forcing_config(self.time_period, self.root_dir, self.forcing_template, gpkg_file, self.forcing_config_dir, self.forcing_config_file, self.run_type, self.global_domain, self.forcing_static_dir)
@@ -1241,7 +1324,7 @@ class RealizationBuilder:
         For UEB, TopoFlow-Glacier, and Noah-OWP-Modular, create new BMI config files with new time info, and
         update path to BMI configs in realization file accordingly
         """
-        self.real_config = gfun.update_noah_ueb_topo_times(self.real_config, self.input_dir)
+        self.real_config = gfun.update_noah_ueb_topo_times(self.real_config, self.input_dir, self.basename_opt)
         logger.info("Updated noah and ueb config files for forecast if used")
 
     def _update_fcst_troute(self):
@@ -1249,7 +1332,7 @@ class RealizationBuilder:
         Update BMI config files for t-route for forecast period
         """
         self.real_config = gfun.update_troute(self.real_config, self.input_dir, self.basename_opt)
-        logger.info("Updated noah and ueb config files for forecast")
+        logger.info("Updated t-route file for forecast")
 
     def _create_bmi_configs(self):
         """
@@ -1426,6 +1509,57 @@ class RealizationBuilder:
 
         logger.info("Created BMI config files for all modules in each regionalization formulation")
 
+    def _configure_model_states(self):
+        """
+        Configure state saving configuration in state saving and loading realization sections
+        """
+        if not self.load_state_from and not self.save_state:
+            logger.info("No model state management configured.")
+
+        # Ensure model state directories exist
+        if self.save_state:
+            self.save_state_to = Path(self.work_dir) / "state_save"
+            self.save_state_to.mkdir(parents=True, exist_ok=True)
+            logger.info(f"State save directory: {self.save_state_to}")
+
+        if self.load_state_from:
+            if not self.load_state_from.exists():
+                logger.critical(f"State load directory does not exist: {self.load_state_from}")
+                raise
+            logger.info(f"State load directory: {self.load_state_from}")
+
+        # Initialize state saving array
+        state_saving = []
+
+        # Add state loading configuration if specified
+        if self.load_state_from:
+            load_config = {
+                "direction": "load",
+                "label": "State load",
+                "path": str(self.load_state_from),
+                "type": "FilePerUnit",
+                "when": "StartOfRun"
+            }
+            state_saving.append(load_config)
+            logger.info("Configured state loading at start of run")
+
+        # Add state saving configuration if specified
+        if self.save_state:
+            save_config = {
+                "direction": "save",
+                "label": "Save at end of run",
+                "path": str(self.save_state_to),
+                "type": "FilePerUnit",
+                "when": "EndOfRun"
+            }
+            state_saving.append(save_config)
+            logger.info("Configured state saving at end of run")
+
+        # Add state saving to real_config if there are entries
+        if state_saving:
+            self.real_config['state_saving'] = state_saving
+            logger.info("Model state configuration set in realization file")
+
     def _write_realization(self):
         """
         Write realization file for calibration and default runs
@@ -1480,7 +1614,7 @@ class RealizationBuilder:
         new_basename = os.path.basename(self.real_input_file).replace("valid_best", self.basename_opt)
 
         # save the new realization file
-        self.realization_file = Path(self.input_dir, new_basename)
+        self.realization_file = Path(self.work_dir, new_basename)
         try:
             with open(self.realization_file, 'w') as outfile:
                 json.dump(self.real_config, outfile, indent=4, separators=(", ", ": "), sort_keys=False)
@@ -1491,7 +1625,7 @@ class RealizationBuilder:
             logger.critical(f"Unexpected error while writing realization data to JSON: {self.realization_file}\n{e}")
             raise
 
-        logger.info(f"Realization file is created at: {self.realization_file}")
+        logger.info(f"Realization file created at: {self.realization_file}")
 
     def _write_partition(self):
         """
@@ -1636,6 +1770,8 @@ class RealizationBuilder:
 
         logger.info("Calibration run set up successfully")
 
+        return self.realization_file
+
     def build_region_realization(self):
         """
         Creating regionalization realization file from formulation_assignment file generated by regionalization
@@ -1674,14 +1810,16 @@ class RealizationBuilder:
 
         logger.info("Regionalization run set up successfully")
 
+        return self.realization_file
+
     def load_config_apply_overrides(self):
         """Load the config file from disk and apply overrides.
         If config overrides are applied with amend = False, then skip reading the config file."""
         if self.config_overrides and (not self.config_overrides_mode__amend):
             logging.info("Skipping load of config file since overrides will replace entire config (no amend)")
         else:
-            self.__load_config()
-        self.__override_config()
+            self._load_config()
+        self._override_config()
 
     def build_fcst_realization(self):
         """
@@ -1689,23 +1827,28 @@ class RealizationBuilder:
         """
         self.load_config_apply_overrides()
         self._load_yaml()
+        self._parse_config()
         self._create_fcst_dir()
         self._init_log()
         self._parse_yaml()
-        self._parse_config()
         self._load_realization()
         self._parse_forcing_engine()
-        self._extract_forcing()
         self._configure_forcing_engine()
         self._update_fcst_realization()
         self._update_fcst_noah_ueb_topo()
         self._update_fcst_troute()
+        self._configure_model_states()
         self._write_fcst_realization()
 
         if self.use_cold_start:
             logger.info("Cold start run set up successfully")
         else:
             logger.info("Forecast run set up successfully")
+
+        if self.save_state:
+            return self.realization_file, self.save_state_to
+        else:
+            return self.realization_file
 
     def build_default_realization(self):
         """
@@ -1741,6 +1884,8 @@ class RealizationBuilder:
         self._write_partition()
 
         logger.info("Default run set up successfully")
+
+        return self.realization_file
 
 
 def validate_topoflow_glacier(gpkg_file: str) -> dict:

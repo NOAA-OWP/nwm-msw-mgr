@@ -1726,6 +1726,7 @@ def create_topmodel_input(
 def update_noah_ueb_topo_times(
         real_config: dict,
         input_dir: Path,
+        basename_opt: str,
 ) -> dict:
     """
     For noah-owp-modular, Topoflow-Glacier, & UEB, create new BMI config files with adjusted start/end times, and then
@@ -1735,6 +1736,7 @@ def update_noah_ueb_topo_times(
     ---------
     real_config: dictionary containing the realization configuration
     input_dir: folder for the new BMI config files
+    basename_opt: suffix for new BMI config files
 
     Returns
     -------
@@ -1799,9 +1801,13 @@ def update_noah_ueb_topo_times(
                             lines[8] = f'{startdate[:4]} {startdate[4:6]} {startdate[6:8]} {startdate[8:10]}.0\n'
                             lines[9] = f'{enddate[:4]} {enddate[4:6]} {enddate[6:8]} {enddate[8:10]}.0\n'
 
+                    # Rename basename from _valid to basename_opt
+                    src_basename = os.path.basename(f1)
+                    new_basename = src_basename.replace('_valid', f'_{basename_opt}')
+
                     # write to new BMI config files
                     try:
-                        with open(Path(dst, os.path.basename(f1)), 'w') as outfile:
+                        with open(Path(dst, new_basename), 'w') as outfile:
                             outfile.writelines(lines)
                     except FileNotFoundError as e:
                         logger.critical(f"File not found error when writing to {dst}\n{e}")
@@ -1813,13 +1819,19 @@ def update_noah_ueb_topo_times(
                         logger.critical(f"OS error when writing to {dst}\n{e}")
                         raise
 
-                # Update path in module
-                mod_params['init_config'] = str(Path(dst, os.path.basename(src0)))
+                # replace path to BMI config file in realization file
+                src_basename_init = os.path.basename(src0)
+                new_basename_init = src_basename_init.replace('_valid', f'_{basename_opt}')
+                mod_params['init_config'] = str(Path(dst, new_basename_init))
 
             # Update times with yaml-based editting for TopoflowGlacier
             elif model_name == 'BmiTopoflowGlacier':
                 for f1 in glob.glob(f'{src}'):
-                    cfg_path = Path(dst, os.path.basename(f1))
+                    # Rename basename from _valid to basename_opt
+                    src_basename = os.path.basename(f1)
+                    new_basename = src_basename.replace('_valid', f'_{basename_opt}')
+                    cfg_path = Path(dst, new_basename)
+
                     with open(f1, 'r') as yaml_file:
                         cfg = yaml.safe_load(yaml_file)
 
@@ -1829,22 +1841,30 @@ def update_noah_ueb_topo_times(
                     cfg['start_time'] = startdate_topo
                     cfg['end_time'] = enddate_topo
 
-                    with open(cfg_path, 'w') as yaml_file:
-                        yaml.dump(cfg, yaml_file, default_flow_style=False, sort_keys=False)
+                    try:
+                        with open(cfg_path, 'w') as yaml_file:
+                            yaml.dump(cfg, yaml_file, default_flow_style=False, sort_keys=False)
+                    except FileNotFoundError as e:
+                        logger.critical(f"File not found error when writing to {cfg_path}\n{e}")
+                        raise
+                    except PermissionError as e:
+                        logger.critical(f"Permission denied when writing to {cfg_path}\n{e}")
+                        raise
+                    except OSError as e:
+                        logger.critical(f"OS error when writing to {cfg_path}\n{e}")
+                        raise
 
-                    # Update path in realization
-                    mod_params['init_config'] = str(dst / os.path.basename(src0))
-
-            # Reassign modules back to realization
-            if real_format == 'uniform':
-                real_config['global']['formulations'][0]['params']['modules'] = modules_list
+                # replace path to BMI config file in realization file
+                src_basename_init = os.path.basename(src0)
+                new_basename_init = src_basename_init.replace('_valid', f'_{basename_opt}')
+                mod_params['init_config'] = str(Path(dst, new_basename_init))
 
     return real_config
 
 
 def update_troute(
         real_config: dict,
-        input_dir: Path,
+        run_dir: Path,
         basename_opt: str
 ) -> dict:
     """
@@ -1854,7 +1874,7 @@ def update_troute(
     Arguments
     ---------
     real_config: dictionary containing the realization configuration
-    input_dir: folder for the new BMI config files
+    run_dir: folder for the new troute output file
     basename_opt: new file basename for forecast or cold start
 
     Returns
@@ -1907,7 +1927,7 @@ def update_troute(
     new_basename = os.path.basename(src).replace("valid_best", basename_opt)
 
     try:
-        new_file = Path(input_dir, new_basename)
+        new_file = Path(run_dir, new_basename)
         with open(new_file, 'w') as file:
             yaml.dump(rt_config, file, sort_keys=False, default_flow_style=False, indent=4)
     except yaml.YAMLError as e:
@@ -2090,7 +2110,12 @@ def create_fcst_times(
         cycle_date: str,
         cycle_hour: str,
         use_cold_start: bool,
-        cold_start_datetime: str = None
+        use_warm_start: bool,
+        hind_cycle: int = None,
+        prev_hind_cycle: int = None,
+        forcing_lag: int = None,
+        cold_start_datetime: str = None,
+        fcst_lookback: int = None
 ) -> Tuple[str, str]:
     """ Compute forecast start and end time based on selected forecast cycle, date, and hour
 
@@ -2100,7 +2125,12 @@ def create_fcst_times(
     cycle_date : date of forecast cycle
     cycle_hour : hour of forecast cycle (00z)
     use_cold_start : boolean flag for using cold start period
+    use_warm_start: boolean flag for using warm start run
+    hind_cycle: cycle (in hours) between first hindcast iteration (00) and current hindcast iteration
+    prev_hind_cycle: cycle (in hours) from previous hindcast iteration, used to orchestrate warm start runs
+    forcing_lag: number of hours forcing valid time is lagged from ngen start time in lagged ensemble run
     cold_start_datetime : datetime str of beginning of cold start period
+    fcst_lookback : lookback time in hours of forecast configuration following cold start
 
     Returns
     ----------
@@ -2117,10 +2147,25 @@ def create_fcst_times(
     ana_flag = forcing_template['AnAFlag']
 
     # Construct start and end times for cold start period
-    if use_cold_start is True:
+    if use_cold_start:
 
+        # fcst_lookback aligns cold start end with start of forecast start for AnA configurations
         fcst_start = datetime.datetime.strftime(cs_dt + datetime.timedelta(hours=1), "%Y-%m-%d %H:%M:%S")
-        fcst_end = datetime.datetime.strftime(cycle_dt, "%Y-%m-%d %H:%M:%S")
+        fcst_end = datetime.datetime.strftime(cycle_dt - datetime.timedelta(hours=fcst_lookback), "%Y-%m-%d %H:%M:%S")
+
+    # Construct start and end times for warm start period
+    elif use_warm_start:
+
+        # Warm start begins at the start of the previous hindcast cycle and ends at the start of the current hindcast cycle
+        # fcst_lookback shifts the warm start period to align with cold start for AnA configurations
+        fcst_start = datetime.datetime.strftime(cycle_dt + datetime.timedelta(hours=prev_hind_cycle) - datetime.timedelta(hours=fcst_lookback) + datetime.timedelta(hours=1), "%Y-%m-%d %H:%M:%S")
+        fcst_end = datetime.datetime.strftime(cycle_dt + datetime.timedelta(hours=hind_cycle) - datetime.timedelta(hours=fcst_lookback), "%Y-%m-%d %H:%M:%S")
+
+    # Construct start and end times for warm start period
+    elif use_warm_start:
+        # Warm start begins at the start of the previous hindcast cycle and ends at the start of the current hindcast cycle
+        fcst_start = datetime.datetime.strftime(cycle_dt + datetime.timedelta(hours=prev_hind_cycle), "%Y-%m-%d %H:%M:%S")
+        fcst_end = datetime.datetime.strftime(cycle_dt + datetime.timedelta(hours=hind_cycle), "%Y-%m-%d %H:%M:%S")
 
     # Construct start and end times based on forecast cycle
     elif ana_flag == 0:
@@ -2129,8 +2174,8 @@ def create_fcst_times(
         forcing_horizon = int(forcing_template['ForecastInputHorizons'][0] / 60)
         start_delta = 1
 
-        fcst_start = datetime.datetime.strftime(cycle_dt + datetime.timedelta(hours=start_delta), "%Y-%m-%d %H:%M:%S")
-        fcst_end = datetime.datetime.strftime(cycle_dt + datetime.timedelta(hours=forcing_horizon), "%Y-%m-%d %H:%M:%S")
+        fcst_start = datetime.datetime.strftime(cycle_dt + datetime.timedelta(hours=hind_cycle) + datetime.timedelta(hours=start_delta), "%Y-%m-%d %H:%M:%S")
+        fcst_end = datetime.datetime.strftime(cycle_dt + datetime.timedelta(hours=forcing_horizon) + datetime.timedelta(hours=hind_cycle) - datetime.timedelta(hours=forcing_lag), "%Y-%m-%d %H:%M:%S")
 
     # Construct start and end times based on analysis cycle
     elif ana_flag == 1:
@@ -2138,8 +2183,8 @@ def create_fcst_times(
         # Retrieve analysis lookback from config file
         forcing_lookback = int(forcing_template['LookBack'] / 60) - 1
 
-        fcst_start = datetime.datetime.strftime(cycle_dt - datetime.timedelta(hours=forcing_lookback), "%Y-%m-%d %H:%M:%S")
-        fcst_end = datetime.datetime.strftime(cycle_dt, "%Y-%m-%d %H:%M:%S")
+        fcst_start = datetime.datetime.strftime(cycle_dt + datetime.timedelta(hours=hind_cycle) - datetime.timedelta(hours=forcing_lookback), "%Y-%m-%d %H:%M:%S")
+        fcst_end = datetime.datetime.strftime(cycle_dt + datetime.timedelta(hours=hind_cycle), "%Y-%m-%d %H:%M:%S")
 
     return fcst_start, fcst_end
 
@@ -2180,7 +2225,12 @@ def update_fcst_forcing_config(
         forcing_config_dir: Path,
         forcing_config_file: Path,
         use_cold_start: bool,
-        cold_start_datetime: str = None
+        use_warm_start: bool,
+        hind_cycle: int,
+        prev_hind_cycle: int,
+        forcing_lag: int,
+        cold_start_datetime: str = None,
+        fcst_lookback: int = None,
 ) -> None:
     """ update bmi forcing engine config yaml file for forecast forcing
 
@@ -2194,7 +2244,12 @@ def update_fcst_forcing_config(
     forcing_config_dir: directory path for forcing config file
     forcing_config_dir: output path for forcing config file
     use_cold_start : boolean flag for using cold start period
+    use_warm_start: boolean flag for using warm start period
+    hind_cycle: cycle (in hours) between first hindcast iteration (00) and current hindcast iteration
+    prev_hind_cycle: cycle (in hours) from previous hindcast iteration, used to orchestrate warm start runs
+    forcing_lag: number of hours forcing valid time is lagged from ngen start time in lagged ensemble run
     cold_start_datetime : datetime str of beginning of cold start period
+    fcst_lookback : lookback time in hours of forecast configuration following cold start
 
     Returns
     ----------
@@ -2207,13 +2262,20 @@ def update_fcst_forcing_config(
     ana_flag = forcing_template['AnAFlag']
 
     # Format cycle_date and hour for config file
-    cycle_dt = datetime.datetime.strptime(cycle_date, "%Y-%m-%d").replace(hour=int(cycle_hour.replace("z", "")))
+    initial_cycle_dt = datetime.datetime.strptime(cycle_date, "%Y-%m-%d").replace(hour=int(cycle_hour.replace("z", "")))
+    cycle_dt = initial_cycle_dt + datetime.timedelta(hours=hind_cycle) - datetime.timedelta(hours=forcing_lag)
     cycle_str = cycle_dt.strftime('%Y%m%d%H%M')
 
     # Set lookback minutes for cold start period
-    if use_cold_start is True:
+    if use_cold_start:
         cold_start_dt = datetime.datetime.strptime(cold_start_datetime, "%Y-%m-%d %H:%M:%S")
-        forcing_template['LookBack'] = int((cycle_dt - cold_start_dt).total_seconds() / 60) - 60
+        lookback = int((cycle_dt - cold_start_dt).total_seconds() / 60)
+        forcing_template['LookBack'] = lookback
+
+    # Set lookback minutes for warm start period
+    elif use_warm_start:
+        lookback = int((hind_cycle - prev_hind_cycle) * 60)
+        forcing_template['LookBack'] = lookback
 
     # Set geogrid file name
     gpkg_name = os.path.splitext(os.path.basename(gpkg_file))[0]
@@ -2225,7 +2287,7 @@ def update_fcst_forcing_config(
 
     # Update forcing_template with dynamic variables
     if ana_flag:
-        forcing_template['RefcstBDateProc'] = (cycle_dt - datetime.timedelta(hours=1)).strftime('%Y%m%d%H%M')
+        forcing_template['RefcstBDateProc'] = (cycle_dt - datetime.timedelta(hours=fcst_lookback) - datetime.timedelta(hours=1)).strftime('%Y%m%d%H%M')
     else:
         forcing_template['RefcstBDateProc'] = cycle_str
     forcing_template['Geopackage'] = gpkg_file
