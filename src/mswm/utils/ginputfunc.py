@@ -334,15 +334,16 @@ def create_cfe_input(
     ]
 
     # Set module list and rootzone flag for non-regionalization
-    mods_list = modules if run_type != 'regionalization' else None
-    rootzone_flag_default = is_aet_rootzone if run_type != 'regionalization' else None
+    is_grouped = run_type == 'regionalization' or isinstance(modules[0], list)
+    mods_list = None if is_grouped else modules
+    rootzone_flag_default = None if is_grouped else (is_aet_rootzone if 'smp' in modules else 0)
 
     # Create bmi config files
     for i, catID in enumerate(catids):
 
         # Set module list and is_aet_rootzone flag for each catchment during regionalization
-        mods = modules[i] if run_type == 'regionalization' else mods_list
-        rootzone_flag = is_aet_rootzone[catID] if run_type == 'regionalization' else rootzone_flag_default
+        mods = modules[i] if is_grouped else mods_list
+        rootzone_flag = (is_aet_rootzone[catID] if 'smp' in mods else 0) if is_grouped else rootzone_flag_default
 
         # Set sft coupling and surface partitioning scheme
         scheme = 'Xinanjiang' if 'cfex' in mods else 'Schaake'
@@ -594,7 +595,8 @@ def create_sft_smp_input(
     os.makedirs(smp_dir, exist_ok=True)
 
     # Set module list for non-regionalization run
-    mods_list = modules if run_type != 'regionalization' else None
+    is_grouped = run_type == 'regionalization' or isinstance(modules[0], list)
+    mods_list = None if is_grouped else modules
 
     # Shared configuration parameters
     sm_profile_str = ",".join(f"{float(depth):g}" for depth in sm_profile_depth)
@@ -626,7 +628,7 @@ def create_sft_smp_input(
     for i, catID in enumerate(catids):
 
         # Set module list for each catchment during regionalization
-        mods = modules[i] if run_type == 'regionalization' else mods_list
+        mods = modules[i] if is_grouped else mods_list
 
         # Determine ice fraction scheme
         icefscheme = 'Xinanjiang' if 'cfex' in mods else 'Schaake'
@@ -1406,13 +1408,14 @@ def create_lasam_input(
         'soil_z=10,30,100.0,200.0[cm]',  # TODO: Should this match soil moisture depths supplied by user?
     ]
 
+    # Set module list based on grouping
+    is_grouped = run_type == 'regionalization' or isinstance(modules[0], list)
+    mods_list = None if is_grouped else modules
+
     # Create bmi config file
     for i, catID in enumerate(catids):
         # Set module list for each catchment during regionalization
-        if run_type == 'regionalization':
-            mods = modules[i]
-        else:
-            mods = modules
+        mods = modules[i] if is_grouped else mods_list
 
         # Get catchment attributes
         cat_attrs = divides_df.loc[catID]
