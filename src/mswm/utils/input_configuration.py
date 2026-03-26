@@ -221,7 +221,8 @@ class CalibConfig(StrictBaseModel):
 valid_configs = ['standard_ana', 'aorc', 'extended_ana', 'long_range_mem1', 'long_range_mem2', 'long_range_mem3', 'long_range_mem4',
                  'medium_range_blend', 'nwm', 'short_range', 'short_range_alaska', 'medium_range_blend_alaska', 'short_range_extended_alaska',
                  'short_range_hawaii', 'short_range_puertorico', 'extended_ana_alaska', 'standard_ana_alaska', 'standard_ana_hawaii',
-                 'standard_ana_puertorico', ]
+                 'standard_ana_puertorico', 'medium_range_mem1', 'medium_range_mem2', 'medium_range_mem3', 'medium_range_mem4', 'medium_range_mem5', 
+                 'medium_range_mem6', 'medium_range_mem7', 'medium_range_mem8', 'medium_range_no_da',]
 
 
 class ForcingConfig(StrictBaseModel):
