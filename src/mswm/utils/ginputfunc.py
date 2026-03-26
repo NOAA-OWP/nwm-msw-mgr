@@ -2581,7 +2581,7 @@ def var_mapping(
         for i, d in enumerate(depths):
             var_maps["output"]["sm_out"].append("soil_moisture_profile")
             var_maps["output"]["sm_out_header"].append(f"sm_profile_{float(d):g}m")
-            var_maps["output"]["sm_out_units"].append("m")
+            var_maps["output"]["sm_out_units"].append("1")
             var_maps["output"]["sm_out_index"].append(str(i))
     else:
         var_maps['output']['sm_out'] = ''
