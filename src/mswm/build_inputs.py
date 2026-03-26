@@ -559,11 +559,38 @@ class RealizationBuilder:
         if 'global' in self.real_config:
             real_modules_sec = self.real_config['global']['formulations'][0]['params']['modules']
             real_modules = [m['params']['model_type_name'] for m in real_modules_sec]
-        else:
-            logger.critical("Grouped formulations not currently supported for NWM output variables.")
+            self.modules = [settings.modules_all[settings.modules_all['name_config'] == m].iloc[0]['module'] for m in real_modules]
+        elif 'formulation_groups' in self.real_config:
+            self.grp_to_form = {}
+            self.grp_to_cat = {}
+            self.grp_aet_rootzone = {}
+            all_modules = []
 
-        # Transform module names
-        self.modules = [settings.modules_all[settings.modules_all['name_config'] == m].iloc[0]['module'] for m in real_modules]
+            # Reconstruct grp_to_form from formulation groups
+            for grp, forms in self.real_config['formulation_groups'].items():
+                grp_modules = []
+                for form in forms:
+                    for m in form['params']['modules']:
+                        name = m['params']['model_type_name']
+                        module = settings.modules_all[settings.modules_all['name_config'] == name].iloc[0]['module']
+                        grp_modules.append(module)
+                        if module not in all_modules:
+                            all_modules.append(module)
+                self.grp_to_form[grp] = grp_modules
+                self.grp_aet_rootzone[grp] = 0
+
+            # Reconstruct grp_to_cat from catchments section
+            for cat_id, cat_config in self.real_config.get('catchments', {}).items():
+                grp = cat_config.get('formulations')
+                if grp:
+                    self.grp_to_cat.setdefault(grp, []).append(cat_id)
+
+            self.modules = all_modules
+
+        else:
+            logger.critical("No support formulation format found in realization file.")
+            raise ValueError("realization file must contain 'global' or 'formulation_groups'.")
+
         logger.info("Parsed modules and hydrofabric geopackage from existing realization file")
 
     def _get_nwm_output_variables(self):
@@ -1197,7 +1224,7 @@ class RealizationBuilder:
         # Set library files
         self.lib_file = {}
         modules1 = []
-        if self.run_type == 'regionalization':
+        if self.run_type == 'regionalization' or (hasattr(self, 'grp_to_form') and self.grp_to_form):
             modules1 = list(set(m1 for form in self.grp_to_form.values() for m1 in form if m1 not in ['troute', 'lstm', 'topoflow-glacier']))
             self.all_mod = modules1.copy()
 
@@ -1633,7 +1660,7 @@ class RealizationBuilder:
         """
         if hasattr(self, '_building_fcst_realization') and self._building_fcst_realization:
             base_mods = []
-        elif self.run_type == 'regionalization':
+        elif self.run_type == 'regionalization' or (hasattr(self, 'grp_to_form') and self.grp_to_form):
             base_mods = list(set(m1 for form in self.grp_to_form.values() for m1 in form if m1 != 'troute'))
         else:
             base_mods = self.modules
@@ -1665,10 +1692,7 @@ class RealizationBuilder:
         self.real_config = gfun.update_troute(self.real_config, self.input_dir, self.basename_opt)
 
         if self.output_nwm_vars:
-            self.real_config = gfun.update_realization_nwm_output(self.work_dir, self.lib_file, self.bmi_dir, self.forcing_provider,
-                                                                  self.adapters, self.modules, self.nwm_output_dicts, self.output_dict,
-                                                                  self.real_config, self.run_type)
-            logger.info("Updated forecast realization file with NWM output variables and adapter modules")
+            self._apply_nwm_output_vars()
 
     def _assemble_realization(self):
         """
@@ -1693,15 +1717,7 @@ class RealizationBuilder:
 
         # Update realization with NWM output variables if needed
         if self.output_nwm_vars:
-            if hasattr(self, 'grp_to_form') and self.grp_to_form:
-                for grp in self.grp_to_form:
-                    self.real_config = gfun.update_realization_nwm_output(self.work_dir, self.lib_file, self.bmi_dir, self.forcing_provider,
-                                                                          self.grp_to_adapters[grp], self.grp_to_form[grp], self.grp_to_nwm_output_dicts[grp], self.output_dict,
-                                                                          self.real_config, self.run_type, grp=grp)
-            else:
-                self.real_config = gfun.update_realization_nwm_output(self.work_dir, self.lib_file, self.bmi_dir, self.forcing_provider,
-                                                                      self.adapters, self.modules, self.nwm_output_dicts, self.output_dict,
-                                                                      self.real_config, self.run_type)
+            self._apply_nwm_output_vars()
 
     def _assemble_region_realization(self):
         """
@@ -1717,10 +1733,22 @@ class RealizationBuilder:
 
         # Update realization with NWM output variables if needed
         if self.output_nwm_vars:
+            self._apply_nwm_output_vars()
+
+    def _apply_nwm_output_vars(self):
+        """
+        Update realization config with NWM output variables for grouped or global formulations
+        """
+        if hasattr(self, 'grp_to_form') and self.grp_to_form:
             for grp in self.grp_to_form:
                 self.real_config = gfun.update_realization_nwm_output(self.work_dir, self.lib_file, self.bmi_dir, self.forcing_provider,
                                                                       self.grp_to_adapters[grp], self.grp_to_form[grp], self.grp_to_nwm_output_dicts[grp], self.output_dict,
                                                                       self.real_config, self.run_type, grp=grp)
+        else:
+            self.real_config = gfun.update_realization_nwm_output(self.work_dir, self.lib_file, self.bmi_dir, self.forcing_provider,
+                                                                  self.adapters, self.modules, self.nwm_output_dicts, self.output_dict,
+                                                                  self.real_config, self.run_type)
+        logger.info("Updated forecast realization file with NWM output variables and adapter modules")
 
     def _write_realization(self):
         """
