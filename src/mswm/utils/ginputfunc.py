@@ -3740,7 +3740,8 @@ def create_partition_file(
         gpkg_file: str,
         nprocs: int,
         work_dir: str,
-        basin: str) -> Union[str, Path]:
+        partition_config_basename_prefix: str,
+        sub_dir_name: str = "Input") -> Union[str, Path]:
     """ Create partition file
 
     Parameters
@@ -3748,19 +3749,27 @@ def create_partition_file(
     partition_generator: partition config generator json file
     gpkg_file: GeoPackage hydrofabric file
     nprocs: number of processors
-    work_dir : path to working directory
-    basin : name of basin
+    work_dir : path to working directory.
+        For non-forecasts this should be RealizationBuilder.work_dir.
+        For forecasts this is the forecast realization directory.
+    partition_config_basename_prefix : prefix of the basename used for the output partition configuration file
+    sub_dir_name : subdirectory basename (direct child of work_dir) in which to write the partition file.  Default: "Input"
 
     Returns
     ----------
-    None
+    Path of the partition file that was written
 
     """
 
-    partition_file = os.path.join(work_dir, 'Input', f"{basin}_partition_config.json")
+    partition_file = os.path.join(
+        work_dir,
+        sub_dir_name,
+        f"{partition_config_basename_prefix}{settings.PARTITION_CONFIG_FILE_NAME_SUFFIX}.json",
+    )
+
     cmd = f"{partition_generator} {gpkg_file} {gpkg_file} {partition_file} {nprocs} '' ''"
 
-    logger.info("Creating partition file for basin %s", basin)
+    logger.info("Creating partition file for %s", partition_config_basename_prefix)
     logger.info(" - Partition generator: %s", partition_generator)
     logger.info(" - Hydrofabric file: %s", gpkg_file)
     logger.info(" - Partition file: %s", partition_file)
