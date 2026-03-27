@@ -1633,7 +1633,7 @@ class RealizationBuilder:
         """
         if getattr(self, "_building_fcst_realization", "")  is True:
             cat_file = self.gpkg_cats
-            partition_config_basename_prefix = ""
+            partition_config_basename_prefix = "forecast"
             work_dir, sub_dir_name = os.path.split(self.input_dir)
         else:
             # Original behavior for "default", "calibration", and "regionalization", before forecast partitions were supported
