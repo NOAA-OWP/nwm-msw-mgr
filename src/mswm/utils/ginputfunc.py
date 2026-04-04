@@ -4,6 +4,7 @@ This module contains a variety of functions to create different input files.
 @author: Jeffrey Wade, Xia Feng
 """
 
+import copy
 import datetime
 import glob
 import json
@@ -2216,6 +2217,85 @@ def replace_forcing_placeholders(
         return obj
 
 
+def adjust_forcing_config_for_wcoss(
+    forcing_template: dict[str, str],
+    scratch_dir_override: str | None = None,
+    input_forcing_dirs_override_root: str | None = None,
+    forcing_product_versions: dict[str, str] | None = None,
+) -> dict[str, str]:
+    """Adjust the forcing config dictionary for WCOSS use case, if the optional parameters are provided.
+
+    Parameters
+    ----------
+    forcing_template : dictionary of forcing bmi config template file
+    scratch_dir_override (optional) : if provided, replaces entire value of key ScratchDir
+    ### The following 2 must be both provided together if intended to be used
+    input_forcing_dirs_override_root (optional) : modifies how InputForcingDirectories is constructed. See code for details.
+        Only used with forcing_product_versions. Must be provided when forcing_product_versions is provided.
+    forcing_product_versions (optional) : forcing product versions, e.g. {"HRRR": "vFoo", "RAP": "vBar"}.
+        Only used with input_forcing_dirs_override_root. Must be provided when input_forcing_dirs_override_root is provided.
+
+    Returns
+    ----------
+    A copy of forcing_template, modified if optional arguments are provided.
+    """
+    errors: list[Exception] = []
+
+    d = copy.deepcopy(forcing_template)
+
+    # For ScratchDir, replace the entire string if "scratch_dir_override" is provided.
+    if scratch_dir_override:
+        if "ScratchDir" not in d:
+            raise KeyError(f"Key 'ScratchDir' not in forcing_template: {d}")
+        d["ScratchDir"] = scratch_dir_override
+
+    # For InputForcingDirectories, if input_forcing_dirs_override_root is provided,
+    # replace everything up to the dir basename (the product name e.g. HRRR),
+    # then pathjoin the product version, too.
+    # Also make the product name lowercase in the final path.
+    if input_forcing_dirs_override_root and not forcing_product_versions:
+        errors.append(
+            ValueError(
+                f"When input_forcing_dirs_override_root is provided, forcing_product_versions must also be provided, but the latter is: {forcing_product_versions}"
+            )
+        )
+    if forcing_product_versions and not input_forcing_dirs_override_root:
+        errors.append(
+            ValueError(
+                f"When forcing_product_versions is provided, input_forcing_dirs_override_root must also be provided, but the latter is: {input_forcing_dirs_override_root}"
+            )
+        )
+
+    if input_forcing_dirs_override_root:
+        if "InputForcingDirectories" not in d:
+            raise KeyError(
+                f"Key 'InputForcingDirectories' not in forcing_template: {d}"
+            )
+        dirs_list = d["InputForcingDirectories"]
+
+        for i, dir_path_orig in enumerate(dirs_list):
+            forcing_product_name = os.path.basename(dir_path_orig)
+            try:
+                version = forcing_product_versions[forcing_product_name]
+            except KeyError:
+                errors.append(
+                    KeyError(
+                        f"Forcing product name {repr(forcing_product_name)} was derived from path {dir_path_orig}, but was not found in forcing_product_versions: {forcing_product_versions}"
+                    )
+                )
+                continue
+            dir_path_adjusted = os.path.join(
+                input_forcing_dirs_override_root, forcing_product_name.lower(), version
+            )
+            dirs_list[i] = dir_path_adjusted
+
+    if errors:
+        logger.critical(errors)
+        raise RuntimeError(errors)
+
+    return d
+
+
 def update_fcst_forcing_config(
         cycle_date: str,
         cycle_hour: str,
@@ -2231,6 +2311,9 @@ def update_fcst_forcing_config(
         forcing_lag: int,
         cold_start_datetime: str = None,
         fcst_lookback: int = None,
+        scratch_dir_override: str | None = None,
+        input_forcing_dirs_override_root: str | None = None,
+        forcing_product_versions: dict[str, str] | None = None,
 ) -> None:
     """ update bmi forcing engine config yaml file for forecast forcing
 
@@ -2250,6 +2333,9 @@ def update_fcst_forcing_config(
     forcing_lag: number of hours forcing valid time is lagged from ngen start time in lagged ensemble run
     cold_start_datetime : datetime str of beginning of cold start period
     fcst_lookback : lookback time in hours of forecast configuration following cold start
+    scratch_dir_override (optional) : if provided, replaces entire value of key ScratchDir
+    input_forcing_dirs_override_root (optional) : if provided, modifies how InputForcingDirectories is constructed. See code for details.
+    forcing_product_versions (optional) : see function update_fcst_config_for_wcoss
 
     Returns
     ----------
@@ -2292,6 +2378,12 @@ def update_fcst_forcing_config(
         forcing_template['RefcstBDateProc'] = cycle_str
     forcing_template['Geopackage'] = gpkg_file
 
+    forcing_template = adjust_forcing_config_for_wcoss(
+        forcing_template,
+        scratch_dir_override,
+        input_forcing_dirs_override_root,
+        forcing_product_versions,
+    )
     # Write forcing config yaml file
     with open(forcing_config_file, "w", encoding="utf-8") as file:
         yaml.dump(forcing_template, file, Dumper=ForcingDumper, sort_keys=False, default_flow_style=False)
