@@ -5,7 +5,6 @@ This module contains functions to manage the initial creation of configuration f
 """
 
 import copy
-import logging
 from datetime import datetime
 import json
 import os
@@ -15,11 +14,25 @@ import shutil
 import pandas as pd
 import yaml
 
+import logging
+import ewts
 
-logger = logging.getLogger(__name__)
+LoggerLike = logging.Logger | ewts.EwtsLogger
 
+def _resolve_logger(logger: LoggerLike | None) -> LoggerLike:
+    if logger is None:
+        return logging.getLogger(__name__)
 
-def create_valid_config_file(yaml_file: Path, valid_run_path: Path, valid_config_file: Path, valid_run_name: str) -> None:
+    if isinstance(logger, (ewts.EwtsLogger, logging.Logger)):
+        return logger
+
+    raise TypeError(
+        f"Unsupported logger type: {type(logger).__name__}. "
+        "Expected logging.Logger or ewts.EwtsLogger."
+    )
+
+def create_valid_config_file(yaml_file: Path, valid_run_path: Path, valid_config_file: Path, 
+                             valid_run_name: str, logger: LoggerLike | None = None) -> None:
     """
     Create configuration yaml file for valiation control and best runs.
 
@@ -31,6 +44,8 @@ def create_valid_config_file(yaml_file: Path, valid_run_path: Path, valid_config
     valid_run_name : control or best validation run
 
     """
+    logger = _resolve_logger(logger)
+    
     with open(yaml_file) as file:
         y = yaml.safe_load(file)
 
@@ -44,7 +59,8 @@ def create_valid_config_file(yaml_file: Path, valid_run_path: Path, valid_config
     logger.info("Config file for {} is created at {}".format(valid_run_name, d['general']['yaml_file']))
 
 
-def create_valid_realization_file(agent: 'Agent', eval_params: 'EvaluationOptions', params: 'pd.DataFrame', valid_run_name: str) -> None:
+def create_valid_realization_file(agent: 'Agent', eval_params: 'EvaluationOptions', params: 'pd.DataFrame', 
+                                  valid_run_name: str, logger: LoggerLike | None = None) -> None:
     """
     Create model realization file for valiation control and best runs.
 
@@ -56,7 +72,8 @@ def create_valid_realization_file(agent: 'Agent', eval_params: 'EvaluationOption
     valid_run_name: name for validation run (valid_best,valid_control,valid_worker#_iter#)
 
     """
-
+    logger = _resolve_logger(logger)
+        
     # Retrieve output variables from calib_yaml
     with open(agent.yaml_file) as file:
         y = yaml.safe_load(file)
@@ -178,4 +195,4 @@ def create_valid_realization_file(agent: 'Agent', eval_params: 'EvaluationOption
         json.dump(config_valid, outfile, indent=4, default=str, separators=(", ", ": "), sort_keys=False)
 
     # Write yaml configuration file for validation run
-    create_valid_config_file(agent.yaml_file, agent.valid_path, config_valid_file, valid_run_name)
+    create_valid_config_file(agent.yaml_file, agent.valid_path, config_valid_file, valid_run_name, logger)
