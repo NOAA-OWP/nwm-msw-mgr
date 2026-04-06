@@ -703,11 +703,21 @@ class RealizationBuilder:
                                                            "valid": [self.conf2['valid_eval_start_period'], self.conf2['valid_eval_end_period']],
                                                            "full": [self.conf2['full_eval_start_period'], self.conf2['full_eval_end_period']]}}
         # Retrieve time period for regionalization
-        elif self.run_type == 'regionalization':
-            self.time_period = {"run_time_period": {"region": [self.conf1['start_period'], self.conf1['end_period']]}}
-        # Retrieve time period for default
-        elif self.run_type == 'default':
-            self.time_period = {"run_time_period": {"default": [self.conf1['start_period'], self.conf1['end_period']]}}
+        elif self.run_type in ('regionalization', 'default'):
+            # Use fcst_start/fcst_end if set by forcing engine, otherwise fall back to config start and end times
+            if getattr(self, 'fcst_start', None) and getattr(self, 'fcst_end', None):
+                start = self.fcst_start
+                end = self.fcst_end
+            else:
+                start = self.conf1['start_period']
+                end = self.conf1['end_period']
+                if not start or not end:
+                    missing = [k for k, v in {'start_period': start, 'end_period': end}.items() if not v]
+                    err = f"Missing required General config key(s) for default run: {', '.join(missing)}"
+                    logger.critical(err)
+                    raise ValueError(err)
+            run_key = 'region' if self.run_type == 'regionalization' else 'default'
+            self.time_period = {"run_time_period": {run_key: [start, end]}}
 
         # Confirm times are properly formatted and in correct order
         errors = []
