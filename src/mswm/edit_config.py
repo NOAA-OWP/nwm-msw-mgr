@@ -3,6 +3,7 @@ This module contains functions to manage the initial creation of configuration f
 
 @author: Jeffrey Wade, Xia Feng, Nels Frazer
 """
+from __future__ import annotations
 
 import copy
 from datetime import datetime
@@ -15,21 +16,23 @@ import pandas as pd
 import yaml
 
 import logging
-import ewts
+from typing import Protocol
+class LoggerLike(Protocol):
+    def debug(self, msg: str, *args, **kwargs) -> object: ...
+    def info(self, msg: str, *args, **kwargs) -> object: ...
+    def warning(self, msg: str, *args, **kwargs) -> object: ...
+    def error(self, msg: str, *args, **kwargs) -> object: ...
+    def critical(self, msg: str, *args, **kwargs) -> object: ...
 
-LoggerLike = logging.Logger | ewts.EwtsLogger
 
 def _resolve_logger(logger: LoggerLike | None) -> LoggerLike:
+    # Your desired behavior
     if logger is None:
         return logging.getLogger(__name__)
 
-    if isinstance(logger, (ewts.EwtsLogger, logging.Logger)):
-        return logger
+    # No strict type checking — trust duck typing
+    return logger
 
-    raise TypeError(
-        f"Unsupported logger type: {type(logger).__name__}. "
-        "Expected logging.Logger or ewts.EwtsLogger."
-    )
 
 def create_valid_config_file(yaml_file: Path, valid_run_path: Path, valid_config_file: Path, 
                              valid_run_name: str, logger: LoggerLike | None = None) -> None:
@@ -45,7 +48,7 @@ def create_valid_config_file(yaml_file: Path, valid_run_path: Path, valid_config
 
     """
     logger = _resolve_logger(logger)
-    
+
     with open(yaml_file) as file:
         y = yaml.safe_load(file)
 
