@@ -6,7 +6,7 @@ This module creates a Setup Manager to manage the modification of configuration 
 
 import argparse
 from mswm.build_inputs import RealizationBuilder, validate_topoflow_glacier
-
+from mswm.utils.input_configuration import InputConfig
 
 def build_default(input_path: str, use_cold_start: bool = False):
     """
@@ -26,9 +26,10 @@ def build_calib(input_path: str):
     return real_path
 
 
-def build_fcst(input_path: str, valid_yaml: str, fcst_run_name: str, use_cold_start: bool = False, use_warm_start: bool = False,
+def build_fcst(input_path: str | None, valid_yaml: str, fcst_run_name: str, use_cold_start: bool = False, use_warm_start: bool = False,
                use_hindcast: bool = False, use_lagged_ens: bool = False, hind_cycle: int | None = None, prev_hind_cycle: int | None = None,
-               lagged_ens_mem: str | None = None, forcing_lag: int | None = None, load_state_from: str = None, save_state: bool = False):
+               lagged_ens_mem: str | None = None, forcing_lag: int | None = None, load_state_from: str = None, save_state: bool = False,
+               config_overrides: InputConfig = None):
     """
     Call RealizationBuilder class to generate forecast realization and config files
     """
@@ -36,7 +37,7 @@ def build_fcst(input_path: str, valid_yaml: str, fcst_run_name: str, use_cold_st
                             use_cold_start=use_cold_start, use_warm_start=use_warm_start, use_lagged_ens=use_lagged_ens,
                             use_hindcast=use_hindcast, hind_cycle=hind_cycle, prev_hind_cycle=prev_hind_cycle,
                             lagged_ens_mem=lagged_ens_mem, forcing_lag=forcing_lag,
-                            load_state_from=load_state_from, save_state=save_state)
+                            load_state_from=load_state_from, save_state=save_state, config_overrides=config_overrides)
     real_path = rb.build_fcst_realization()
     return real_path
 
