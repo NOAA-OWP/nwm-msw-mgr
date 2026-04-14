@@ -7,6 +7,7 @@ This module contains functions to manage the initial creation of configuration f
 import copy
 from pathlib import Path
 import os
+import ewts
 import logging
 import re
 import math
@@ -102,7 +103,7 @@ class RealizationBuilder:
         fcst_modes = sum([self.use_cold_start, self.use_warm_start, self.use_hindcast, self.use_lagged_ens])
         if fcst_modes > 1:
             err = ("Invalid configuration: only one of 'use_cold_start', 'use_warm_start', 'use_hindcast', use_lagged_ens may be True.")
-            logger.critical(err)
+            main_logger.critical(err)
             raise ValueError(err)
 
         # Initialize this to empty dict so that config override has a target even when input_path is not used
@@ -573,10 +574,19 @@ class RealizationBuilder:
         log_path = os.path.join(self.work_dir, 'logs')
 
         # Initialize logging
-        log_level_set(log_path)
         global logger
-        logger = logging.getLogger(MODULE_NAME)
+        logger = ewts.logger.setup_logger(
+                ewts.MSW_MGR_ID,
+                level="INFO",
+                log_dir=log_path,
+                log_file_name="mswm.log",
+                running_in_ngen=False,
+                enabled=True,
+                bind_now=True,
+            )
+
         gfun.init_ginput_logger()
+        logger.info(f"Using EWTS logger")
         logger.info(f"Building {self.run_type} realization from: {self.input_path}")
 
     def _parse_forcing_engine(self):
