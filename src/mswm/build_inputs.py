@@ -22,7 +22,6 @@ import subprocess
 
 from mswm.utils import ginputfunc as gfun
 from mswm.utils import settings
-from mswm.utils.log_level import log_level_set, MODULE_NAME
 from mswm.utils.input_configuration import InputConfig
 
 
@@ -572,6 +571,7 @@ class RealizationBuilder:
         """
         # Set location for msw-mgr log
         log_path = os.path.join(self.work_dir, 'logs')
+        safe_run_type = re.sub(r"[^A-Za-z0-9._-]", "_", self.run_type)
 
         # Initialize logging
         global logger
@@ -579,14 +579,13 @@ class RealizationBuilder:
                 ewts.MSW_MGR_ID,
                 level="INFO",
                 log_dir=log_path,
-                log_file_name="mswm.log",
+                log_file_name=f"msw_mgr_{safe_run_type}.log",
                 running_in_ngen=False,
                 enabled=True,
                 bind_now=True,
             )
 
         gfun.init_ginput_logger()
-        logger.info(f"Using EWTS logger")
         logger.info(f"Building {self.run_type} realization from: {self.input_path}")
 
     def _parse_forcing_engine(self):
