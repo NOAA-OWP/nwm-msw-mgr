@@ -234,6 +234,10 @@ class ForcingConfig(StrictBaseModel):
     cold_start_datetime: Optional[str] = None
     global_domain: Optional[str] = "CONUS"
     forcing_static_dir: Optional[str] = None
+    ### For WCOSS paths
+    scratch_dir_override: Optional[str] = None
+    input_forcing_dirs_override_root: Optional[str] = None
+    forcing_product_versions: Optional[dict] = None
 
     # Check optional fields that depend on forcing_provider
     @model_validator(mode="after")

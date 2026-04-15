@@ -590,6 +590,13 @@ class RealizationBuilder:
         self.root_dir = self.forcingSec.get('root_dir', None)
         self.global_domain = self.forcingSec.get('global_domain', "CONUS")
         self.forcing_static_dir = self.forcingSec.get('forcing_static_dir', None)
+        self.scratch_dir_override = self.forcingSec.get("scratch_dir_override", None)
+        self.input_forcing_dirs_override_root = self.forcingSec.get(
+            "input_forcing_dirs_override_root", None
+        )
+        self.forcing_product_versions = self.forcingSec.get(
+            "forcing_product_versions", None
+        )
 
         # Raise error if forecast or cold start is run with CSV provider
         if self.forcing_provider == 'csv' and self.run_type in ('forecast', 'cold_start'):
@@ -1242,7 +1249,11 @@ class RealizationBuilder:
                 # Update dynamic parameters in forcing engine configuration file
                 gfun.update_fcst_forcing_config(self.cycle_date, self.cycle_hour, self.root_dir, self.forcing_template, gpkg_file, self.forcing_config_dir,
                                                 self.forcing_config_file, self.use_cold_start, self.use_warm_start, self.hind_cycle, self.prev_hind_cycle,
-                                                self.forcing_lag, self.cold_start_datetime, self.fcst_lookback)
+                                                self.forcing_lag, self.cold_start_datetime, self.fcst_lookback,
+                    scratch_dir_override=self.scratch_dir_override,
+                    input_forcing_dirs_override_root=self.input_forcing_dirs_override_root,
+                    forcing_product_versions=self.forcing_product_versions,
+                )
             else:
                 # Update historical dynamic parameters in forcing engine configuration file
                 gfun.update_hist_forcing_config(self.time_period, self.root_dir, self.forcing_template, gpkg_file, self.forcing_config_dir, self.forcing_config_file, self.run_type, self.global_domain, self.forcing_static_dir)
