@@ -593,11 +593,9 @@ class RealizationBuilder:
 
         # Raise error if forecast or cold start is run with CSV provider
         if self.forcing_provider == 'csv' and self.run_type in ('forecast', 'cold_start'):
-            try:
-                raise ValueError(f"Run type {self.run_type} requires bmi forcing provider")
-            except ValueError as e:
-                logger.critical(e)
-                raise
+            msg = f"Run type {self.run_type} requires bmi forcing provider, but {repr(self.forcing_provider)} was provided"
+            logger.critical(msg)
+            raise ValueError(msg)
 
         # Retrieve cold_start_time
         self.cold_start_datetime = self.forcingSec.get('cold_start_datetime', None)
@@ -626,8 +624,9 @@ class RealizationBuilder:
                 elif self.use_lagged_ens:
                     # Check that use_lagged_ens is only used with medium_range configuration
                     if self.forcing_configuration != "medium_range":
-                        logger.critical(f"Lagged ensemble run must use medium range forcing configuration. {self.forcing_configuration} configuration cannot be used for a lagged ensemble.")
-                        raise
+                        msg = f"Lagged ensemble run must use medium range forcing configuration. {self.forcing_configuration} configuration cannot be used for a lagged ensemble."
+                        logger.critical(msg)
+                        raise ValueError(msg)
                     self.forcing_configuration_str = f"{self.forcing_configuration}_{self.lagged_ens_mem}_config.yml"
                 else:
                     self.forcing_configuration_str = f"{self.forcing_configuration}_config.yml"
