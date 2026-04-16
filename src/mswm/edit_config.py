@@ -3,9 +3,9 @@ This module contains functions to manage the initial creation of configuration f
 
 @author: Jeffrey Wade, Xia Feng, Nels Frazer
 """
+from __future__ import annotations
 
 import copy
-import logging
 from datetime import datetime
 import json
 import os
@@ -15,11 +15,27 @@ import shutil
 import pandas as pd
 import yaml
 
+import logging
+from typing import Protocol
+class LoggerLike(Protocol):
+    def debug(self, msg: str, *args, **kwargs) -> object: ...
+    def info(self, msg: str, *args, **kwargs) -> object: ...
+    def warning(self, msg: str, *args, **kwargs) -> object: ...
+    def error(self, msg: str, *args, **kwargs) -> object: ...
+    def critical(self, msg: str, *args, **kwargs) -> object: ...
 
-logger = logging.getLogger(__name__)
+
+def _resolve_logger(logger: LoggerLike | None) -> LoggerLike:
+    # Your desired behavior
+    if logger is None:
+        return logging.getLogger(__name__)
+
+    # No strict type checking — trust duck typing
+    return logger
 
 
-def create_valid_config_file(yaml_file: Path, valid_run_path: Path, valid_config_file: Path, valid_run_name: str) -> None:
+def create_valid_config_file(yaml_file: Path, valid_run_path: Path, valid_config_file: Path, 
+                             valid_run_name: str, logger: LoggerLike | None = None) -> None:
     """
     Create configuration yaml file for valiation control and best runs.
 
@@ -31,6 +47,8 @@ def create_valid_config_file(yaml_file: Path, valid_run_path: Path, valid_config
     valid_run_name : control or best validation run
 
     """
+    logger = _resolve_logger(logger)
+
     with open(yaml_file) as file:
         y = yaml.safe_load(file)
 
@@ -44,7 +62,8 @@ def create_valid_config_file(yaml_file: Path, valid_run_path: Path, valid_config
     logger.info("Config file for {} is created at {}".format(valid_run_name, d['general']['yaml_file']))
 
 
-def create_valid_realization_file(agent: 'Agent', eval_params: 'EvaluationOptions', params: 'pd.DataFrame', valid_run_name: str) -> None:
+def create_valid_realization_file(agent: 'Agent', eval_params: 'EvaluationOptions', params: 'pd.DataFrame', 
+                                  valid_run_name: str, logger: LoggerLike | None = None) -> None:
     """
     Create model realization file for valiation control and best runs.
 
@@ -56,7 +75,8 @@ def create_valid_realization_file(agent: 'Agent', eval_params: 'EvaluationOption
     valid_run_name: name for validation run (valid_best,valid_control,valid_worker#_iter#)
 
     """
-
+    logger = _resolve_logger(logger)
+        
     # Retrieve output variables from calib_yaml
     with open(agent.yaml_file) as file:
         y = yaml.safe_load(file)
@@ -178,4 +198,4 @@ def create_valid_realization_file(agent: 'Agent', eval_params: 'EvaluationOption
         json.dump(config_valid, outfile, indent=4, default=str, separators=(", ", ": "), sort_keys=False)
 
     # Write yaml configuration file for validation run
-    create_valid_config_file(agent.yaml_file, agent.valid_path, config_valid_file, valid_run_name)
+    create_valid_config_file(agent.yaml_file, agent.valid_path, config_valid_file, valid_run_name, logger)
