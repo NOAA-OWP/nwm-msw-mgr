@@ -516,7 +516,8 @@ class RealizationBuilder:
         self.run_type = self.conf1.get("run_type") if self.conf1 else None
         self.domain = self.conf1.get("domain") if self.conf1 else None
         self.environment = self.conf1.get("environment") if self.conf1 else None
-        self.basin = self.conf1['basin'] if self.conf1 else None
+        self.basin = self.conf1.get("basin") if self.conf1 else None
+        self.subset_type = self.conf1.get("subset_type") if self.conf1 else None
 
         # Retrieve module properties inputs
         self.module_prop = self.input_configs.get("ModuleProperties")
@@ -542,7 +543,6 @@ class RealizationBuilder:
         Create input directory to store realization file and BMI config files
         """
         # Set run directory based on run_type
-        self.basin = self.conf1['basin']
         obj_fnc = self.conf2.get('objective_function') or "none"
         opt_alg = self.conf2.get('optimization_algorithm') or "none"
         if self.run_type == 'calibration':
@@ -577,14 +577,14 @@ class RealizationBuilder:
         global logger
         ewts.logger.reset_logger(ewts.MSW_MGR_ID)
         logger = ewts.logger.setup_logger(
-                ewts.MSW_MGR_ID,
-                level="INFO",
-                log_dir=log_path,
-                log_file_name=f"msw_mgr_{safe_run_type}.log",
-                running_in_ngen=False,
-                enabled=True,
-                bind_now=True,
-            )
+            ewts.MSW_MGR_ID,
+            level="INFO",
+            log_dir=log_path,
+            log_file_name=f"msw_mgr_{safe_run_type}.log",
+            running_in_ngen=False,
+            enabled=True,
+            bind_now=True,
+        )
 
         gfun.init_ginput_logger()
         logger.info(f"Building {self.run_type} realization from: {self.input_path}")
@@ -795,7 +795,7 @@ class RealizationBuilder:
         self.gpkg_file = self.conf3.get('hydrofab_file')
         if self.gpkg_file is None:
             # If gpkg_file not provided, retrieve gpkg from icefabric and save to file
-            self.gpkg_file = gfun.call_icefabric_gpkg(self.basin, self.domain, self.input_dir, self.environment, 'nhf')
+            self.gpkg_file = gfun.call_icefabric_gpkg(self.basin, self.subset_type, self.domain, self.input_dir, self.environment, 'nhf')
 
         else:
             # Ensure user provided geopackage file exists
@@ -1251,9 +1251,9 @@ class RealizationBuilder:
                 gfun.update_fcst_forcing_config(self.cycle_date, self.cycle_hour, self.root_dir, self.forcing_template, gpkg_file, self.forcing_config_dir,
                                                 self.forcing_config_file, self.use_cold_start, self.use_warm_start, self.hind_cycle, self.prev_hind_cycle,
                                                 self.forcing_lag, self.cold_start_datetime, self.fcst_lookback,
-                    scratch_dir_override=self.scratch_dir_override,
-                    forcing_product_versions=self.forcing_product_versions,
-                )
+                                                scratch_dir_override=self.scratch_dir_override,
+                                                forcing_product_versions=self.forcing_product_versions,
+                                                )
             else:
                 # Update historical dynamic parameters in forcing engine configuration file
                 gfun.update_hist_forcing_config(self.time_period, self.root_dir, self.forcing_template, gpkg_file, self.forcing_config_dir, self.forcing_config_file, self.run_type, self.global_domain, self.forcing_static_dir)
@@ -1586,7 +1586,7 @@ class RealizationBuilder:
         """
         Write parallel processing partition file
         """
-        if getattr(self, "_building_fcst_realization", "")  is True:
+        if getattr(self, "_building_fcst_realization", "") is True:
             cat_file = self.gpkg_cats
             partition_config_basename_prefix = "forecast"
             work_dir, sub_dir_name = os.path.split(self.input_dir)
