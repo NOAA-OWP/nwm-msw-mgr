@@ -575,6 +575,7 @@ class RealizationBuilder:
 
         # Initialize logging
         global logger
+        ewts.logger.reset_logger(ewts.MSW_MGR_ID)
         logger = ewts.logger.setup_logger(
                 ewts.MSW_MGR_ID,
                 level="INFO",
