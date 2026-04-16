@@ -6,11 +6,11 @@ This module contains a variety of functions to create different input files.
 
 import copy
 import datetime
+import ewts
 import glob
 import json
 import os
 import subprocess
-import logging
 import math
 from pathlib import Path
 from typing import List, Union, Dict, Any, Tuple
@@ -22,7 +22,6 @@ import yaml
 import httpx
 
 from mswm.utils import settings
-from mswm.utils.log_level import MODULE_NAME
 
 logger = None
 
@@ -102,7 +101,7 @@ def init_ginput_logger():
     Initialize ginputfunc.py logger once MSWM named logger is created
     """
     global logger
-    logger = logging.getLogger(MODULE_NAME)
+    logger = ewts.get_logger(ewts.MSW_MGR_ID).get_bound_logger()
 
 
 def call_icefabric_gpkg(
