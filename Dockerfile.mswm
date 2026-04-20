@@ -1,8 +1,11 @@
 # syntax=docker/dockerfile:1.4
 
+ARG ORG=ngwpc
 ARG NGEN_IMAGE_TAG=latest
+ARG NGEN_IMAGE=ghcr.io/${ORG}/ngen:${NGEN_IMAGE_TAG}
+
 #FROM ngen-int:${NGEN_IMAGE_TAG}
-FROM ghcr.io/ngwpc/ngen:${NGEN_IMAGE_TAG}
+FROM ${NGEN_IMAGE}
 
 WORKDIR /ngen-app/mswm/
 
