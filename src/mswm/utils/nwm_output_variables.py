@@ -36,8 +36,8 @@ NWM_OUTPUT_VARIABLES: List[NWMOutputVariable] = [
         description="Ponded water depth",
         adapter="cfes",
         adapter_var="NWM_PONDED_DEPTH",
-        provider=["cfes", "cfex", "sac", "lasam"],
-        provider_var=["NWM_PONDED_DEPTH", "NWM_PONDED_DEPTH", "nwm_ponded_depth", "nwm_ponded_depth"],
+        provider=["cfes", "cfex", "sac", "topmodel", "lasam"],
+        provider_var=["NWM_PONDED_DEPTH", "NWM_PONDED_DEPTH", "nwm_ponded_depth", "nwm_ponded_depth", "nwm_ponded_depth"],
     ),
     NWMOutputVariable(
         nwm_name="qBucket",
