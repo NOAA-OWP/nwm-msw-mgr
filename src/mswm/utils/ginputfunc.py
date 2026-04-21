@@ -3529,7 +3529,7 @@ def update_realization_nwm_output(
         sft_index = next((i for i, m in enumerate(modules) if 'sft' in m), None)
         cfes_index = sft_index + 1
         modules.insert(cfes_index, 'cfes')
-        var_maps = var_mapping(modules, "water_potential_evaporation_flux", name_prcp.get('csv'), output_dict)
+        var_maps = var_mapping(modules, "water_potential_evaporation_flux", name_prcp.get('csv'), name_prcp.get(forcing_provider), output_dict)
         real_modules.insert(cfes_index,
                             {"name": "bmi_c",
                              "params": {"name": "bmi_c",
