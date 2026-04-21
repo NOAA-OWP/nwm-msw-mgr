@@ -2224,10 +2224,62 @@ def replace_forcing_placeholders(
         return obj
 
 
+class NoForcingProductVersionMatchError(Exception):
+    """Returned by get_forcing_dir_path_override when the forcing product basename
+    does not have a match in the provided lookup dictionary"""
+
+
+def get_forcing_dir_path_override(
+    forcing_dir_path_provided: str,
+    forcing_product_versions: dict[str, list[str, str]],
+) -> tuple[str | None, Exception | None]:
+    """
+    Inspect the provided forcing directory path and return a copy of it
+    that has been overridden using the provided dictionary.
+
+    Parameters
+    ----------
+    forcing_dir_path_provided : str
+        The forcing directory path as read from the forcing configuration yaml file.
+    forcing_product_versions : dictionary of forcing product directories,
+        keyed on product name,
+        with value being a list of 2 elements:
+            1. Directory path (with format parameter {vers}),
+            2. A version string to use in the string replacement.
+
+        These are used to override any paths found in InputForcingDirectories, SuppPcpDirectories, SuppPcpParamDir
+
+        Example:
+            {
+                "HRRR":     ["/lfs/h1/ops/prod/com/hrrr/{vers}", "v4.1"],
+                "HRRR_ANA": ["/lfs/h1/ops/prod/com/hrrr/{vers}", "v4.1"],
+            }
+
+    Returns
+    -------
+    str
+        Path after applying override.
+        If no override provided, then the original path is returned.
+        If a problem is detected in the inputs, then None is returned.
+    Exception | None
+        If a problem is detected in the inputs, an exception will be returned, otherwise None will be returned.
+    """
+    # As written in the forcing config file
+    forcing_product_name = os.path.basename(forcing_dir_path_provided)
+    try:
+        val = forcing_product_versions[forcing_product_name]
+    except KeyError:
+        return None, NoForcingProductVersionMatchError(
+            f"Forcing product name {repr(forcing_product_name)} was derived from path {forcing_dir_path_provided}, but was not found in forcing_product_versions keys: {list(forcing_product_versions)}"
+        )
+    path_template, version = val
+    dir_path_adjusted = path_template.format(vers=version)
+    return dir_path_adjusted, None
+
+
 def adjust_forcing_config_for_wcoss(
     forcing_template: dict[str, str],
     scratch_dir_override: str | None = None,
-    input_forcing_dirs_override_root: str | None = None,
     forcing_product_versions: dict[str, str] | None = None,
 ) -> dict[str, str]:
     """Adjust the forcing config dictionary for WCOSS use case, if the optional parameters are provided.
@@ -2236,15 +2288,29 @@ def adjust_forcing_config_for_wcoss(
     ----------
     forcing_template : dictionary of forcing bmi config template file
     scratch_dir_override (optional) : if provided, replaces entire value of key ScratchDir
-    ### The following 2 must be both provided together if intended to be used
-    input_forcing_dirs_override_root (optional) : modifies how InputForcingDirectories is constructed. See code for details.
-        Only used with forcing_product_versions. Must be provided when forcing_product_versions is provided.
-    forcing_product_versions (optional) : forcing product versions, e.g. {"HRRR": "vFoo", "RAP": "vBar"}.
-        Only used with input_forcing_dirs_override_root. Must be provided when input_forcing_dirs_override_root is provided.
+    forcing_product_versions (optional) : dictionary of overrides for forcing product directories,
+        keyed on product name,
+        with value being a list of 2 elements:
+            1. Directory path to use -- a "format" string with format parameter {vers} to be replaced,
+            2. A version string to use in the string replacement.
+
+        These are used to override any paths found in InputForcingDirectories, SuppPcpDirectories, SuppPcpParamDir
+
+        SuppPcpParamDir is treated specially in that it is less strict -- if its input basename value (from config yml file)
+        does not have a match in the provided forcing_product_versions dict, then it uses the value from the config yml file
+        as is (does not raise an exception).
+
+        InputForcingDirectories and SuppPcpDirectories are strict -- they raise an exception if they do not have a match in forcing_product_versions.
+
+        Example:
+            {
+                "HRRR":     ["/lfs/h1/ops/prod/com/hrrr/{vers}", "v4.1"],
+                "HRRR_ANA": ["/lfs/h1/ops/prod/com/hrrr/{vers}", "v4.1"],
+            }
 
     Returns
     ----------
-    A copy of forcing_template, modified if optional arguments are provided.
+    A copy of forcing_template, modified if optional arguments were provided.
     """
     errors: list[Exception] = []
 
@@ -2256,45 +2322,48 @@ def adjust_forcing_config_for_wcoss(
             raise KeyError(f"Key 'ScratchDir' not in forcing_template: {d}")
         d["ScratchDir"] = scratch_dir_override
 
-    # For InputForcingDirectories, if input_forcing_dirs_override_root is provided,
-    # replace everything up to the dir basename (the product name e.g. HRRR),
-    # then pathjoin the product version, too.
-    # Also make the product name lowercase in the final path.
-    if input_forcing_dirs_override_root and not forcing_product_versions:
-        errors.append(
-            ValueError(
-                f"When input_forcing_dirs_override_root is provided, forcing_product_versions must also be provided, but the latter is: {forcing_product_versions}"
-            )
-        )
-    if forcing_product_versions and not input_forcing_dirs_override_root:
-        errors.append(
-            ValueError(
-                f"When forcing_product_versions is provided, input_forcing_dirs_override_root must also be provided, but the latter is: {input_forcing_dirs_override_root}"
-            )
-        )
+    if forcing_product_versions:
+        expected_keys = [
+            "InputForcingDirectories",
+            "SuppPcpDirectories",
+            "SuppPcpParamDir",
+        ]
+        for k in expected_keys:
+            if k not in d:
+                raise KeyError(f"Missing key {repr(k)} in keys {list(d)}")
 
-    if input_forcing_dirs_override_root:
-        if "InputForcingDirectories" not in d:
-            raise KeyError(
-                f"Key 'InputForcingDirectories' not in forcing_template: {d}"
-            )
-        dirs_list = d["InputForcingDirectories"]
-
-        for i, dir_path_orig in enumerate(dirs_list):
-            forcing_product_name = os.path.basename(dir_path_orig)
-            try:
-                version = forcing_product_versions[forcing_product_name]
-            except KeyError:
-                errors.append(
-                    KeyError(
-                        f"Forcing product name {repr(forcing_product_name)} was derived from path {dir_path_orig}, but was not found in forcing_product_versions: {forcing_product_versions}"
-                    )
-                )
+        all_forcing_dirs_lists = [d["InputForcingDirectories"], d["SuppPcpDirectories"]]
+        for dirs_list in all_forcing_dirs_lists:
+            if not dirs_list:
                 continue
-            dir_path_adjusted = os.path.join(
-                input_forcing_dirs_override_root, forcing_product_name.lower(), version
+
+            for i, dir_path_orig in enumerate(dirs_list):
+                forcing_dir_path_override, error = get_forcing_dir_path_override(
+                    dir_path_orig,
+                    forcing_product_versions,
+                )
+                if error:
+                    errors.append(error)
+                else:
+                    dirs_list[i] = forcing_dir_path_override
+
+        # This is a single value rather than a list
+        if d["SuppPcpParamDir"]:
+            forcing_dir_path_override, error = get_forcing_dir_path_override(
+                d["SuppPcpParamDir"], forcing_product_versions
             )
-            dirs_list[i] = dir_path_adjusted
+            if error:
+                # SuppPcpParamDir is treated differently, it is less strict.
+                # If there is no product it just uses what was in the config file rather than raising an error.
+                if isinstance(error, NoForcingProductVersionMatchError):
+                    logger.warning(
+                        f"No match for SuppPcpParamDir {repr(d['SuppPcpParamDir'])} in provided product version dictionary {list(forcing_product_versions)}. Not applying override."
+                    )
+                    pass
+                else:
+                    errors.append(error)
+            else:
+                d["SuppPcpParamDir"] = forcing_dir_path_override
 
     if errors:
         logger.critical(errors)
