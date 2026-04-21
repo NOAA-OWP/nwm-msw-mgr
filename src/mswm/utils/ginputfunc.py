@@ -1475,6 +1475,7 @@ def create_lasam_input(
             raise
 
     # Create lasam list
+    max_soil_types = 16
     lasam_lst = ['verbosity=none',
                  'soil_params_file=' + soil_param_file,
                  'layer_thickness=200.0[cm]',
@@ -1485,7 +1486,7 @@ def create_lasam_input(
                  'ponded_depth_max=1.1[cm]',
                  'use_closed_form_G=false',
                  'layer_soil_type=',
-                 'max_soil_types=16',
+                 'max_soil_types=' + str(max_soil_types),
                  'wilting_point_psi=15495.0[cm]',
                  'field_capacity_psi=340.9[cm]',
                  'giuh_ordinates=0.06,0.51,0.28,0.12,0.03',
@@ -1512,7 +1513,7 @@ def create_lasam_input(
 
         # Insert soil type, checking that it doesn't exceed max_soil_types=16
         isltyp = int(dfa.loc[catID]['mode.ISLTYP'])
-        if isltyp > 16:
+        if isltyp > max_soil_types:
             msg = f"LASAM soil type value {isltyp} exceeds max_soil_types=16"
             logger.critical(msg)
             raise ValueError(msg)
