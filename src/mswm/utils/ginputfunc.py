@@ -2388,7 +2388,6 @@ def update_fcst_forcing_config(
         cold_start_datetime: str = None,
         fcst_lookback: int = None,
         scratch_dir_override: str | None = None,
-        input_forcing_dirs_override_root: str | None = None,
         forcing_product_versions: dict[str, str] | None = None,
 ) -> None:
     """ update bmi forcing engine config yaml file for forecast forcing
@@ -2410,7 +2409,6 @@ def update_fcst_forcing_config(
     cold_start_datetime : datetime str of beginning of cold start period
     fcst_lookback : lookback time in hours of forecast configuration following cold start
     scratch_dir_override (optional) : if provided, replaces entire value of key ScratchDir
-    input_forcing_dirs_override_root (optional) : if provided, modifies how InputForcingDirectories is constructed. See code for details.
     forcing_product_versions (optional) : see function update_fcst_config_for_wcoss
 
     Returns
@@ -2457,7 +2455,6 @@ def update_fcst_forcing_config(
     forcing_template = adjust_forcing_config_for_wcoss(
         forcing_template,
         scratch_dir_override,
-        input_forcing_dirs_override_root,
         forcing_product_versions,
     )
     # Write forcing config yaml file
