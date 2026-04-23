@@ -236,8 +236,7 @@ class ForcingConfig(StrictBaseModel):
     forcing_static_dir: Optional[str] = None
     ### For WCOSS paths
     scratch_dir_override: Optional[str] = None
-    input_forcing_dirs_override_root: Optional[str] = None
-    forcing_product_versions: Optional[dict] = None
+    forcing_product_versions: Optional[dict[str, list[str]]] = None
 
     # Check optional fields that depend on forcing_provider
     @model_validator(mode="after")

@@ -601,9 +601,6 @@ class RealizationBuilder:
         self.global_domain = self.forcingSec.get('global_domain', "CONUS")
         self.forcing_static_dir = self.forcingSec.get('forcing_static_dir', None)
         self.scratch_dir_override = self.forcingSec.get("scratch_dir_override", None)
-        self.input_forcing_dirs_override_root = self.forcingSec.get(
-            "input_forcing_dirs_override_root", None
-        )
         self.forcing_product_versions = self.forcingSec.get(
             "forcing_product_versions", None
         )
@@ -1261,7 +1258,6 @@ class RealizationBuilder:
                                                 self.forcing_config_file, self.use_cold_start, self.use_warm_start, self.hind_cycle, self.prev_hind_cycle,
                                                 self.forcing_lag, self.cold_start_datetime, self.fcst_lookback,
                     scratch_dir_override=self.scratch_dir_override,
-                    input_forcing_dirs_override_root=self.input_forcing_dirs_override_root,
                     forcing_product_versions=self.forcing_product_versions,
                 )
             else:
