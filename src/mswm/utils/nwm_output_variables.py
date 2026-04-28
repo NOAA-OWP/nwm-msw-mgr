@@ -156,15 +156,17 @@ NWM_OUTPUT_VARIABLES: List[NWMOutputVariable] = [
         provider=["smp"],
         provider_var=["soil_moisture_profile"],
     ),
-    NWMOutputVariable(
-        nwm_name="SFCRNOFF",
-        nwm_units="mm",
-        description="Accumulated surface runoff",
-        adapter="cfes",
-        adapter_var="flux_direct_runoff_m",
-        provider=["cfes", "cfex", "lasam", "sac", "topmodel"],
-        provider_var=["flux_direct_runoff_m", "flux_direct_runoff_m", "surface_runoff", "qs", "land_surface_water__domain_time_integral_of_runoff_volume_flux"],
-    ),
+    # SFCRNOFF output variable is temporarily disabled, as CFE does not have a flux_direct_runoff_m variable, and two rainfall runoff models cannot be used together currently
+    # TODO: Update CFE to produce flux_direct_runoff_m variable
+    # NWMOutputVariable(
+    #     nwm_name="SFCRNOFF",
+    #     nwm_units="mm",
+    #     description="Accumulated surface runoff",
+    #     adapter="cfes",
+    #     adapter_var="flux_direct_runoff_m",
+    #     provider=["cfes", "cfex", "lasam", "sac", "topmodel"],
+    #     provider_var=["flux_direct_runoff_m", "flux_direct_runoff_m", "surface_runoff", "qs", "land_surface_water__domain_time_integral_of_runoff_volume_flux"],
+    # ),
     NWMOutputVariable(
         nwm_name="TRAD",
         nwm_units="K",
