@@ -129,10 +129,10 @@ class TestRegionBuild:
         files = os.listdir(cfes_dir)
         assert len(files) == 4
 
-    def test_cfex_configs_exist(self):
-        cfex_dir = os.path.join(self.rb.input_dir, "cfe-x_input")
-        assert os.path.isdir(cfex_dir)
-        files = os.listdir(cfex_dir)
+    def test_lasam_configs_exist(self):
+        lasam_dir = os.path.join(self.rb.input_dir, "lasam_input")
+        assert os.path.isdir(lasam_dir)
+        files = os.listdir(lasam_dir)
         assert len(files) == 4
 
     def test_noah_configs_exist(self):
@@ -308,13 +308,13 @@ class TestRegionNWMOutputBuild:
         sft_dir = os.path.join(str(self.rb.input_dir), "sft_input")
         assert os.path.isdir(sft_dir)
         input_files = [f for f in os.listdir(sft_dir) if f.endswith(".txt")]
-        assert len(input_files) == 7
+        assert len(input_files) == 8
 
     def test_smp_adapter_configs_created(self):
         smp_dir = os.path.join(str(self.rb.input_dir), "smp_input")
         assert os.path.isdir(smp_dir)
         input_files = [f for f in os.listdir(smp_dir) if f.endswith(".txt")]
-        assert len(input_files) == 7
+        assert len(input_files) == 8
 
     # BMI config files
     def test_cfes_configs_exist(self):
@@ -327,7 +327,7 @@ class TestRegionNWMOutputBuild:
         lasam_dir = os.path.join(self.rb.input_dir, "lasam_input")
         assert os.path.isdir(lasam_dir)
         files = os.listdir(lasam_dir)
-        assert len(files) == 3
+        assert len(files) == 4
 
     def test_noah_configs_exist(self):
         noah_dir = os.path.join(self.rb.input_dir, "noah-owp-modular_input")

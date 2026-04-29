@@ -2998,7 +2998,6 @@ def create_realization_file(
         forcing_provider: str,
         forcing_dir: Union[str, Path],
         forcing_config_file: Union[str, Path],
-        realization_file: Union[str, Path],
         modules: List[str],
         time_period: dict,
         rt_dict: dict,
@@ -3153,12 +3152,7 @@ def create_realization_file(
     # Add routing section
     g.update(rt_dict)
 
-    # Write realization file
-    with open(realization_file, 'w') as f:
-        json.dump(g, f, indent=4, separators=(", ", ": "), sort_keys=False)
-    logger.info(f'Realization file is created at {realization_file}')
-
-    return output_config
+    return g, output_config
 
 
 def create_reg_realization_file(

@@ -914,7 +914,6 @@ class RealizationBuilder:
         # Set cat, nexus, and walk files
         self.cat_file = os.path.join(self.input_dir, os.path.basename(self.gpkg_file))
         self.nexus_file = os.path.join(self.input_dir, os.path.basename(self.gpkg_file))
-        self.walk_file = self.input_dir + '{}'.format(self.basin) + '_crosswalk.json'
 
         if self.file_crs_epsg(self.gpkg_file) in (4326, 5070):
             try:
@@ -938,23 +937,24 @@ class RealizationBuilder:
                 logger.critical(msg)
                 raise RuntimeError(msg) from e
 
-        # Read layers from hydrofabric
+    def _read_hydrofabric(self):
+        """
+        Read catchment divides and flowpaths layers from hydrofabric
+        """
+        # Read catchment parameter values from geopackage divide-attributes
+        gpkg_path = self.gpkg_cats if self.run_type in ('cold_start', 'warm_start', 'hindcast', 'lagged_ens', 'forecast') else self.gpkg_file
+
+        # Read catchment divides, flowpaths, and gages layers from hydrofabric
         try:
-            self.divides_df = gpd.read_file(self.gpkg_file, layer='divides')
+            self.divides_df = gpd.read_file(gpkg_path, layer='divides')
             self.catids = self.divides_df['div_id'].tolist()
             self.divides_df.set_index('div_id', inplace=True)
-            self.gages_df = gpd.read_file(self.gpkg_file, layer='gages')
-            self.flowpaths_df = gpd.read_file(self.gpkg_file, layer='flowpaths')
+            self.flowpaths_df = gpd.read_file(gpkg_path, layer='flowpaths')
             self.flowpaths_df.set_index('div_id', inplace=True)
-            logger.info(f"Divides and gages layers loaded from: {self.gpkg_file}")
+            self.gages_df = gpd.read_file(gpkg_path, layer='gages')
         except Exception as e:
             logger.critical(f"Error while reading geopackage file: {e}")
             raise
-
-        # Create crosswalk file between catchments and gages for calibration run
-        if self.run_type == 'calibration':
-            gfun.create_walk_file(self.basin, self.divides_df, self.gages_df, self.walk_file)
-            logger.info(f"Crosswalk file created at: {self.walk_file}")
 
         # Modify divides_df to set values of b, smcmax, satpsi values and set to defaults if they equal 0
         # Remove code after EDFS fixes NHF attributes
@@ -1790,6 +1790,11 @@ class RealizationBuilder:
         user_email = self.conf2.get('user_email') or ''
         strategy = 'grouped' if 'topoflow-glacier' in self.modules else 'uniform'
 
+        # Create crosswalk file between catchments and gages for calibration run
+        self.walk_file = self.input_dir + '{}'.format(self.basin) + '_crosswalk.json'
+        gfun.create_walk_file(self.basin, self.divides_df, self.gages_df, self.walk_file)
+        logger.info(f"Crosswalk file created at: {self.walk_file}")
+
         # Create calibration configuration file
         self.calib_config_file = os.path.join(self.work_dir + '/Input', '{}'.format(self.basin) + '_config_calib.yaml')
         self.model_dict = {'type': 'ngen', 'binary': self.conf3['ngen_exe_file'], 'realization': self.realization_file,
@@ -1889,6 +1894,7 @@ class RealizationBuilder:
         self._parse_time()
         self._parse_calib_settings()
         self._extract_hydrofabric()
+        self._read_hydrofabric()
         self._parse_modules()
         self._validate_processes()
         self._map_cat_to_grp()
@@ -1932,6 +1938,7 @@ class RealizationBuilder:
         self._load_reg_catchments()
         self._parse_time()
         self._extract_hydrofabric()
+        self._read_hydrofabric()
         self._parse_reg_params()
         self._parse_reg_modules()
         self._validate_processes()
@@ -1981,7 +1988,7 @@ class RealizationBuilder:
         self._configure_forcing_engine()
         if self.output_nwm_vars:
             self._parse_realization()
-            self._extract_divides()
+            self._read_hydrofabric()
             self._map_cat_to_grp()
             self._map_cat_to_form()
             self._map_mod_to_cat()
@@ -2028,7 +2035,7 @@ class RealizationBuilder:
         self._parse_forcing_engine()
         self._parse_time()
         self._extract_hydrofabric()
-        self._extract_divides()
+        self._read_hydrofabric()
         self._parse_modules()
         self._validate_processes()
         self._map_cat_to_grp()
