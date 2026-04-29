@@ -1512,11 +1512,7 @@ class RealizationBuilder:
                         raise
 
                 # Determine cat_mod and mods_to_pass based on run_type and loop type
-<<<<<<< HEAD
                 if is_regionalization or hasattr(self, 'grp_to_form') and self.grp_to_form:
-=======
-                if self.run_type == 'regionalization' or hasattr(self, 'grp_to_form') and self.grp_to_form:
->>>>>>> 56ef8b1 (Implement topoflow-glacier for nwm output variables)
                     if is_adapter_loop:
                         cat_mod = [cat for grp, grp_adapters in self.grp_to_adapters.items()
                                    if m1 in grp_adapters for cat in self.grp_to_cat[grp]]
@@ -1533,13 +1529,8 @@ class RealizationBuilder:
 
                 # Create BMI config files from scratch if paths not provided
                 if m1 in ['cfes', 'cfex']:
-<<<<<<< HEAD
                     gfun.create_cfe_input(cat_mod, mods_to_pass, self.divides_df, mod_input_dir, self.run_type,
                                           self.cat_to_aet_rootzone if is_regionalization or hasattr(self, 'grp_to_form') else self.aet_rootzone,
-=======
-                    gfun.create_cfe_input(cat_mod, mods_to_pass, self.attr_file, mod_input_dir, self.run_type,
-                                          self.cat_to_aet_rootzone if self.run_type == 'regionalization' or hasattr(self, 'grp_to_form') else self.aet_rootzone,
->>>>>>> 56ef8b1 (Implement topoflow-glacier for nwm output variables)
                                           self.output_dict['sm_profile_depth'])
                 elif m1 == 'topmodel':
                     gfun.create_topmodel_input(cat_mod, self.divides_df, self.flowpaths_df, mod_input_dir)
@@ -1558,14 +1549,9 @@ class RealizationBuilder:
                 elif m1 == 'sft':
                     sft_dir = os.path.join(self.input_dir, 'sft_input')
                     smp_dir = os.path.join(self.input_dir, 'smp_input')
-<<<<<<< HEAD
 
                     if is_regionalization or (hasattr(self, 'grp_to_form') and self.grp_to_form):
                         # Loop through schemes that could be paired with SMP/SFT
-=======
-                    if self.run_type == 'regionalization' or hasattr(self, 'grp_to_form') and self.grp_to_form:
-                        # Loop through rainfall runoff schemes that could be paired with SFT/SMP across formulation groups
->>>>>>> 56ef8b1 (Implement topoflow-glacier for nwm output variables)
                         for scheme in ['cfes', 'cfex', 'lasam', 'topmodel', 'sac']:
                             if is_adapter_loop:
                                 # Find groups where scheme is in formulation or adapter and sft is in adapter
