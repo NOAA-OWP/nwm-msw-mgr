@@ -502,6 +502,7 @@ class RealizationBuilder:
         self.domain = self.conf1.get("domain") if self.conf1 else None
         self.environment = self.conf1.get("environment") if self.conf1 else None
         self.basin = self.conf1['basin'] if self.conf1 else None
+        self.subset_type = self.conf1.get("subset_type") if self.conf1 else None
 
         # Retrieve module properties inputs
         self.module_prop = self.input_configs.get("ModuleProperties")
@@ -633,11 +634,6 @@ class RealizationBuilder:
             mod_adapters = self.modules + self.adapters
             if (any(x in mod_adapters for x in ['cfes', 'cfex', 'lasam'])) or ('topmodel' in mod_adapters and 'smp' in mod_adapters) or ('sac' in mod_adapters and 'smp' in mod_adapters) and 'sloth' not in mod_adapters:
                 self.adapters = ['sloth'] + self.adapters
-
-            if 'cfes' in self.adapters and 'topmodel' in self.modules:
-                msg = "Topmodel formulations cannot create all NWM output variables due to conflict with CFE adapter."
-                logger.critical(msg)
-                raise RuntimeError(msg)
 
             logger.info(f"Adapter modules required to produce full set of NWM output variables: {self.adapters}")
 
