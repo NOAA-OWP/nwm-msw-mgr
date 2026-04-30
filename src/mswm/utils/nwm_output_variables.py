@@ -46,7 +46,7 @@ NWM_OUTPUT_VARIABLES: List[NWMOutputVariable] = [
         adapter="cfes",
         adapter_var="DEEP_GW_TO_CHANNEL_FLUX",
         provider=["cfes", "cfex", "sac", "topmodel", "lasam"],
-        provider_var=["DEEP_GW_TO_CHANNEL_FLUX", "DEEP_GW_TO_CHANNEL_FLUX", "qg", "land_surface_water__baseflow_volume_flux", "groundwater_to_stream_recharge"],
+        provider_var=["DEEP_GW_TO_CHANNEL_FLUX_M3_PER_S", "DEEP_GW_TO_CHANNEL_FLUX_M3_PER_S", "qg_m3_per_s", "land_surface_water__baseflow_volume_flux", "groundwater_to_stream_recharge_m3_per_s"],
     ),
     NWMOutputVariable(
         nwm_name="ACSNOM",
@@ -55,7 +55,7 @@ NWM_OUTPUT_VARIABLES: List[NWMOutputVariable] = [
         adapter="noah",
         adapter_var="ACSNOM",
         provider=["snow17", "ueb", "noah", "topoflow-glacier"],
-        provider_var=["raim", "SWIT", "ACSNOM", "snowpack__domain_time_integral_of_melt_volume_flux"],
+        provider_var=["raim_depth", "SWIT_mm", "ACSNOM", "snowpack__domain_time_integral_of_melt_volume_flux"],
     ),
     NWMOutputVariable(
         nwm_name="SNOWT_AVG",
@@ -127,7 +127,7 @@ NWM_OUTPUT_VARIABLES: List[NWMOutputVariable] = [
         adapter="noah",
         adapter_var="SNEQV",
         provider=["snow17", "ueb", "noah", "topoflow-glacier"],
-        provider_var=["sneqv", "SWE", "SNEQV", "snowpack__liquid-equivalent_depth"],
+        provider_var=["sneqv_kg_m2", "SWE_kg_m2", "SNEQV_kg_m2", "snowpack__liquid-equivalent_mass_per_area"],
     ),
     NWMOutputVariable(
         nwm_name="QSNOW",
