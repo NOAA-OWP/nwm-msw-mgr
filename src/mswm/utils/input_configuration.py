@@ -126,6 +126,24 @@ class ModulePropertiesConfig(StrictBaseModel):
         raise ValueError(f"Invalid value set for cfe.aet_rootzone: {val}")
 
 
+class NWMOutputConfig(StrictBaseModel):
+    """
+    Input.config NWM output variables section requirement
+    """
+    nwm_output_variables: Optional[Union[int, bool, str]] = None
+
+    # Normalize nwm_output_variables values
+    @field_validator('nwm_output_variables')
+    def norm_nwm_output(cls, val):
+        if val is None:
+            return None
+        if val in ('1', 1, True, "true", "True"):
+            return True
+        if val in ('0', 0, False, "false", "False"):
+            return False
+        raise ValueError(f"Invalid value set for nwm_output_variables: {val}")
+
+
 class RegionConfig(StrictBaseModel):
     """
     Input.config regionalization section requirement
@@ -283,7 +301,7 @@ class DataFileConfig(StrictBaseModel):
     lasam_parameter_dir: Optional[str] = None
     lstm_parameter_dir: Optional[str] = None
     attributes_file: Optional[str] = None
-    ngen_exe_file: str
+    ngen_exe_file: Optional[str] = None
     sloth_lib: Optional[str] = None
     cfe_lib: Optional[str] = None
     lasam_lib: Optional[str] = None
@@ -312,6 +330,7 @@ class InputConfig(StrictBaseModel):
     """
     General: Optional[GeneralConfig] = None
     ModuleProperties: Optional[ModulePropertiesConfig] = None
+    NWMOutput: Optional[NWMOutputConfig] = None
     Regionalization: Optional[RegionConfig] = None
     Calibration: Optional[CalibConfig] = None
     Forcing: Optional[ForcingConfig] = None

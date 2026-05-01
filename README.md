@@ -48,7 +48,6 @@ pip install -e ".[test]"
 pytest tests/ -v
 ```
 
-
 ## Usage
 
 mswm provides four primary workflows for generating ngen realization and configuration files: **calibration**, **forecast**, **default parameters**, and **regionalization**. Each can be run from the CLI or called directly from Python.
@@ -312,6 +311,14 @@ Parameters required only for calibration runs. Section does not need to be suppl
 | `user_email` | string | No |Email address to receive run completion notification (optional) |
 | `calib_parameter_file` | path | Calibration | Path to calibration parameter files. Can be: (1) folder with tab-delimited CSV files per module, (2) folder with comma-delimited CSV files per module, (3) single file with all parameters in fixed-width format. |
 
+## NWM Output Variable Section `[NWMOuput]`
+Parameters for activating full set of NWM output variables. Only used for forecast, default, and regionalization runs.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `nwm_output_variables` | bool | No | Boolean flag to activate output of full set of NWM output variables |
+
+
 ## Forcing Section: `[Forcing]`
 Parameters for forcing engine configuration. Required for all run types, including forecast.
 
@@ -562,3 +569,26 @@ When generating run files for a medium range lagged ensemble (using the nwm-fcst
 │           ├── lagged_ens_mem5/                       # Lagged Ensemble member 5 run, using saved states from Closed Loop AnA
 │           └── lagged_ens_mem6/                       # Lagged Ensemble member 6 run, using saved states from Closed Loop AnA                    
 ```
+
+## NWM Output Variables
+The NWM output variable system provides a standardized way to produce a full set of NWM output variables from any supported Ngen formulation, regardless of which modules are included in the primary formulation
+
+NWM output variables are defined in `/utils/nwm_output_variables.py` as a registry of required variables, each with a name, units, and a list of valid provider modules. When `nwm_output_variables` is enable in the `input.config` file,
+the msw-mgr queries this registry against the existing formulation to determine which variables are already satisfied and which require additional adapter modules to be satisfied.
+
+This feature is currently supported for **default**, **forecast**, and **regionalization** run types only. To enable NWM output variables, add the following to `input.config`:
+```ini
+[NWMOutput]
+nwm_output_variables = True
+```
+
+### Adapter Modules
+When the primary formulation cannot satisfy all required NWM output variables, the msw-mgr automatically identifies and adds adapter modules, which are non-interactive modules that run alongside the primary formulation solely to produce the missing output variables. Adapter modules are inserted into the realization file's module list but are configured so that they do not influence the primary formulation's behavior. For example, if a NoahOWP-CFE formulation is missing soil moisture outputs, SFT and SMP adapters may be added to produce those variables without affecting the the streamflow simulations produced by the original formulation.
+
+SLOTH is added automatically when required to satisfy static input variables needed by adapter moduels. Any existing SLOTH parameters from the primary formulation are preserved and updated as needed to avoid conflicts.
+
+### Workflow
+1. The primary formulation BMI config files are created first using only the original formulation
+2. Adapter module BMI config files are then created separately, using the full combined module list so that inter-module dependencies are satisfied
+3. The realization file is assemble for the primary formulation, then updated to append adapter module sections and NWM output variable entries to the output variable list
+4. For regionalization runs, each formulation group is handled independently since different groups may require different adapter modules

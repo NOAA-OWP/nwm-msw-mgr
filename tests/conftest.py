@@ -11,6 +11,7 @@ from mswm.utils.input_configuration import (
     InputConfig,
     GeneralConfig,
     ModulePropertiesConfig,
+    NWMOutputConfig,
     ForcingConfig,
     DataFileConfig,
     CalibConfig,
@@ -39,6 +40,9 @@ def dummy_files(tmp_work_dir):
         "libsurfacebmi.so": "noah_owp_modular_lib",
         "libcfebmi.so": "cfe_lib",
         "libslothmodel.so": "sloth_lib",
+        "libsftbmi.so": "sft_lib",
+        "libsmpbmi.so": "smp_lib",
+        "liblasambmi.so": "lasam_lib",
     }
 
     # Create dummy libraries
@@ -134,6 +138,7 @@ def _make_region_input_config(tmp_work_dir):
     # Get package root for parameter files
     pkg_root = Path(mswm.__file__).parent
     noah_parameter_dir = str(pkg_root / "module_parameter_files" / "noah-owp-modular")
+    lasam_parameter_dir = str(pkg_root / "module_parameter_files" / "lasam")
 
     general = GeneralConfig(
         basin="01123000",
@@ -157,9 +162,13 @@ def _make_region_input_config(tmp_work_dir):
         hydrofab_file=str(test_gpkg),
         ngen_exe_file=os.path.join(tmp_work_dir, "ngen"),
         noah_owp_modular_lib=os.path.join(tmp_work_dir, "libsurfacebmi.so"),
+        sft_lib=os.path.join(tmp_work_dir, "libsftbmi.so"),
+        smp_lib=os.path.join(tmp_work_dir, "libsmpbmi.so"),
         cfe_lib=os.path.join(tmp_work_dir, "libcfebmi.so"),
+        lasam_lib=os.path.join(tmp_work_dir, "liblasambmi.so"),
         sloth_lib=os.path.join(tmp_work_dir, "libslothmodel.so"),
-        noah_parameter_dir=noah_parameter_dir
+        noah_parameter_dir=noah_parameter_dir,
+        lasam_parameter_dir=lasam_parameter_dir,
     )
     region = RegionConfig(
         form_assign_file=os.path.join(test_region_dir, "formulation_assignment.csv"),
@@ -179,6 +188,65 @@ def _make_region_input_config(tmp_work_dir):
     )
 
 
+def _make_region_nwm_output_input_config(tmp_work_dir):
+    """Build an InputConfig pydantic object for a regionalization run with nwm output variables"""
+    # Get package root for parameter files
+    pkg_root = Path(mswm.__file__).parent
+    noah_parameter_dir = str(pkg_root / "module_parameter_files" / "noah-owp-modular")
+    lasam_parameter_dir = str(pkg_root / "module_parameter_files" / "lasam")
+
+    general = GeneralConfig(
+        basin="01123000",
+        run_type="regionalization",
+        domain="conus",
+        formulation="region",
+        main_dir=tmp_work_dir,
+        start_period="2015-10-01 00:00:00",
+        end_period="2016-09-30 23:00:00",
+        output_precip=True,
+        output_swe=True,
+        output_sm=True,
+    )
+    nwmoutput = NWMOutputConfig(
+        nwm_output_variables=True
+    )
+    forcing = ForcingConfig(
+        forcing_provider="bmi",
+        forcing_template_dir=str(test_forcing_configs),
+        root_dir=tmp_work_dir,
+        forcing_configuration="aorc",
+    )
+    datafile = DataFileConfig(
+        hydrofab_file=str(test_gpkg),
+        ngen_exe_file=os.path.join(tmp_work_dir, "ngen"),
+        noah_owp_modular_lib=os.path.join(tmp_work_dir, "libsurfacebmi.so"),
+        sft_lib=os.path.join(tmp_work_dir, "libsftbmi.so"),
+        smp_lib=os.path.join(tmp_work_dir, "libsmpbmi.so"),
+        cfe_lib=os.path.join(tmp_work_dir, "libcfebmi.so"),
+        lasam_lib=os.path.join(tmp_work_dir, "liblasambmi.so"),
+        sloth_lib=os.path.join(tmp_work_dir, "libslothmodel.so"),
+        noah_parameter_dir=noah_parameter_dir,
+        lasam_parameter_dir=lasam_parameter_dir,
+    )
+    region = RegionConfig(
+        form_assign_file=os.path.join(test_region_dir, "formulation_assignment.csv"),
+        cat_grp_file=os.path.join(test_region_dir, "catchment_groups.csv"),
+    )
+    parallel = ParallelConfig(
+        parallel_ngen_exe=os.path.join(tmp_work_dir, "ngen"),
+        partition_generator_exe=os.path.join(tmp_work_dir, "partitionGenerator"),
+        nprocs=2,
+    )
+    return InputConfig(
+        General=general,
+        Forcing=forcing,
+        NWMOutput=nwmoutput,
+        DataFile=datafile,
+        Regionalization=region,
+        Parallel=parallel,
+    )
+
+
 def _make_fcst_input_config(tmp_work_dir):
     """Build an InputConfig pydantic object for a forecast run"""
     forcing = ForcingConfig(
@@ -191,6 +259,40 @@ def _make_fcst_input_config(tmp_work_dir):
     )
     return InputConfig(
         Forcing=forcing,
+    )
+
+
+def _make_fcst_nwm_output_input_config(tmp_work_dir):
+    """Build an InputConfig pydantic object for a forecast run with full nwm output variables"""
+    # Get package root for parameter files
+    pkg_root = Path(mswm.__file__).parent
+    noah_parameter_dir = str(pkg_root / "module_parameter_files" / "noah-owp-modular")
+
+    forcing = ForcingConfig(
+        forcing_provider="bmi",
+        forcing_template_dir=str(test_forcing_configs),
+        root_dir=tmp_work_dir,
+        forcing_configuration="short_range",
+        cycle_datetime="2025-09-01 00:00:00",
+        cold_start_datetime="2025-08-01 00:00:00",
+    )
+    nwmoutput = NWMOutputConfig(
+        nwm_output_variables=True
+    )
+    datafile = DataFileConfig(
+        hydrofab_file=str(test_gpkg),
+        ngen_exe_file=os.path.join(tmp_work_dir, "ngen"),
+        noah_owp_modular_lib=os.path.join(tmp_work_dir, "libsurfacebmi.so"),
+        sft_lib=os.path.join(tmp_work_dir, "libsftbmi.so"),
+        smp_lib=os.path.join(tmp_work_dir, "libsmpbmi.so"),
+        cfe_lib=os.path.join(tmp_work_dir, "libcfebmi.so"),
+        sloth_lib=os.path.join(tmp_work_dir, "libslothmodel.so"),
+        noah_parameter_dir=noah_parameter_dir
+    )
+    return InputConfig(
+        Forcing=forcing,
+        NWMOutput=nwmoutput,
+        DataFile=datafile
     )
 
 

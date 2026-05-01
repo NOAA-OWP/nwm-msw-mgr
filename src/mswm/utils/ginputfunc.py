@@ -102,9 +102,37 @@ __all__ = [
     'build_output_vars',
     'create_realization_file',
     'create_reg_realization_file',
+    'find_module_index',
+    'update_realization_nwm_output',
+    'write_realization_to_file',
     'create_calib_config_file',
     'create_partition_file',
 ]
+
+# Set global forcing name variables
+name_prcp = {"csv": "atmosphere_water__liquid_equivalent_precipitation_rate",
+             "bmi": "RAINRATE_ELEMENT"}
+
+name_Q2 = {"csv": "atmosphere_air_water~vapor__relative_saturation",
+           "bmi": "Q2D_ELEMENT"}
+
+name_temp = {"csv": "land_surface_air__temperature",
+             "bmi": "T2D_ELEMENT"}
+
+name_xwind = {"csv": "land_surface_wind__x_component_of_velocity",
+              "bmi": "U2D_ELEMENT"}
+
+name_ywind = {"csv": "land_surface_wind__y_component_of_velocity",
+              "bmi": "V2D_ELEMENT"}
+
+name_lw = {"csv": "land_surface_radiation~incoming~longwave__energy_flux",
+           "bmi": "LWDOWN_ELEMENT"}
+
+name_sw = {"csv": "land_surface_radiation~incoming~shortwave__energy_flux",
+           "bmi": "SWDOWN_ELEMENT"}
+
+name_pressure = {"csv": "land_surface_air__pressure",
+                 "bmi": "PSFC_ELEMENT"}
 
 
 def init_ginput_logger():
@@ -307,15 +335,16 @@ def create_cfe_input(
     ]
 
     # Set module list and rootzone flag for non-regionalization
-    mods_list = modules if run_type != 'regionalization' else None
-    rootzone_flag_default = is_aet_rootzone if run_type != 'regionalization' else None
+    is_grouped = run_type == 'regionalization' or isinstance(modules[0], list)
+    mods_list = None if is_grouped else modules
+    rootzone_flag_default = None if is_grouped else (is_aet_rootzone if 'smp' in modules else 0)
 
     # Create bmi config files
     for i, catID in enumerate(catids):
 
         # Set module list and is_aet_rootzone flag for each catchment during regionalization
-        mods = modules[i] if run_type == 'regionalization' else mods_list
-        rootzone_flag = is_aet_rootzone[catID] if run_type == 'regionalization' else rootzone_flag_default
+        mods = modules[i] if is_grouped else mods_list
+        rootzone_flag = (is_aet_rootzone[catID] if 'smp' in mods else 0) if is_grouped else rootzone_flag_default
 
         # Set sft coupling and surface partitioning scheme
         scheme = 'Xinanjiang' if 'cfex' in mods else 'Schaake'
@@ -408,7 +437,7 @@ def create_noah_input(
             try:
                 os.unlink(dst)
             except Exception as e:
-                logger.error(f"Failed to remove existing {dst}: {e}")
+                logger.critical(f"Failed to remove existing {dst}: {e}")
                 raise
         try:
             os.symlink(src, dst)
@@ -416,13 +445,12 @@ def create_noah_input(
             logger.critical(f"Failed to create symlink: {src} -> {dst}: {e}")
             raise
 
-    # Files for either the calibration and validation run or the regionalization run
+    # Generate files based on run type
     run_list_map = {
         'calibration': ['calib', 'valid'],
         'regionalization': ['region'],
-        'default': ['default'],
     }
-    run_list = run_list_map.get(run_type)
+    run_list = run_list_map.get(run_type, [run_type])
 
     # Set base namelist section
     base_namelist = {
@@ -568,7 +596,8 @@ def create_sft_smp_input(
     os.makedirs(smp_dir, exist_ok=True)
 
     # Set module list for non-regionalization run
-    mods_list = modules if run_type != 'regionalization' else None
+    is_grouped = run_type == 'regionalization' or isinstance(modules[0], list)
+    mods_list = None if is_grouped else modules
 
     # Shared configuration parameters
     sm_profile_str = ",".join(f"{float(depth):g}" for depth in sm_profile_depth)
@@ -600,7 +629,7 @@ def create_sft_smp_input(
     for i, catID in enumerate(catids):
 
         # Set module list for each catchment during regionalization
-        mods = modules[i] if run_type == 'regionalization' else mods_list
+        mods = modules[i] if is_grouped else mods_list
 
         # Determine ice fraction scheme
         icefscheme = 'Xinanjiang' if 'cfex' in mods else 'Schaake'
@@ -803,7 +832,7 @@ def create_ueb_input(
             try:
                 os.unlink(dst)
             except Exception as e:
-                logger.error(f"Failed to remove existing {dst}: {e}")
+                logger.critical(f"Failed to remove existing {dst}: {e}")
                 raise
 
         # Create new symlink
@@ -1093,12 +1122,11 @@ def create_symlinks(src_file_list, src_dir, dst_dir):
                 try:
                     os.unlink(target)
                 except Exception as e:
-                    logger.error(f"Failed to remove existing {target}: {e}")
+                    logger.critical(f"Failed to remove existing {target}: {e}")
                     raise
 
             try:
                 os.symlink(ffile, target)
-                logger.info("Created symlink to ngen executable")
             except OSError as e:
                 logger.critical(f"Failed to create symlink: {ffile} -> {target}: {e}")
                 raise
@@ -1144,7 +1172,7 @@ def create_lstm_config(
         try:
             os.unlink(train_data_dir)
         except Exception as e:
-            logger.error(f"Failed to remove existing {train_data_dir}: {e}")
+            logger.critical(f"Failed to remove existing {train_data_dir}: {e}")
             raise
 
     try:
@@ -1381,13 +1409,14 @@ def create_lasam_input(
         'soil_z=10,30,100.0,200.0[cm]',  # TODO: Should this match soil moisture depths supplied by user?
     ]
 
+    # Set module list based on grouping
+    is_grouped = run_type == 'regionalization' or isinstance(modules[0], list)
+    mods_list = None if is_grouped else modules
+
     # Create bmi config file
     for i, catID in enumerate(catids):
         # Set module list for each catchment during regionalization
-        if run_type == 'regionalization':
-            mods = modules[i]
-        else:
-            mods = modules
+        mods = modules[i] if is_grouped else mods_list
 
         # Get catchment attributes
         cat_attrs = divides_df.loc[catID]
@@ -1496,7 +1525,7 @@ def create_topmodel_input(
     Parameters
     ----------
     catids : catchment IDs in the basin
-    divides_df: dataframe containing hydrofabric divides attributes
+    divides_df: dataframe containing hydrofabric divides attributesF
     flowpaths_df: dataframe containing hydrofabric flowpaths attributes
     input_dir: directory for writing topmodel bmi configuration files
 
@@ -2553,7 +2582,7 @@ def var_mapping(
         for i, d in enumerate(depths):
             var_maps["output"]["sm_out"].append("soil_moisture_profile")
             var_maps["output"]["sm_out_header"].append(f"sm_profile_{float(d):g}m")
-            var_maps["output"]["sm_out_units"].append("m")
+            var_maps["output"]["sm_out_units"].append("1")
             var_maps["output"]["sm_out_index"].append(str(i))
     else:
         var_maps['output']['sm_out'] = ''
@@ -2590,10 +2619,27 @@ def create_lib_symlinks(workdir: Union[str, Path], lib_file: dict) -> dict:
     return lib_mod
 
 
-def get_sloth_params(modules: List[str]) -> dict:
+def get_sloth_params(modules: List[str], adapters: List[str] = None) -> dict:
     """Get SLOTH model parameters based on model configuration"""
-    if 'cfes' in modules or 'cfex' in modules:
-        if 'sft' not in modules:
+    adapters = adapters or []
+    smp_as_adapter = 'smp' in adapters
+    sft_as_adapter = 'sft' in adapters
+
+    if 'cfes' in modules or 'cfex' in modules or 'cfes' in adapters:
+        if sft_as_adapter and smp_as_adapter:
+            # smp/sft added as adapters: sloth must provide soil storage vars
+            return {
+                "sloth_soil_storage(1,double,m,node)": 1.0E-10,
+                "sloth_soil_storage_change(1,double,m,node)": 0.0,
+                "soil_moisture_wetting_fronts(1,double,1,node)": 0.0,
+                "soil_thickness_layered(1,double,1,node)": 0.0,
+                "soil_depth_wetting_fronts(1,double,m,node)": 0.0,
+                "num_wetting_fronts(1,int,1,node)": 1.0,
+                "Qb_topmodel(1,double,m h^-1,node)": 0.0,
+                "Qv_topmodel(1,double,m h^-1,node)": 0.0,
+                "global_deficit(1,double,m,node)": 0.0,
+            }
+        elif 'sft' not in modules:
             return {
                 "sloth_ice_fraction_schaake(1,double,1,node)": 0.0,
                 "sloth_ice_fraction_xinanjiang(1,double,1,node)": 0.0,
@@ -2609,27 +2655,63 @@ def get_sloth_params(modules: List[str]) -> dict:
                 "Qv_topmodel(1,double,m h^-1,node)": 0.0,
                 "global_deficit(1,double,m,node)": 0.0,
             }
-    elif 'topmodel' in modules and 'smp' in modules:
-        return {
-            "sloth_soil_storage(1,double,m,node)": 1.0E-10,
-            "sloth_soil_storage_change(1,double,m,node)": 0.0,
-            "soil_moisture_wetting_fronts(1,double,1,node)": 0.0,
-            "soil_depth_wetting_fronts(1,double,1,node)": 0.0,
-            "num_wetting_fronts(1,int,1,node)": 1,
-        }
-    elif 'sac' in modules and 'smp' in modules:
-        return {
-            "soil_moisture_wetting_fronts(1,double,1,node)": 0.0,
-            "soil_thickness_layered(1,double,1,node)": 0.0,
-            "soil_depth_wetting_fronts(1,double,m,node)": 0.0,
-            "num_wetting_fronts(1,int,1,node)": 1.0,
-            "Qb_topmodel(1,double,m h^-1,node)": 0.0,
-            "Qv_topmodel(1,double,m h^-1,node)": 0.0,
-            "global_deficit(1,double,m,node)": 0.0
-        }
+    elif 'topmodel' in modules:
+        if 'smp' in modules:
+            return {
+                "sloth_soil_storage(1,double,m,node)": 1.0E-10,
+                "sloth_soil_storage_change(1,double,m,node)": 0.0,
+                "soil_moisture_wetting_fronts(1,double,1,node)": 0.0,
+                "soil_depth_wetting_fronts(1,double,1,node)": 0.0,
+                "num_wetting_fronts(1,int,1,node)": 1,
+            }
+        elif smp_as_adapter:
+            return {
+                "sloth_soil_storage(1,double,m,node)": 1.0E-10,
+                "sloth_soil_storage_change(1,double,m,node)": 0.0,
+                "soil_moisture_wetting_fronts(1,double,1,node)": 0.0,
+                "soil_thickness_layered(1,double,1,node)": 0.0,
+                "soil_depth_wetting_fronts(1,double,m,node)": 0.0,
+                "num_wetting_fronts(1,int,1,node)": 1.0,
+                "Qb_topmodel(1,double,m h^-1,node)": 0.0,
+                "Qv_topmodel(1,double,m h^-1,node)": 0.0,
+                "global_deficit(1,double,m,node)": 0.0,
+            }
+    elif 'sac' in modules:
+        if 'smp' in modules:
+            return {
+                "soil_moisture_wetting_fronts(1,double,1,node)": 0.0,
+                "soil_thickness_layered(1,double,1,node)": 0.0,
+                "soil_depth_wetting_fronts(1,double,m,node)": 0.0,
+                "num_wetting_fronts(1,int,1,node)": 1.0,
+                "Qb_topmodel(1,double,m h^-1,node)": 0.0,
+                "Qv_topmodel(1,double,m h^-1,node)": 0.0,
+                "global_deficit(1,double,m,node)": 0.0
+            }
+        elif smp_as_adapter:
+            return {
+                "sloth_soil_storage(1,double,m,node)": 1.0E-10,
+                "sloth_soil_storage_change(1,double,m,node)": 0.0,
+                "soil_moisture_wetting_fronts(1,double,1,node)": 0.0,
+                "soil_thickness_layered(1,double,1,node)": 0.0,
+                "soil_depth_wetting_fronts(1,double,m,node)": 0.0,
+                "num_wetting_fronts(1,int,1,node)": 1.0,
+                "Qb_topmodel(1,double,m h^-1,node)": 0.0,
+                "Qv_topmodel(1,double,m h^-1,node)": 0.0,
+                "global_deficit(1,double,m,node)": 0.0,
+            }
     elif 'lasam' in modules:
-        if 'sft' not in modules:
+        if 'sft' not in modules and not sft_as_adapter:
             return {"soil_temperature_profile(1,double,K,node)": 275.15}
+        elif smp_as_adapter:
+            return {
+                "sloth_soil_storage(1,double,m,node)": 1.0E-10,
+                "sloth_soil_storage_change(1,double,m,node)": 0.0,
+                "Qb_topmodel(1,double,m h^-1,node)": 0.0,
+                "Qv_topmodel(1,double,m h^-1,node)": 0.0,
+                "global_deficit(1,double,m,node)": 0.0,
+                "num_wetting_fronts(1,int,1,node)": 1.0,
+                "potential_evapotranspiration_rate(1,double,1,node)": 0.0
+            }
         else:
             return {
                 "sloth_soil_storage(1,double,m,node)": 1.0E-10,
@@ -2970,7 +3052,6 @@ def create_realization_file(
         forcing_provider: str,
         forcing_dir: Union[str, Path],
         forcing_config_file: Union[str, Path],
-        realization_file: Union[str, Path],
         modules: List[str],
         time_period: dict,
         rt_dict: dict,
@@ -3125,12 +3206,7 @@ def create_realization_file(
     # Add routing section
     g.update(rt_dict)
 
-    # Write realization file
-    with open(realization_file, 'w') as f:
-        json.dump(g, f, indent=4, separators=(", ", ": "), sort_keys=False)
-    logger.info(f'Realization file is created at {realization_file}')
-
-    return output_config
+    return g, output_config
 
 
 def create_reg_realization_file(
@@ -3140,7 +3216,6 @@ def create_reg_realization_file(
         forcing_provider: str,
         forcing_dir: Union[str, Path],
         forcing_config_file: Union[str, Path],
-        realization_file: Union[str, Path],
         time_period: dict,
         rt_dict: dict,
         output_dict: dict,
@@ -3311,12 +3386,161 @@ def create_reg_realization_file(
     # Add catchment groups
     g['catchments'] = {cat: {"formulations": grp, "forcing": "forcing_grp1"} for cat, grp in cat_to_grp.items()}
 
-    # Write realization file
-    with open(realization_file, 'w') as f:
-        json.dump(g, f, indent=4, separators=(", ", ": "), sort_keys=False)
-    logger.info(f'Realization file is created at {realization_file}')
+    return g, output_config_grp
 
-    return output_config_grp
+
+def find_module_index(real_modules: List[dict], module: str) -> int | None:
+    """
+    Find the index of a module in the real modules list by model_type_name
+    """
+    return next((i for i, m in enumerate(real_modules) if m['params'].get('model_type_name') == get_model_type_name(module)), None)
+
+
+def update_realization_nwm_output(
+        workdir: Union[str, Path],
+        lib_file: dict,
+        bmi_dir: dict,
+        forcing_provider: str,
+        adapters: List[str],
+        modules: List[str],
+        nwm_output_dicts: List[dict],
+        output_dict: dict,
+        real_config: dict,
+        run_type: str,
+        grp: str = None
+) -> None:
+    """
+    Create realization file for the specified model and module
+
+    Parameters
+    ----------
+    workdir : basin directory for storing all the files
+    lib_file : library files for different modules
+    bmi_dir : directory for different model or module to store BMI files
+    forcing_provider: forcing provider option (csv or bmi)
+    adapters : additional modules required to produce NWM output variables
+    modules: model and module combination
+    nwm_output_dicts : dictionaries containing NWM output variable information
+    output_dict : whether to output certain variables (currently SWE and soil moisture)
+    real_config : existing realization file as a dictionary
+    run_type: type of run (calib, regionalization, or default, cold_start, forecast, hindcast, lagged_ens)
+    grp: group name for regionalization realizations
+
+    Returns
+    ----------
+    real_config: updated realization file as a dictionary
+    """
+    # Create local copy of modules to not affect self.modules
+    base_modules = modules.copy()
+
+    run_type_abbr = {'regionalization': 'region'}.get(run_type, run_type)
+
+    # Retrieve forcing variable names
+    forcing_vars = get_forcing_vars_map()
+
+    # Create symlinks for adapter libraries
+    adapter_lib_file = {k: v for k, v in lib_file.items() if k in adapters}
+    lib_mod = create_lib_symlinks(workdir, adapter_lib_file)
+
+    # Retrieve correct formulation section based on type of realization file
+    if grp is not None:
+        real_output = real_config['formulation_groups'][grp][0]['params']['output_variables']
+        real_modules = real_config['formulation_groups'][grp][0]['params']['modules']
+    else:
+        real_output = real_config['global']['formulations'][0]['params']['output_variables']
+        real_modules = real_config['global']['formulations'][0]['params']['modules']
+
+    # Update output variable section with NWM output variables
+    output_keys = set(item['header'] for item in real_output)
+    for nwm_dict in nwm_output_dicts:
+        if nwm_dict['nwm_name'] not in output_keys:
+            real_output.append({'name': nwm_dict['provider_var'], 'header': nwm_dict['nwm_name'], 'units': nwm_dict['nwm_units']})
+
+    # Combine modules and adapters
+    mod_adapters = base_modules + adapters
+
+    if 'sloth' in mod_adapters:
+        sloth_params = get_sloth_params(base_modules, adapters)
+
+        # If sloth already in formulation, add sloth module parameters to existing section
+        if 'sloth' in base_modules:
+            sloth_index = find_module_index(real_modules, 'sloth')
+            # Remove soil_temperature profile if SFT is being added as an adapter
+            real_modules[sloth_index]["params"]["model_params"].pop("soil_temperature_profile(1,double,K,node)", None)
+            real_modules[sloth_index]["params"]["model_params"].update(sloth_params)
+        else:
+            # Add sloth section to realization
+            modules.insert(0, 'sloth')
+            base = build_base_config('sloth', lib_mod, bmi_dir, run_type_abbr, forcing_provider, forcing_vars)
+            sloth_config = build_module_config('sloth', base, mod_adapters, forcing_provider, forcing_vars)
+            sloth_config['params']['model_params'] = sloth_params
+            real_modules.insert(0, sloth_config)
+
+    if 'noah' in adapters:
+        noah_index = 1 if 'sloth' in modules else 0
+        modules.insert(noah_index, 'noah')
+        base = build_base_config('noah', lib_mod, bmi_dir, run_type_abbr, forcing_provider, forcing_vars)
+        noah_config = build_module_config('noah', base, mod_adapters, forcing_provider, forcing_vars)
+        real_modules.insert(noah_index, noah_config)
+
+    if 'smp' in adapters:
+        noah_index = find_module_index(real_modules, 'noah')
+        smp_index = noah_index + 1
+        modules.insert(smp_index, 'smp')
+        base = build_base_config('smp', lib_mod, bmi_dir, run_type_abbr, forcing_provider, forcing_vars)
+        smp_config = build_module_config('smp', base, mod_adapters, forcing_provider, forcing_vars)
+        # Enforce smp adapter variable name mapping
+        smp_config['params']['variables_names_map'] = {
+            "soil_storage": "sloth_soil_storage",
+            "soil_storage_change": "sloth_soil_storage_change"
+        }
+        real_modules.insert(smp_index, smp_config)
+
+    if 'sft' in adapters:
+        smp_index = find_module_index(real_modules, 'smp')
+        sft_index = smp_index + 1
+        modules.insert(sft_index, 'sft')
+        base = build_base_config('sft', lib_mod, bmi_dir, run_type_abbr, forcing_provider, forcing_vars)
+        sft_config = build_module_config('sft', base, mod_adapters, forcing_provider, forcing_vars)
+        real_modules.insert(sft_index, sft_config)
+
+    if 'cfes' in adapters:
+        sft_index = find_module_index(real_modules, 'sft')
+        cfes_index = sft_index + 1
+        modules.insert(cfes_index, 'cfes')
+        base = build_base_config('cfes', lib_mod, bmi_dir, run_type_abbr, forcing_provider, forcing_vars)
+        cfes_config = build_module_config('cfes', base, mod_adapters, forcing_provider, forcing_vars)
+        var_maps = var_mapping(modules, "water_potential_evaporation_flux", name_prcp.get('csv'), name_prcp.get(forcing_provider), output_dict)
+        cfes_config['params']['variables_names_map'] = var_maps['input']
+        real_modules.insert(cfes_index, cfes_config)
+
+    return real_config
+
+
+def write_realization_to_file(
+        real_config: dict,
+        realization_file: Union[str, Path],
+) -> None:
+    """ Create configuration YAML file for calibration run
+
+    Parameters
+    ----------
+    real_config : dictionary containing realization file schema
+    realization_file: path to write realization file
+
+    Returns
+    ----------
+    None
+    """
+    try:
+        with open(realization_file, 'w') as outfile:
+            json.dump(real_config, outfile, indent=4, separators=(", ", ": "), sort_keys=False)
+    except TypeError as e:
+        logger.critical(f"Failed to dump realization data to JSON: {realization_file}\n{e}")
+        raise
+    except OSError as e:
+        logger.critical(f"Unexpected error while writing realization data to JSON: {realization_file}\n{e}")
+        raise
 
 
 def create_calib_config_file(
@@ -3407,7 +3631,7 @@ def create_calib_config_file(
         try:
             os.unlink(ngen_file_link)
         except Exception as e:
-            logger.error(f"Failed to remove existing {ngen_file_link}: {e}")
+            logger.critical(f"Failed to remove existing {ngen_file_link}: {e}")
             raise
     try:
         os.symlink(model_dict['binary'], ngen_file_link)
