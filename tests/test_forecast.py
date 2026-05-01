@@ -569,8 +569,8 @@ class TestFcstNWMOutputBuild:
 
     def test_nwm_provider_vars(self):
         nwm_provider_vars = [x['provider_var'] for x in self.rb.nwm_output_dicts]
-        nwm_required_provider_vars = ['NWM_PONDED_DEPTH', 'DEEP_GW_TO_CHANNEL_FLUX', 'ACSNOM', 'SNOWT_AVG', 'soil_ice_fraction', 'soil_moisture_fraction', 'QRAIN', 'FSNO', 'SNOWH',
-                                      'SNLIQ', 'SNEQV', 'QSNOW', 'soil_temperature_profile', 'soil_moisture_profile', 'flux_direct_runoff_m', 'TRAD', 'LH', 'FIRA', 'FSH']
+        nwm_required_provider_vars = ['NWM_PONDED_DEPTH', 'DEEP_GW_TO_CHANNEL_FLUX_M3_PER_S', 'ACSNOM', 'SNOWT_AVG', 'soil_ice_fraction', 'soil_moisture_fraction', 'QRAIN', 'FSNO', 'SNOWH',
+                                      'SNLIQ', 'SNEQV_kg_m2', 'QSNOW', 'soil_temperature_profile', 'soil_moisture_profile', 'SFCRNOFF', 'TRAD', 'LH', 'FIRA', 'FSH']
         assert nwm_provider_vars == nwm_required_provider_vars
 
     def test_nwm_ouputs_in_realization(self):

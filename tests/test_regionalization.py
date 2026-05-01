@@ -249,14 +249,14 @@ class TestRegionNWMOutputBuild:
 
     def test_nwm_provider_vars_grp1(self):
         nwm_provider_vars = [x['provider_var'] for x in self.rb.grp_to_nwm_output_dicts['gage1']]
-        nwm_required_provider_vars = ['NWM_PONDED_DEPTH', 'DEEP_GW_TO_CHANNEL_FLUX', 'ACSNOM', 'SNOWT_AVG', 'soil_ice_fraction', 'soil_moisture_fraction', 'QRAIN', 'FSNO', 'SNOWH',
-                                      'SNLIQ', 'SNEQV', 'QSNOW', 'soil_temperature_profile', 'soil_moisture_profile', 'flux_direct_runoff_m', 'TRAD', 'LH', 'FIRA', 'FSH']
+        nwm_required_provider_vars = ['NWM_PONDED_DEPTH', 'DEEP_GW_TO_CHANNEL_FLUX_M3_PER_S', 'ACSNOM', 'SNOWT_AVG', 'soil_ice_fraction', 'soil_moisture_fraction', 'QRAIN', 'FSNO', 'SNOWH',
+                                      'SNLIQ', 'SNEQV_kg_m2', 'QSNOW', 'soil_temperature_profile', 'soil_moisture_profile', 'SFCRNOFF', 'TRAD', 'LH', 'FIRA', 'FSH']
         assert nwm_provider_vars == nwm_required_provider_vars
 
     def test_nwm_provider_vars_grp2(self):
         nwm_provider_vars = [x['provider_var'] for x in self.rb.grp_to_nwm_output_dicts['gage2']]
-        nwm_required_provider_vars = ['nwm_ponded_depth', 'groundwater_to_stream_recharge', 'ACSNOM', 'SNOWT_AVG', 'soil_ice_fraction', 'soil_moisture_fraction', 'QRAIN', 'FSNO', 'SNOWH',
-                                      'SNLIQ', 'SNEQV', 'QSNOW', 'soil_temperature_profile', 'soil_moisture_profile', 'surface_runoff', 'TRAD', 'LH', 'FIRA', 'FSH']
+        nwm_required_provider_vars = ['nwm_ponded_depth', 'groundwater_to_stream_recharge_m3_per_s', 'ACSNOM', 'SNOWT_AVG', 'soil_ice_fraction', 'soil_moisture_fraction', 'QRAIN', 'FSNO', 'SNOWH',
+                                      'SNLIQ', 'SNEQV_kg_m2', 'QSNOW', 'soil_temperature_profile', 'soil_moisture_profile', 'surface_runoff', 'TRAD', 'LH', 'FIRA', 'FSH']
         assert nwm_provider_vars == nwm_required_provider_vars
 
     def test_nwm_ouputs_in_realization_grp1(self):
