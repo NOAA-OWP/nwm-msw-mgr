@@ -44,7 +44,7 @@ NWM_OUTPUT_VARIABLES: List[NWMOutputVariable] = [
         nwm_units="m3/s",
         description="Flux from gw bucket",
         adapter="cfes",
-        adapter_var="DEEP_GW_TO_CHANNEL_FLUX",
+        adapter_var="DEEP_GW_TO_CHANNEL_FLUX_M3_PER_S",
         provider=["cfes", "cfex", "sac", "topmodel", "lasam"],
         provider_var=["DEEP_GW_TO_CHANNEL_FLUX_M3_PER_S", "DEEP_GW_TO_CHANNEL_FLUX_M3_PER_S", "qg_m3_per_s", "land_surface_water__baseflow_volume_flux", "groundwater_to_stream_recharge_m3_per_s"],
     ),
