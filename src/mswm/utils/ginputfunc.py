@@ -10,6 +10,7 @@ import ewts
 import glob
 import json
 import os
+import math
 import subprocess
 from ambiance import Atmosphere
 from pathlib import Path
@@ -1249,7 +1250,7 @@ def create_lstm_input(
             'elev_mean': float(cat_attrs['elevation_mean']),
             'lat': float(cat_attrs['lat']),
             'lon': float(cat_attrs['lon']),
-            'slope_mean': float(cat_attrs['slope250m_mean']),
+            'slope_mean': 1000 * math.tan(math.radians(float(cat_attrs['slope250m_mean']))),
         })
 
         # Write config to file
@@ -1501,7 +1502,7 @@ def create_topoflow_glacier_input(
                 'start_time': start_time,
                 'end_time': end_time,
                 'da': float(cat_attrs["area_sqkm"]),
-                'slope': float(cat_attrs["slope250m_mean"]),
+                'slope': 1000 * math.tan(math.radians(float(cat_attrs['slope250m_mean']))),
                 'aspect': float(cat_attrs["aspect_circmean"]),
                 'lat': float(cat_attrs["lat"]),
                 'lon': float(cat_attrs["lon"]),
