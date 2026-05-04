@@ -1682,36 +1682,16 @@ class RealizationBuilder:
         """
         # Set file paths
         routing_config_file = os.path.join(self.work_dir + '/Input', '{}'.format(self.basin) + self.run_configs[0])
-        bmi_dir = {}
-        for m1 in self.modules:
-            m2 = settings.modules_all.loc[settings.modules_all['module'] == m1, 'name_ui'].iloc[0]
-            bmi_dir[m1] = os.path.join(self.input_dir, m2 + '_input')
-
         rt_dict = {"routing": {"t_route_config_file_with_path": routing_config_file}}
 
         # Assemble realization file
         if hasattr(self, 'grp_to_form') and self.grp_to_form:
             self.real_config, self.output_config = gfun.create_reg_realization_file(self.work_dir, self.lib_file, self.bmi_dir, self.forcing_provider, self.forcing_path, self.forcing_config_file,
-                                                                                    self.time_period, rt_dict, self.output_dict, self.calib_output_vars, self.run_type, self.cat_to_grp, self.grp_to_form, {})
+                                                                                    self.time_period, rt_dict, self.output_dict, self.calib_output_vars, self.run_type, self.cat_to_grp, self.grp_to_form,
+                                                                                    getattr(self, 'grp_params', {}))
         else:
             self.real_config, self.output_config = gfun.create_realization_file(self.work_dir, self.lib_file, self.bmi_dir, self.forcing_provider, self.forcing_path, self.forcing_config_file,
                                                                                 self.modules, self.time_period, rt_dict, self.output_dict, self.calib_output_vars, self.run_type)
-
-        # Update realization with NWM output variables if needed
-        if self.output_nwm_vars:
-            self._apply_nwm_output_vars()
-
-    def _assemble_region_realization(self):
-        """
-        Assemble realization file for regionalization runs
-        """
-        # Set file paths
-        routing_config_file = os.path.join(self.work_dir + '/Input', '{}'.format(self.basin) + self.run_configs[0])
-        rt_dict = {"routing": {"t_route_config_file_with_path": routing_config_file}}
-
-        # Assemble realization file
-        self.real_config, self.output_config = gfun.create_reg_realization_file(self.work_dir, self.lib_file, self.bmi_dir, self.forcing_provider, self.forcing_path, self.forcing_config_file,
-                                                                                self.time_period, rt_dict, self.output_dict, {}, self.run_type, self.cat_to_grp, self.grp_to_form, self.grp_params)
 
         # Update realization with NWM output variables if needed
         if self.output_nwm_vars:
@@ -1950,7 +1930,7 @@ class RealizationBuilder:
         self._set_output_vars()
         self._create_bmi_configs(is_regionalization=True)
         self._set_bmi_config_dir()
-        self._assemble_region_realization()
+        self._assemble_realization()
         self._write_realization()
         self._write_partition()
 
