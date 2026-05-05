@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import List, Union, Dict, Any, Tuple
 from collections import OrderedDict
 import geopandas as gpd
+import pyogrio
 import pandas as pd
 import yaml
 import httpx
@@ -264,12 +265,15 @@ def reproject_gpkg(src_file: Union[str, Path], dst_file: Union[str, Path], epsg:
         for layer in gpd.list_layers(src_file)["name"]:
             gdf = gpd.read_file(src_file, layer=layer)
             if isinstance(gdf, gpd.GeoDataFrame):
-                # Reproject spatial layer to new crs
-                gdf = gdf.to_crs(epsg=epsg)
+                if gdf.crs is not None:
+                    # Reproject spatial layer to new crs
+                    gdf = gdf.to_crs(epsg=epsg)
+                else:
+                    logger.debug(f"Spatial layer '{layer}' has no CRS, copying as is")
+                gdf.to_file(tmp_file, layer=layer, driver="GPKG", mode="a")
             else:
-                # Convert non-spatial table layers to geodataframes
-                gdf = gpd.GeoDataFrame(gdf, geometry=None, crs=None)
-            gdf.to_file(tmp_file, layer=layer, driver="GPKG", mode="a")
+                # Write non-spatial table layers to gpkg
+                pyogrio.write_dataframe(gdf, tmp_file, layer=layer, driver="GPKG", append=True)
         os.replace(tmp_file, dst_file)
     except Exception as e:
         if tmp_file.exists():
