@@ -68,6 +68,7 @@ def is_probably_regex(pattern):
 __all__ = [
     'init_ginput_logger',
     'call_icefabric_gpkg',
+    'reproject_gpkg',
     'create_walk_file',
     'create_cfe_input',
     'create_noah_input',
@@ -240,6 +241,41 @@ def call_icefabric_gpkg(
 
     # Return output gpkg path
     return gpkg_fp
+
+
+def reproject_gpkg(src_file: Union[str, Path], dst_file: Union[str, Path], epsg: int = 4326) -> None:
+    """
+    Reproject all layers in a geopackage to a target CRS. Non-spatial tables are copied as is
+    Reproject layers to a temporary file one at a time, then copy to destination location
+    This avoids conflicts when the gpkg already exists at the destination when retrieved by Icefabric
+
+    Parameters
+    -----------
+    src_file: path to source geopackage
+    dst_file: path to destination geopackage
+    epsg: target EPSG code, default 4326
+    """
+    src_file = Path(src_file)
+    dst_file = Path(dst_file)
+    tmp_file = dst_file.with_suffix(".tmp.gpkg")
+
+    # Loop through all layers in the file to reproject
+    try:
+        for layer in gpd.list_layers(src_file)["name"]:
+            gdf = gpd.read_file(src_file, layer=layer)
+            if isinstance(gdf, gpd.GeoDataFrame):
+                # Reproject spatial layer to new crs
+                gdf = gdf.to_crs(epsg=epsg)
+            else:
+                # Convert non-spatial table layers to geodataframes
+                gdf = gpd.GeoDataFrame(gdf, geometry=None, crs=None)
+            gdf.to_file(tmp_file, layer=layer, driver="GPKG", mode="a")
+        os.replace(tmp_file, dst_file)
+    except Exception as e:
+        if tmp_file.exists():
+            tmp_file.unlink()
+        logger.critical(f"Failed to reproject {src_file} to EPSG:{epsg}: {e}")
+        raise
 
 
 def create_walk_file(
