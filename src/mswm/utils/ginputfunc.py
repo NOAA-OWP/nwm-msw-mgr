@@ -5,6 +5,7 @@ This module contains a variety of functions to create different input files.
 """
 
 import copy
+import logging
 import datetime
 import ewts
 import glob
@@ -64,6 +65,9 @@ QuotedValueDumper.add_representer(str, quoted_value_presenter)
 
 def is_probably_regex(pattern):
     return any(c in pattern for c in ['^', '$', '.', '(', '[', '|', '\\'])
+
+# Suppress pyogrio logging
+logging.getLogger("pyogrio").setLevel(logging.CRITICAL)
 
 
 __all__ = [
