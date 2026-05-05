@@ -2648,7 +2648,7 @@ def create_lib_symlinks(workdir: Union[str, Path], lib_file: dict) -> dict:
                 raise
         try:
             os.symlink(value, lib_mod_link)
-            logger.info("Created symlink to ngen executable")
+            logger.info(f"Created symlink to {lib_mod_link}")
         except OSError as e:
             logger.critical(f"Failed to create symlink: {value} -> {lib_mod_link}: {e}")
             raise
