@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import List, Union, Dict, Any, Tuple
 from collections import OrderedDict
 import geopandas as gpd
+import shapely
 import pyogrio
 import pandas as pd
 import yaml
@@ -26,6 +27,9 @@ import httpx
 from mswm.utils import settings
 
 logger = None
+
+# Suppress pyogrio logging
+logging.getLogger("pyogrio").setLevel(logging.CRITICAL)
 
 
 class QuotedDumper(yaml.SafeDumper):
@@ -65,9 +69,6 @@ QuotedValueDumper.add_representer(str, quoted_value_presenter)
 
 def is_probably_regex(pattern):
     return any(c in pattern for c in ['^', '$', '.', '(', '[', '|', '\\'])
-
-# Suppress pyogrio logging
-logging.getLogger("pyogrio").setLevel(logging.CRITICAL)
 
 
 __all__ = [
@@ -272,6 +273,9 @@ def reproject_gpkg(src_file: Union[str, Path], dst_file: Union[str, Path], epsg:
                 if gdf.crs is not None:
                     # Reproject spatial layer to new crs
                     gdf = gdf.to_crs(epsg=epsg)
+                    # Strip Z coordinate sif present, ngen only supports 2D geometry
+                    if gdf.has_z.any():
+                        gdf['geometry'] = shapely.force_2d(gdf['geometry'])
                 else:
                     logger.debug(f"Spatial layer '{layer}' has no CRS, copying as is")
                 gdf.to_file(tmp_file, layer=layer, driver="GPKG", mode="a")

@@ -18,7 +18,6 @@ import json
 import yaml
 from collections import defaultdict
 from pydantic import ValidationError, validate_call
-import subprocess
 
 from mswm.utils import ginputfunc as gfun
 from mswm.utils import settings
