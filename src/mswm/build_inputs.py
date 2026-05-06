@@ -18,7 +18,6 @@ import json
 import yaml
 from collections import defaultdict
 from pydantic import ValidationError, validate_call
-import subprocess
 
 from mswm.utils import ginputfunc as gfun
 from mswm.utils import settings
@@ -923,15 +922,13 @@ class RealizationBuilder:
                 logger.critical(msg)
                 raise RuntimeError(msg) from e
         else:
-            # TODO implement either a temporary reprojected file per job (to save space), or a permanent global set of reprojected files (to save time)
-            cmd = ["ogr2ogr", "-overwrite", "-f", "GPKG", "-t_srs", "EPSG:4326", self.cat_file, self.gpkg_file]
-            logger.info(f"Reprojecting gpkg to a new EPSG:4326 file via cmd: {' '.join(cmd)}")
+            # Reproject geopackage to EPSG:4326
+            logger.info(f"Reprojecting gpkg {self.gpkg_file} to EPSG:4326")
             try:
-                subprocess.check_call(cmd)
+                gfun.reproject_gpkg(self.gpkg_file, self.cat_file)
             except Exception as e:
-                msg = f"Failed to reproject gpkg via cmd: {' '.join(cmd)}: {e}"
-                logger.critical(msg)
-                raise RuntimeError(msg) from e
+                logger.critical(str(e))
+                raise
 
     def _read_hydrofabric(self):
         """

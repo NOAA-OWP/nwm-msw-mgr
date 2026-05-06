@@ -5,6 +5,7 @@ This module contains a variety of functions to create different input files.
 """
 
 import copy
+import logging
 import datetime
 import ewts
 import glob
@@ -17,6 +18,8 @@ from pathlib import Path
 from typing import List, Union, Dict, Any, Tuple
 from collections import OrderedDict
 import geopandas as gpd
+import shapely
+import pyogrio
 import pandas as pd
 import yaml
 import httpx
@@ -24,6 +27,9 @@ import httpx
 from mswm.utils import settings
 
 logger = None
+
+# Suppress pyogrio logging
+logging.getLogger("pyogrio").setLevel(logging.CRITICAL)
 
 
 class QuotedDumper(yaml.SafeDumper):
@@ -68,6 +74,7 @@ def is_probably_regex(pattern):
 __all__ = [
     'init_ginput_logger',
     'call_icefabric_gpkg',
+    'reproject_gpkg',
     'create_walk_file',
     'create_cfe_input',
     'create_noah_input',
@@ -240,6 +247,47 @@ def call_icefabric_gpkg(
 
     # Return output gpkg path
     return gpkg_fp
+
+
+def reproject_gpkg(src_file: Union[str, Path], dst_file: Union[str, Path], epsg: int = 4326) -> None:
+    """
+    Reproject all layers in a geopackage to a target CRS. Non-spatial tables are copied as is
+    Reproject layers to a temporary file one at a time, then copy to destination location
+    This avoids conflicts when the gpkg already exists at the destination when retrieved by Icefabric
+
+    Parameters
+    -----------
+    src_file: path to source geopackage
+    dst_file: path to destination geopackage
+    epsg: target EPSG code, default 4326
+    """
+    src_file = Path(src_file)
+    dst_file = Path(dst_file)
+    tmp_file = dst_file.with_suffix(".tmp.gpkg")
+
+    # Loop through all layers in the file to reproject
+    try:
+        for layer in gpd.list_layers(src_file)["name"]:
+            gdf = gpd.read_file(src_file, layer=layer)
+            if isinstance(gdf, gpd.GeoDataFrame):
+                if gdf.crs is not None:
+                    # Reproject spatial layer to new crs
+                    gdf = gdf.to_crs(epsg=epsg)
+                    # Strip Z coordinate sif present, ngen only supports 2D geometry
+                    if gdf.has_z.any():
+                        gdf['geometry'] = shapely.force_2d(gdf['geometry'])
+                else:
+                    logger.debug(f"Spatial layer '{layer}' has no CRS, copying as is")
+                gdf.to_file(tmp_file, layer=layer, driver="GPKG", mode="a")
+            else:
+                # Write non-spatial table layers to gpkg
+                pyogrio.write_dataframe(gdf, tmp_file, layer=layer, driver="GPKG", append=True)
+        os.replace(tmp_file, dst_file)
+    except Exception as e:
+        if tmp_file.exists():
+            tmp_file.unlink()
+        logger.critical(f"Failed to reproject {src_file} to EPSG:{epsg}: {e}")
+        raise
 
 
 def create_walk_file(
@@ -2612,7 +2660,7 @@ def create_lib_symlinks(workdir: Union[str, Path], lib_file: dict) -> dict:
                 raise
         try:
             os.symlink(value, lib_mod_link)
-            logger.info("Created symlink to ngen executable")
+            logger.info(f"Created symlink to {lib_mod_link}")
         except OSError as e:
             logger.critical(f"Failed to create symlink: {value} -> {lib_mod_link}: {e}")
             raise
