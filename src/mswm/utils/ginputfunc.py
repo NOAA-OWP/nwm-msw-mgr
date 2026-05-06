@@ -117,31 +117,6 @@ __all__ = [
     'create_partition_file',
 ]
 
-# Set global forcing name variables
-name_prcp = {"csv": "atmosphere_water__liquid_equivalent_precipitation_rate",
-             "bmi": "RAINRATE_ELEMENT"}
-
-name_Q2 = {"csv": "atmosphere_air_water~vapor__relative_saturation",
-           "bmi": "Q2D_ELEMENT"}
-
-name_temp = {"csv": "land_surface_air__temperature",
-             "bmi": "T2D_ELEMENT"}
-
-name_xwind = {"csv": "land_surface_wind__x_component_of_velocity",
-              "bmi": "U2D_ELEMENT"}
-
-name_ywind = {"csv": "land_surface_wind__y_component_of_velocity",
-              "bmi": "V2D_ELEMENT"}
-
-name_lw = {"csv": "land_surface_radiation~incoming~longwave__energy_flux",
-           "bmi": "LWDOWN_ELEMENT"}
-
-name_sw = {"csv": "land_surface_radiation~incoming~shortwave__energy_flux",
-           "bmi": "SWDOWN_ELEMENT"}
-
-name_pressure = {"csv": "land_surface_air__pressure",
-                 "bmi": "PSFC_ELEMENT"}
-
 
 def init_ginput_logger():
     """"
@@ -3559,7 +3534,7 @@ def update_realization_nwm_output(
         modules.insert(cfes_index, 'cfes')
         base = build_base_config('cfes', lib_mod, bmi_dir, run_type_abbr, forcing_provider, forcing_vars)
         cfes_config = build_module_config('cfes', base, mod_adapters, forcing_provider, forcing_vars)
-        var_maps = var_mapping(modules, "water_potential_evaporation_flux", name_prcp.get('csv'), name_prcp.get(forcing_provider), output_dict)
+        var_maps = var_mapping(modules, "water_potential_evaporation_flux", forcing_vars['prcp'].get('csv'), forcing_vars['prcp'].get(forcing_provider), output_dict)
         cfes_config['params']['variables_names_map'] = var_maps['input']
         real_modules.insert(cfes_index, cfes_config)
 
