@@ -46,7 +46,7 @@ NWM_OUTPUT_VARIABLES: List[NWMOutputVariable] = [
         adapter="cfes",
         adapter_var="DEEP_GW_TO_CHANNEL_FLUX_M3_PER_S",
         provider=["cfes", "cfex", "sac", "topmodel", "lasam"],
-        provider_var=["DEEP_GW_TO_CHANNEL_FLUX_M3_PER_S", "DEEP_GW_TO_CHANNEL_FLUX_M3_PER_S", "qg_m3_per_s", "land_surface_water__baseflow_volume_flux", "groundwater_to_stream_recharge_m3_per_s"],
+        provider_var=["DEEP_GW_TO_CHANNEL_FLUX_M3_PER_S", "DEEP_GW_TO_CHANNEL_FLUX_M3_PER_S", "qg_m3_per_s", "land_surface_water__baseflow_volume_flux_m3_per_s", "groundwater_to_stream_recharge_m3_per_s"],
     ),
     NWMOutputVariable(
         nwm_name="ACSNOM",
