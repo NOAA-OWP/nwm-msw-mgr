@@ -1,5 +1,7 @@
 # nwm-msw-mgr - Model Setup Workflow Manager
 
+[![Tests](https://github.com/NGWPC/nwm-msw-mgr/actions/workflows/test.yml/badge.svg)](https://github.com/NGWPC/nwm-msw-mgr/actions/workflows/test.yml)
+
 ## Description
 The Model Setup Workflow Manager generates realization and configuration files for running ngen in calibration, validation, forecast, and regionalization modes. mswm can either be run from the command line or called directly from Python scripts.
 
@@ -39,6 +41,12 @@ To build the nwm-msw-mgr continer:
 docker build --tag=nwm-msw-mgr .
 ```
 
+## Testing
+To run nwm-msw-mgr integration tests:
+```bash
+pip install -e ".[test]"
+pytest tests/ -v
+```
 
 ## Usage
 
@@ -68,9 +76,9 @@ build_calib(input_path="/path/to/input.config")
 
 ---
 
-### Forecast Workflow
+### Forecast, Hindcast, & Lagged Ensemble Workflow
 
-Modify the realization and configuration files from an existing calibration run for a cold start or forecast run of ngen.
+Modify the realization and configuration files from an existing calibration run for a forecast run of ngen. If executing a Hindcast or Lagged Ensemble run through the nwm-fcst-mgr, the fcst-mgr will orchestrate these calls to the mswm.
 
 #### CLI
 
@@ -79,7 +87,9 @@ python -m mswm.manager build_fcst \
     /path/to/input_forecast.config \
     /path/to/valid_best.yaml \
     my_forecast_run \
-    --use_cold_start
+    --use_cold_start \
+    --save_state \
+    --load_state_from /path/to/saved_state/
 ```
 
 #### Python
@@ -91,7 +101,16 @@ build_fcst(
     input_path="/path/to/input_forecast.config",
     valid_yaml="/path/to/valid_best.yaml",
     fcst_run_name="my_forecast_run",
-    use_cold_start=True,
+    use_cold_start=False,
+    use_warm_start=False,
+    use_hindcast=False,
+    use_lagged_ens=False,
+    hind_cycle=None,
+    prev_hind_cycle=None
+    lagged_ens_mem=None,
+    forcing_lag=None,
+    save_state=True,
+    load_state_from="/path/to/saved_state/"
 )
 ```
 
@@ -100,17 +119,52 @@ build_fcst(
 - `valid_best.yaml` - Path to validation yaml file from previous nwm-cal-mgr run
 - `fcst_run_name` - Relative path for output folder (e.g., 'fcst_run1')
 - `--use_cold_start` - (optional) Generate files for cold start period (True) or forecast period (False)
+- `--use_warm_start` - (optional) Generate files for hindcasting warm start run
+- `--use_hindcast` - (optional) Generate files for hindcast run
+- `--use_lagged_ens` - (optional) Generate files for lagged ensemble run
+- `--hind_cycle` - (optional) Cycle interval in hours for hindcast run
+- `--prev_hind_cycle` - (optional) Cycle value in hours for previous hindcast cycle
+- `--lagged_ens_member` - (optional) Name of medium range lagged ensemble member (mem1-mem6, no_da)
+- `--forcing_lag` - (optional) Number of hours lagged ensemble forcing valid time is lagged from start of ngen run
+- `--save_state` - (optional) Save model state files at the end of a run (typically a cold start)
+- `--load_save_state` - (optional) Path to directory containing model states to load at beginning of run (typically a forecast run)
 
 #### Example
 **Cold start:**
 ```bash
-python -m mswm.manager build_fcst input.config valid.yaml fcst_run1 --use_cold_start
+python -m mswm.manager build_fcst input.config valid.yaml fcst_run1 --use_cold_start --save_state
 ```
 
 **Forecast:**
 ```bash
-python -m mswm.manager build_fcst input.config valid.yaml fcst_run1
+python -m mswm.manager build_fcst input.config valid.yaml fcst_run1 --load_state_from /path/to/saved_state/
 ```
+
+**Warm start:**
+```bash
+python -m mswm.manager build_fcst input.config valid_yaml hind_run1 --use_warm_start --save_state
+```
+
+**Hindcast (cycle 0):**
+```bash
+python -m mswm.manager build_fcst input.config valid.yaml hind_run1 --use_hindcast --hind_cycle 0 --load_state_from /path/to/saved_state/
+```
+
+**Hindcast (cycle 1, 3 hour interval):**
+```bash
+python -m mswm.manager build_fcst input.config valid.yaml hind_run1 --use hindcast --hind_cycle 3 --hind_cycle 0 --load_state_from /path/to/saved_state/
+```
+
+**Lagged Ensemble (no da member):**
+```bash
+python -m mswm.manager build_fcst input.config valid.yaml lagged_ens_no_da--use_lagged_ens --lagged_ens_mem no_da --load_state_from /path/to/open_loop_saved_state/
+```
+
+**Lagged Ensemble (member 1):**
+```bash
+python -m mswm.manager build_fcst input.config valid.yaml lagged_ens_mem1--use_lagged_ens --lagged_ens_mem mem1 --load_state_from /path/to/closed_loop_saved_state/
+```
+
 ---
 
 ### Regionalization Workflow
@@ -162,6 +216,24 @@ build_default(
 #### Arguments
 - `input_path` - Path to user-generated configuration file
 
+
+### Topoflow-Glacier Validation
+To validate whether catchments in a given basin have sufficient glacier coverage to apply Topoflow-Glacier, the validate_topoflow function can be called:
+1. python -m mswm.manager validate_topoflow 01123000 conus False
+
+The mswm.manager script in topoflow validation mode takes two command line arguments:
+1. Command for topoflow validation mode (validate_topoflow)
+2. Basin id
+3. Domain id (conus, prvi, ak, hi, gl)
+4. NgenCERF Flag (True = running inside NgenCERF, False = running outside NgenCERF)
+
+The validate_topoflow function will return a JSON with a status of True if there are catchments in the basin where Topoflow-Glacier can be applied (>=50% glacier coverage).
+The validate_topoflow function will return a JSON with a status of False if there are no catchments in the basin where Topoflow-Glacier can be applied.
+
+Within Python scripts, regionalization input files can be generated calling the build_region realization function:
+1. from mswm.build_inputs import validate_topoflow
+2. validate_topoflow(basin_id='01123000', domain='conus', ngen_cerf=False)
+
 # nwm-msw-mgr Input Configuration File Reference
 This section describes all configuration parameters in the `input.config` file used by the nwm-msw-mgr. Full example files for each run type are available in `/example_inputs/`
 
@@ -171,6 +243,9 @@ Configuration parameters that apply to all run types except `forecast`.
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `basin` | string | Yes | Stream gage ID at basin outlet or VPU basin identified |
+| `subset_type` | string | Yes | Type of basin subset: `gage` or `vpu` |
+| `domain` | string | Yes | Region of requested basin: `conus`, `hi`, `ak`, `prvi`, or `gl` |
+| `environment` | string | Yes | Type of run environment: `test` or `oe` |
 | `run_type` | string | Yes | Run type : `calibration`, `regionalization`, or `default` |
 | `models` | string | Yes | Comma-separated list of models for the formulation. **Note:** t-route is automatically added if not selected; sloth is automatically added when needed. |
 | `formulation` | string | Yes | User-defined formulation run name |
@@ -183,6 +258,14 @@ Configuration parameters that apply to all run types except `forecast`.
 | `sm_profile_depth` | string | No | Comma-separated depths in meters for soil moisture profile output (default: `0.1, 0.4, 1.0, 2.0`) |
 | `sm_frac_depth` | float | No | Depth in meters for soil moisture fraction calculation (default: `0.4`) |
 | `is_aet_rootzone` | boolean | No | CFE rootzone option for actual evapotranspiration only used if CFE is in the formulation (default: `False`) |
+
+## Module Properties Section: `[ModuleProperties]`
+Configuration parameters that only apply to specific modules.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `is_aet_rootzone` | boolean | No | CFE rootzone option for actual evapotranspiration only used if CFE is in the formulation (default: `False`) |
+| `pet_method` | int | No | Integer (1-5) used to specify the PET method to be used |
 
 ## Regionalization Section: `[Regionalization]`
 Parameters required only for regionalization runs. Section does not need to be supplied for other run types.
@@ -227,6 +310,14 @@ Parameters required only for calibration runs. Section does not need to be suppl
 | `auth_token` | string | No | Authentication token from ngenCERF (only needed when `ngen_cerf = true`) |
 | `user_email` | string | No |Email address to receive run completion notification (optional) |
 | `calib_parameter_file` | path | Calibration | Path to calibration parameter files. Can be: (1) folder with tab-delimited CSV files per module, (2) folder with comma-delimited CSV files per module, (3) single file with all parameters in fixed-width format. |
+
+## NWM Output Variable Section `[NWMOuput]`
+Parameters for activating full set of NWM output variables. Only used for forecast, default, and regionalization runs.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `nwm_output_variables` | bool | No | Boolean flag to activate output of full set of NWM output variables |
+
 
 ## Forcing Section: `[Forcing]`
 Parameters for forcing engine configuration. Required for all run types, including forecast.
@@ -352,7 +443,7 @@ Available optimization metrics for calibration:
 ## Input Directory Structure
 
 For calibration, the Model Setup Workflow Manager stores run files under the structure `/objfunc_optalg/my_run_name/basin/` (ex: `/kge_dds/calib_1/01123000/`).
-For regionalization, run files are stored in `/regionalization/my_run_name/basin/` (ex: `/regionalization/region_1/vpu01`)
+For regionalization, run files are stored in `/regionalization/my_run_name/basin/` (`ex: `/regionalization/region_1/vpu01`)
 
 ```bash
 ├── /[objfunc]_[optalg]/[my_run_name]/[basin]/              # Top level file structure, dependent on run type
@@ -395,16 +486,109 @@ When generating run files for a forecast (using the nwm-fcst-mgr), input files a
 ├── /[Output]/                                         # Top level forecast file structure, within calibration run /Output/
 │   ├── Calibration_Run/                               # Output run folder from previous calibration run
 │   ├── Validation_Run/                                # Output run folder from previous validation run
-│   ├── Cold_Start_Run/                                # Cold Start run providing start up states for forecast (if --use_cold_start)
-│   │   └── [fcst_run_name]/
-│   │       ├── [module]_input/                        # Module parameter files if modifications required from calibration
-│   │       ├── forcing_config/                        # BMI forcing engine provider config file (if bmi forcing provider used)
-│   │       ├── logs/
-│   │       └── output/                                # Output run folder from nwm-fcst-mgr execution
+│   ├── Model_State_Run/  
+│   │   └── Cold_Start_Run/                            # Cold Start run providing start up states for forecast (if --use_cold_start)
+│   │       └── [fcst_run_name]/
+│   │           ├── Input/
+│   │           │    ├── [module]_input/               # Module parameter files if modifications required from calibration
+│   │           │    └── forcing_config/               # BMI forcing engine provider config file (if bmi forcing provider used)
+│   │           ├── logs/
+│   │           ├── state_save/                            # Folder containing state saving files from cold start run
+│   │           └── Output/                            # Output run folder from nwm-fcst-mgr execution
 │   └── Forecast_Run/
 │       └── [fcst_run_name]/
-│           ├── [module]_input/                        # Module parameter files if modifications required from calibration
-│           ├── forcing_config/                        # BMI forcing engine provider config file (if bmi forcing provider used)
-│           ├── logs/
-│           └── output/                                # Output run folder from nwm-fcst-mgr execution
+│   │       ├── Input/
+│   │       │    ├── [module]_input/                   # Module parameter files if modifications required from calibration
+│   │       │    └── forcing_config/                   # BMI forcing engine provider config file (if bmi forcing provider used)
+│   │       ├── logs/
+│   │       └── Output/                                # Output run folder from nwm-fcst-mgr execution
 ```
+
+### Hindcast Directory Structure
+When generating run files for a hindcast (using the nwm-fcst-mgr), multiple sets of input files for each warm start and hindcast iteration are created in the `/Output/` folder of a completed calibration run.
+
+```bash
+├── /[Output]/                                         # Top level forecast file structure, within calibration run /Output/
+│   ├── Calibration_Run/                               # Output run folder from previous calibration run
+│   ├── Validation_Run/                                # Output run folder from previous validation run
+│   ├── Model_State_Run/  
+│   │   ├── Cold_Start_Run/                            # Cold Start run providing start up states to first hindcast cycle (if --use_cold_start)
+│   │   │   └── [hind_run_name]/
+│   │   │       ├── Input/
+│   │   │       ├── logs/
+│   │   │       └── Output/                            
+│   │   └── Warm_Start_Run/
+│   │       └──  [hind_run_name]/
+│   │           ├── warm_start_3                      # Warm Start run providing start up states to hindcast cycle at 3 hours
+│   │           │   ├── Input/
+│   │           │   ├── logs/
+│   │           │   └── Output/
+│   │           └── warm_start_6                      # Warm Start run providing start up states to hindcast cycle at 6 hours
+│   │               ├── Input/
+│   │               ├── logs/
+│   │               └── Output/
+│   └── Hindcast_Run
+│       └── [hind_run_name]/
+│           ├── hindcast_0                          # Hindcast run at 0 hours, using saved states from Cold Start run
+│           │   ├── Input/
+│           │   ├── logs/
+│           │   └── Output/     
+│           ├── hindcast_3                          # Hindcast run at 3 hours, using saved states from Warm Start run at 3 hours
+│           │   ├── Input/
+│           │   ├── logs/
+│           │   └── Output/  
+│           └── hindcast_6                         # Hindcast run at 6 hours, using saved states from Warm Start run at 6 hours
+│               ├── Input/
+│               ├── logs/
+│               └── Output/                         
+```
+
+### Lagged Ensemble Directory Structure
+When generating run files for a medium range lagged ensemble (using the nwm-fcst-mgr), multiple sets of input files for lagged ensemble member are created in the `/Output/` folder of a completed calibration run.
+
+```bash
+├── /[Output]/                                         # Top level forecast file structure, within calibration run /Output/
+│   ├── Calibration_Run/                               # Output run folder from previous calibration run
+│   ├── Validation_Run/                                # Output run folder from previous validation run
+│   └── Lagged_Ensemble_Run
+│       └── [lagged_ens_run_name]/
+│           ├── lagged_ens_mem1/                       # Lagged Ensemble member 1 run, using saved states from Closed Loop AnA
+│           │   ├── Input/
+│           │   ├── logs/
+│           │   └── Output/   
+│           ├── lagged_ens_noda/                       # Lagged Ensemble no data assimilation run, using saved states from Open Loop AnA
+│           │   ├── Input/
+│           │   ├── logs/
+│           │   └── Output/   
+│           ├── lagged_ens_mem2/                       # Lagged Ensemble member 2 run, using saved states from Closed Loop AnA
+│           │   ├── Input/
+│           │   ├── logs/
+│           │   └── Output/
+│           ├── lagged_ens_mem3/                       # Lagged Ensemble member 3 run, using saved states from Closed Loop AnA
+│           ├── lagged_ens_mem4/                       # Lagged Ensemble member 4 run, using saved states from Closed Loop AnA
+│           ├── lagged_ens_mem5/                       # Lagged Ensemble member 5 run, using saved states from Closed Loop AnA
+│           └── lagged_ens_mem6/                       # Lagged Ensemble member 6 run, using saved states from Closed Loop AnA                    
+```
+
+## NWM Output Variables
+The NWM output variable system provides a standardized way to produce a full set of NWM output variables from any supported Ngen formulation, regardless of which modules are included in the primary formulation
+
+NWM output variables are defined in `/utils/nwm_output_variables.py` as a registry of required variables, each with a name, units, and a list of valid provider modules. When `nwm_output_variables` is enable in the `input.config` file,
+the msw-mgr queries this registry against the existing formulation to determine which variables are already satisfied and which require additional adapter modules to be satisfied.
+
+This feature is currently supported for **default**, **forecast**, and **regionalization** run types only. To enable NWM output variables, add the following to `input.config`:
+```ini
+[NWMOutput]
+nwm_output_variables = True
+```
+
+### Adapter Modules
+When the primary formulation cannot satisfy all required NWM output variables, the msw-mgr automatically identifies and adds adapter modules, which are non-interactive modules that run alongside the primary formulation solely to produce the missing output variables. Adapter modules are inserted into the realization file's module list but are configured so that they do not influence the primary formulation's behavior. For example, if a NoahOWP-CFE formulation is missing soil moisture outputs, SFT and SMP adapters may be added to produce those variables without affecting the the streamflow simulations produced by the original formulation.
+
+SLOTH is added automatically when required to satisfy static input variables needed by adapter moduels. Any existing SLOTH parameters from the primary formulation are preserved and updated as needed to avoid conflicts.
+
+### Workflow
+1. The primary formulation BMI config files are created first using only the original formulation
+2. Adapter module BMI config files are then created separately, using the full combined module list so that inter-module dependencies are satisfied
+3. The realization file is assemble for the primary formulation, then updated to append adapter module sections and NWM output variable entries to the output variable list
+4. For regionalization runs, each formulation group is handled independently since different groups may require different adapter modules
