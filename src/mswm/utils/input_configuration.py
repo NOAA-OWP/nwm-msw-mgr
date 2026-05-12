@@ -7,7 +7,7 @@ This module contains Pydantic classes to validate input.config files for the MSW
 from pydantic import BaseModel, Field, field_validator, model_validator, AliasChoices
 from pydantic_core.core_schema import ValidationInfo
 from pathlib import Path
-from typing import Optional, Literal, Union
+from typing import Optional, Literal, Union, ClassVar
 
 
 class StrictBaseModel(BaseModel):
@@ -48,7 +48,7 @@ class GeneralConfig(StrictBaseModel):
     sm_profile_depth: Optional[list[float] | str] = Field(default_factory=lambda: [0.1, 0.4, 1.0, 2.0])
     sm_frac_depth: Optional[float] = 0.4
 
-    DOMAIN_MAPPINGS = {
+    DOMAIN_MAPPINGS: ClassVar[dict[str, str]] = {
         'conus': 'CONUS',
         'alaska': 'Alaska',
         'ak': 'Alaska',
