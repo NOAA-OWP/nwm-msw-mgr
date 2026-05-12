@@ -2352,7 +2352,7 @@ def update_hist_forcing_config(
     forcing_config_dir: directory path for forcing config file
     forcing_config_dir: output path for forcing config file
     run_type: type of run (calib, regionalization, or default)
-    omain: domain name for historical runs
+    domain: domain name for historical runs
     forcing_static_dir: directory for static data files (e.g. geogrid) for historical runs
 
     Returns
