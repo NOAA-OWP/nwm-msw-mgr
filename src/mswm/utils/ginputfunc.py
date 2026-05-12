@@ -175,21 +175,6 @@ def call_icefabric_gpkg(
     dictionary of initial parameter estimates
     """
 
-    # Transform domain names to API format
-    domain_mappings = {
-        'conus': 'CONUS',
-        'alaska': 'Alaska',
-        'ak': 'Alaska',
-        'hawaii': 'Hawaii',
-        'hi': 'Hawaii',
-        'puerto_rico': 'Puerto_Rico',
-        'prvi': 'Puerto_Rico',
-        'gl': 'Great_Lakes'}
-    try:
-        domain = domain_mappings.get(domain.lower())
-    except KeyError:
-        raise ValueError(f"Invalid domain: '{domain}'. Valid options are {list(domain_mappings.keys())}")
-
     # Check for VPU or gage subset_type
     if subset_type == 'vpu':
         id_type = 'vpu_id'
@@ -2353,7 +2338,7 @@ def update_hist_forcing_config(
         forcing_config_dir: Path,
         forcing_config_file: Path,
         run_type: str,
-        global_domain: str,
+        domain: str,
         forcing_static_dir: str,
 ) -> None:
     """ update bmi forcing engine config yaml file for historical forcing
@@ -2367,7 +2352,7 @@ def update_hist_forcing_config(
     forcing_config_dir: directory path for forcing config file
     forcing_config_dir: output path for forcing config file
     run_type: type of run (calib, regionalization, or default)
-    global_domain: global domain name for historical runs
+    omain: domain name for historical runs
     forcing_static_dir: directory for static data files (e.g. geogrid) for historical runs
 
     Returns
@@ -2401,7 +2386,7 @@ def update_hist_forcing_config(
     # Replace {root_dir} and {gage} placeholders in forcing config
     vars = {'{root_dir}': root_dir,
             '{gage}': gpkg_name,
-            '{global_domain}': global_domain,
+            '{global_domain}': domain,
             '{forcing_static_dir}': forcing_static_dir,
             }
     forcing_template = replace_forcing_placeholders(forcing_template, vars)
