@@ -1423,7 +1423,7 @@ def create_lasam_input(
         'ponded_depth_max=1.1[cm]',
         'use_closed_form_G=false',
         'layer_soil_type=',
-        f'max_soil_types={max_soil_types}',
+        f'max_valid_soil_types={max_soil_types}',
         'wilting_point_psi=15495.0[cm]',
         'field_capacity_psi=340.9[cm]',
         'giuh_ordinates=0.06,0.51,0.28,0.12,0.03',  # TODO: Should the LASAM giuh ordinates match those used by other modules?
