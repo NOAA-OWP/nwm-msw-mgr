@@ -1,7 +1,7 @@
 import pandas as pd
 
 DEFAULT_DATETIME_FORMAT = "%Y-%m-%d %H:%M:%S"
-
+PARTITION_CONFIG_FILE_NAME_SUFFIX = "_partition_config"
 
 # information about all modules currently supported in ngen-cal
 # Column 1: module name
@@ -13,7 +13,7 @@ DEFAULT_DATETIME_FORMAT = "%Y-%m-%d %H:%M:%S"
 
 modules_all = pd.DataFrame([('sloth', 'sloth', 'SLOTH', ['SLOTH'], False),
                             ('pet', 'pet', 'PET', ['Evapotranspiration'], False),
-                            ('topoflow', 'topoflow', 'topoflow', ['Glacier_snow'], True),
+                            ('topoflow-glacier', 'topoflow-glacier', 'BmiTopoflowGlacier', ['Glacier_snow', 'Evapotranspiration', 'Rainfall_runoff'], True),
                             ('noah', 'noah-owp-modular', 'NoahOWP', ['Glacier_snow', 'Evapotranspiration'], True),
                             ('snow17', 'snow-17', 'snow17', ['Glacier_snow'], True),
                             ('ueb', 'ueb', 'UEB', ['Glacier_snow'], True),

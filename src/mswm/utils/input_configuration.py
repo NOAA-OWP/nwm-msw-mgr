@@ -4,10 +4,10 @@ This module contains Pydantic classes to validate input.config files for the MSW
 @author: Jeff Wade
 """
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator, AliasChoices
 from pydantic_core.core_schema import ValidationInfo
 from pathlib import Path
-from typing import Optional, Literal, Union
+from typing import Optional, Literal, Union, ClassVar
 
 
 class StrictBaseModel(BaseModel):
@@ -33,6 +33,9 @@ class GeneralConfig(StrictBaseModel):
     Input.config general section requirement
     """
     basin: str
+    subset_type: Literal["gage", "vpu"] = 'gage'
+    domain: str
+    environment: Literal["test", "oe"] = 'test'
     run_type: Literal["default", "calibration", "regionalization"]
     models: Optional[str] = None
     formulation: Optional[str] = None
@@ -44,7 +47,26 @@ class GeneralConfig(StrictBaseModel):
     output_sm: Optional[bool] = None
     sm_profile_depth: Optional[list[float] | str] = Field(default_factory=lambda: [0.1, 0.4, 1.0, 2.0])
     sm_frac_depth: Optional[float] = 0.4
-    is_aet_rootzone: Optional[Union[int, bool, str]] = None
+
+    DOMAIN_MAPPINGS: ClassVar[dict[str, str]] = {
+        'conus': 'CONUS',
+        'alaska': 'Alaska',
+        'ak': 'Alaska',
+        'hawaii': 'Hawaii',
+        'hi': 'Hawaii',
+        'puerto_rico': 'Puerto_Rico',
+        'prvi': 'Puerto_Rico',
+        'gl': 'Great_Lakes'}
+
+    @field_validator("domain", mode="before")
+    @classmethod
+    def normalize_domain(cls, val):
+        if not isinstance(val, str):
+            raise ValueError(f"domain must be a string, got {type(val)}")
+        normalized_val = cls.DOMAIN_MAPPINGS.get(val.lower())
+        if normalized_val is None:
+            raise ValueError(f"Invalid domain {repr(val)}. Valid options: {list(cls.DOMAIN_MAPPINGS)}")
+        return normalized_val
 
     @field_validator("sm_profile_depth", mode="before")
     @classmethod
@@ -95,17 +117,6 @@ class GeneralConfig(StrictBaseModel):
 
         return val
 
-    # Normalize is_aet_rootzone values
-    @field_validator('is_aet_rootzone')
-    def norm_is_aet_rootzone(cls, val):
-        if val is None:
-            return None
-        if val in ('1', 1, True, "true", "True"):
-            return 1
-        if val in ('0', 0, False, "false", "False"):
-            return 0
-        raise ValueError(f"Invalid value set for is_aet_rootzone: {val}")
-
     # Check optional fields that depend on run_type
     @model_validator(mode="after")
     def check_required_fields(self):
@@ -113,11 +124,44 @@ class GeneralConfig(StrictBaseModel):
         if self.run_type != "regionalization" and not self.models:
             raise ValueError("`models` must be specified for a default and calibration runs.")
 
-        # Start_period and end_period required unless run_type is calibration or default
-        if self.run_type == "regionalization" and (not self.start_period or not self.end_period):
-            raise ValueError("`start_period` and `end_period` must be specified for regionalization runs.")
-
         return self
+
+
+class ModulePropertiesConfig(StrictBaseModel):
+    """
+    Input.config module properties section requirement
+    """
+    cfe_aet_rootzone: Optional[Union[int, bool, str]] = Field(None, validation_alias=AliasChoices("cfe-s_aet_rootzone", "cfe-x_aet_rootzone", "cfe_aet_rootzone"))
+    pet_method: Optional[int] = None
+
+    # Normalize is_aet_rootzone values
+    @field_validator('cfe_aet_rootzone')
+    def norm_aet_rootzone(cls, val):
+        if val is None:
+            return None
+        if val in ('1', 1, True, "true", "True"):
+            return 1
+        if val in ('0', 0, False, "false", "False"):
+            return 0
+        raise ValueError(f"Invalid value set for cfe.aet_rootzone: {val}")
+
+
+class NWMOutputConfig(StrictBaseModel):
+    """
+    Input.config NWM output variables section requirement
+    """
+    nwm_output_variables: Optional[Union[int, bool, str]] = None
+
+    # Normalize nwm_output_variables values
+    @field_validator('nwm_output_variables')
+    def norm_nwm_output(cls, val):
+        if val is None:
+            return None
+        if val in ('1', 1, True, "true", "True"):
+            return True
+        if val in ('0', 0, False, "false", "False"):
+            return False
+        raise ValueError(f"Invalid value set for nwm_output_variables: {val}")
 
 
 class RegionConfig(StrictBaseModel):
@@ -210,9 +254,10 @@ class CalibConfig(StrictBaseModel):
 
 
 valid_configs = ['standard_ana', 'aorc', 'extended_ana', 'long_range_mem1', 'long_range_mem2', 'long_range_mem3', 'long_range_mem4',
-                 'medium_range_blend', 'nwm', 'short_range', 'short_range_alaska', 'medium_range_blend_alaska', 'short_range_extended_alaska',
+                 'medium_range_blend', 'medium_range', 'nwm', 'short_range', 'short_range_alaska', 'medium_range_blend_alaska', 'short_range_extended_alaska',
                  'short_range_hawaii', 'short_range_puertorico', 'extended_ana_alaska', 'standard_ana_alaska', 'standard_ana_hawaii',
-                 'standard_ana_puertorico', ]
+                 'standard_ana_puertorico', 'medium_range_mem1', 'medium_range_mem2', 'medium_range_mem3', 'medium_range_mem4', 'medium_range_mem5',
+                 'medium_range_mem6', 'medium_range_no_da',]
 
 
 class ForcingConfig(StrictBaseModel):
@@ -226,7 +271,10 @@ class ForcingConfig(StrictBaseModel):
     forcing_configuration: Optional[str] = None
     cycle_datetime: Optional[str] = None
     cold_start_datetime: Optional[str] = None
-    global_domain: Optional[str] = "CONUS"
+    forcing_static_dir: Optional[str] = None
+    # For WCOSS paths
+    scratch_dir_override: Optional[str] = None
+    forcing_product_versions: Optional[dict[str, list[str]]] = None
 
     # Check optional fields that depend on forcing_provider
     @model_validator(mode="after")
@@ -243,7 +291,7 @@ class ForcingConfig(StrictBaseModel):
             else:
                 if self.forcing_configuration not in valid_configs:
                     raise ValueError(f"Invalid `forcing_configuration` value: '{self.forcing_configuration}'."
-                                    f"Valid options are: {', '.join(valid_configs)}.")
+                                     f"Valid options are: {', '.join(valid_configs)}.")
 
         # forcing template dir required if forcing_provider is csv
         if self.forcing_provider == 'bmi' and self.forcing_template_dir is None:
@@ -252,6 +300,10 @@ class ForcingConfig(StrictBaseModel):
         # root dir required if forcing_provider is csv
         if self.forcing_provider == 'bmi' and self.root_dir is None:
             raise ValueError("`root_dir` must be specified for a run using bmi forcing provider.")
+
+        # forcing_static_dir required if forcing_provider is bmi and forcing_configuration is nwm
+        if self.forcing_provider == 'bmi' and self.forcing_configuration == 'nwm' and self.forcing_static_dir is None:
+            raise ValueError("`forcing_static_dir` must be specified for a run using bmi forcing provider with nwm forcing configuration.")
 
         return self
 
@@ -262,29 +314,13 @@ class DataFileConfig(StrictBaseModel):
     """
     obs_dir: Optional[str] = None
     nwmretro_file: Optional[str] = None
-    hydrofab_file: str
-    topoflow_bmi_dir: Optional[str] = None
-    noah_owp_modular_bmi_dir: Optional[str] = None
-    snow_17_bmi_dir: Optional[str] = None
-    ueb_bmi_dir: Optional[str] = None
-    pet_bmi_dir: Optional[str] = None
-    smp_bmi_dir: Optional[str] = None
-    sft_bmi_dir: Optional[str] = None
-    cfe_s_bmi_dir: Optional[str] = None
-    cfe_x_bmi_dir: Optional[str] = None
-    topmodel_bmi_dir: Optional[str] = None
-    sac_sma_bmi_dir: Optional[str] = None
-    lasam_bmi_dir: Optional[str] = None
-    lstm_bmi_dir: Optional[str] = None
-    t_route_bmi_dir: Optional[str] = None
+    hydrofab_file: Optional[str] = None
     noah_parameter_dir: Optional[str] = None
     ueb_parameter_dir: Optional[str] = None
     lasam_parameter_dir: Optional[str] = None
     lstm_parameter_dir: Optional[str] = None
-    sac_parameter_dir: Optional[str] = None
-    snow_17_parameter_dir: Optional[str] = None
     attributes_file: Optional[str] = None
-    ngen_exe_file: str
+    ngen_exe_file: Optional[str] = None
     sloth_lib: Optional[str] = None
     cfe_lib: Optional[str] = None
     lasam_lib: Optional[str] = None
@@ -312,6 +348,8 @@ class InputConfig(StrictBaseModel):
     Class to organize input.config section requirements
     """
     General: Optional[GeneralConfig] = None
+    ModuleProperties: Optional[ModulePropertiesConfig] = None
+    NWMOutput: Optional[NWMOutputConfig] = None
     Regionalization: Optional[RegionConfig] = None
     Calibration: Optional[CalibConfig] = None
     Forcing: Optional[ForcingConfig] = None
