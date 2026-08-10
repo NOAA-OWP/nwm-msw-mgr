@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.4
 
-ARG ORG=ngwpc
+ARG ORG=noaa-owp
 ARG NGEN_IMAGE_TAG=latest
 ARG NGEN_IMAGE=ghcr.io/${ORG}/ngen:${NGEN_IMAGE_TAG}
 

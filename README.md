@@ -1,6 +1,6 @@
 # nwm-msw-mgr - Model Setup Workflow Manager
 
-[![Tests](https://github.com/NGWPC/nwm-msw-mgr/actions/workflows/test.yml/badge.svg)](https://github.com/NGWPC/nwm-msw-mgr/actions/workflows/test.yml)
+[![Tests](https://github.com/NOAA-OWP/nwm-msw-mgr/actions/workflows/test.yml/badge.svg)](https://github.com/NOAA-OWP/nwm-msw-mgr/actions/workflows/test.yml)
 
 ## Description
 The Model Setup Workflow Manager generates realization and configuration files for running ngen in calibration, validation, forecast, and regionalization modes. mswm can either be run from the command line or called directly from Python scripts.
@@ -11,7 +11,7 @@ The Model Setup Workflow Manager generates realization and configuration files f
 
 ```bash
 cd [NGEN_REG_ROOT]
-git clone -b development --recurse-submodules https://github.com/NGWPC/nwm-msw-mgr.git
+git clone -b development --recurse-submodules https://github.com/NOAA-OWP/nwm-msw-mgr.git
 ```
 
 ### Build the environment
