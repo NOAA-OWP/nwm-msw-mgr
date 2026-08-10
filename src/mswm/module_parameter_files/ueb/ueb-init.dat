@@ -1,0 +1,15 @@
+UEBGrid Model Driver Test for TWDEF
+/home/yuqiong.liu/work/Gitlab/run/kge_dds/ueb_pet_cfe/01123000/Input/ueb_input/ueb_params-cat-10618_calib.dat
+/home/yuqiong.liu/work/Gitlab/run/kge_dds/ueb_pet_cfe/01123000/Input/ueb_input/ueb_sitevars-cat-10618_calib.dat
+/home/yuqiong.liu/work/Gitlab/run/kge_dds/ueb_pet_cfe/01123000/Input/ueb_input/ueb_inputctr-cat-10618_calib.dat
+/home/yuqiong.liu/work/Gitlab/run/kge_dds/ueb_pet_cfe/01123000/Input/ueb_input/ueb_outputctr-cat-10618_calib.dat
+/home/yuqiong.liu/work/data/bmi_config/UEB//aggout.nc 
+/home/yuqiong.liu/work/data/bmi_config/UEB//watershed_onecell.nc
+watershed y x
+2015 10 01 01.0
+2017 09 30 23.0
+1.0
+-7.0
+0
+1 15 16
+1 1

@@ -1,0 +1,8 @@
+OUTPUT VARIABLES
+0                 // number of point details; put 0 if no point output needed 
+0 0 cat-10618_Point00.txt    // y, x coordinates, output file name                       
+0                //number of netcdf outputs; put 0 if no netcdf output needed
+0                   //number of aggregated output variables
+SWE m AVE           //name/symbol unit Aggregation operation (look up the dictionary "UEB_Variables_Symbols.dat" for the symbol, Operation SUM or AVE)
+SWIT m SUM
+SWISM m SUM
