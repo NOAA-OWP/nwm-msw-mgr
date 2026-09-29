@@ -13,13 +13,11 @@ The `nwm-msw-mgr` is used in two ways:
 
 ## Installation
 
-### Clone mswm
-
-This repository is the NGWPC fork of `nwm-msw-mgr`, maintained ahead of eventual merge to [NOAA-OWP/nwm-msw-mgr](https://github.com/NOAA-OWP/nwm-msw-mgr). Clone instructions below reference the NGWPC fork, as it is the current active development source.
+### Clone nwm-msw-mgr
 
 ```bash
 cd [NGEN_REG_ROOT]
-git clone --recurse-submodules https://github.com/NGWPC/nwm-msw-mgr.git
+git clone --recurse-submodules https://github.com/[GH_ORG]/nwm-msw-mgr.git
 ```
 
 ### Build the environment
@@ -457,7 +455,7 @@ Configuration parameters that apply to all run types except `forecast`.
 | `basin` | string | Yes | Stream gage ID at basin outlet or VPU basin identified |
 | `subset_type` | string | Yes | Type of basin subset: `gage` or `vpu` |
 | `domain` | string | Yes | Region of requested basin: `conus`, `hi`, `ak`, `prvi`, or `gl` |
-| `environment` | string | Yes | Type of run environment: `test` or `oe` |
+| `edfs_url` | string | Yes | EDFS URL for icefabric API (http://edfs.{test/oe}.nextgenwaterprediction.com/api/v1/) |
 | `run_type` | string | Yes | Run type : `calibration`, `regionalization`, or `default` |
 | `models` | string | Yes | Comma-separated list of models for the formulation. **Note:** t-route is automatically added if not selected; sloth is automatically added when needed. |
 | `formulation` | string | Yes | User-defined formulation run name |
@@ -539,6 +537,8 @@ Parameters for reservoir RFC and streamflow data assimilation. This section is o
 |-----------|------|----------|-------------|
 | `reservoir_da` | bool | No | Boolean flag to enable reservoir RRC data assimilation in t-route |
 | `reservoir_rfc_dir` | str | No | Directory containing reservoir RFC forecast files. Required if `reservoir_da` is `True`. |
+| `streamflow_da` | bool | No | Boolean flag to enable USGS streamflow data assimilation in t-route |
+| `usgs_timeslice_dir` | str | No | Directory containing USGS timeslice files. Required if `streamflow_da` is `True`. |
 
 
 ## Forcing Section: `[Forcing]`
@@ -625,7 +625,7 @@ All datetime parameters use the format: `YYYY-MM-DD HH:MM:SS` (UTC)
 
 ### Path Expansion
 Paths with `~` are expanded to the user's home directory. Example: 
-- `~/ngwpc/run_ngen` -> `/home/username/ngwpc/run_ngen`
+- `~/run_ngen` -> `/home/username/run_ngen`
 
 ### Available Modules
 **Glacier/Snow:** noah-owp-modular, snow-17, ueb, topoflow-glacier
